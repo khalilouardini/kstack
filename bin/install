@@ -30,7 +30,8 @@ while [ $# -gt 0 ]; do
     --dry-run|-n) DRY=1; shift ;;
     --force|-f)  FORCE=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
-    -h|--help)   sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)   awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' \
+                   "${BASH_SOURCE[0]}"; exit 0 ;;
     *)           echo "install: unknown argument '$1' (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -49,9 +50,9 @@ COUNT_SKIPPED=0
 row() { # row ACTION NAME DETAIL
   ROWS+=("$1|$2|$3")
   case "$1" in
-    current)               COUNT_OK=$((COUNT_OK + 1)) ;;
+    current|absent)                COUNT_OK=$((COUNT_OK + 1)) ;;
     linked|relinked|removed|wrote) COUNT_CHANGED=$((COUNT_CHANGED + 1)) ;;
-    *)                     COUNT_SKIPPED=$((COUNT_SKIPPED + 1)) ;;
+    *)                             COUNT_SKIPPED=$((COUNT_SKIPPED + 1)) ;;
   esac
 }
 
@@ -94,7 +95,9 @@ install_claude() { # install_claude SRC NAME
     local cur
     cur="$(readlink "$link")"
     if [ "$cur" = "$src" ]; then row current "$name" "already linked"; return; fi
-    local kind="foreign"; owned_by_repo "$link" && kind="stale"
+    # `a && b` on one line would trip `set -e` when a fails; use an if.
+    local kind="foreign"
+    if owned_by_repo "$link"; then kind="stale"; fi
     if [ "$FORCE" -eq 0 ]; then
       row skipped "$name" "$kind symlink -> $cur (use --force to replace)"; return
     fi
@@ -182,9 +185,15 @@ fi
 
 printf '\n%-10s  %-22s  %s\n' ACTION SKILL DETAIL
 printf '%-10s  %-22s  %s\n' "---------" "----------------------" "------"
-for r in "${ROWS[@]}"; do
-  printf '%-10s  %-22s  %s\n' "${r%%|*}" "$(echo "$r" | cut -d'|' -f2)" "${r#*|*|}"
-done
+# bash 3.2 (macOS) treats "${ROWS[@]}" on an empty array as unbound under set -u.
+if [ "${#ROWS[@]}" -gt 0 ]; then
+  for r in "${ROWS[@]}"; do
+    printf '%-10s  %-22s  %s\n' \
+      "$(printf '%s' "$r" | cut -d'|' -f1)" \
+      "$(printf '%s' "$r" | cut -d'|' -f2)" \
+      "$(printf '%s' "$r" | cut -d'|' -f3-)"
+  done
+fi
 
 printf '\nhost=%s  dest=%s\n' "$HOST" "$DEST"
 printf 'repo=%s\n' "$REPO"
