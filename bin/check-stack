@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+"""check-stack — the free-tier health gate for khalilou-stack.
+
+Checks every skill (`*/SKILL.md` under router/, core/, roles/, tools/) and every
+role contract (`roles/*.md`) against CONVENTIONS.md, plus the shell scripts under
+any `bin/`. Exits non-zero if anything fails. `--list` prints the catalog instead.
+
+Stdlib only. Run it from anywhere: paths resolve against this file's repo.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+TIERS = ("router", "core", "roles", "tools")
+SUFFIX = "(khalilou-stack)"
+DESC_HARD, DESC_SOFT = 1024, 500
+
+# Only prefixes that unambiguously name THIS repo. `docs/` is excluded on
+# purpose: skills legitimately cite the consuming repo's docs/ paths, and a
+# false failure teaches people to ignore the gate.
+REPO_PREFIXES = ("router/", "core/", "roles/", "tools/", "bin/", "hosts/", "project-template/")
+ROOT_FILES = {"CONVENTIONS.md", "VERSION", "CHANGELOG.md"}
+BACKTICKED = re.compile(r"`([A-Za-z0-9_][A-Za-z0-9_./-]*)`")
+FORBIDDEN = [
+    (re.compile(r"OGUR-"), "OGUR-"),
+    (re.compile(r"ogur-claude-bot", re.I), "ogur-claude-bot"),
+    (re.compile(r"mvp-scope\.md", re.I), "mvp-scope.md"),
+    (re.compile(r"khalilouardini", re.I), "khalilouardini"),
+    (re.compile(r"\bogur\b", re.I), "ogur"),
+]
+EXEMPT_FILES = {"docs/MIGRATION-ogur.md"}
+HEADING = re.compile(r"^(#{1,6})\s")
+QUOTE = re.compile(r"^\s*>")
+
+
+class Report:
+    def __init__(self) -> None:
+        self.fails: list[tuple[str, str, str]] = []
+        self.warns: list[tuple[str, str, str]] = []
+
+    def fail(self, where: str, check: str, msg: str) -> None:
+        self.fails.append((where, check, msg))
+
+    def warn(self, where: str, check: str, msg: str) -> None:
+        self.warns.append((where, check, msg))
+
+
+def frontmatter(text: str) -> tuple[dict[str, str], int] | None:
+    """Return (top-level scalars, body start line) or None if no --- block."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            meta: dict[str, str] = {}
+            for line in lines[1:i]:
+                m = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$", line)
+                if m:
+                    meta[m.group(1)] = m.group(2).strip()
+            return meta, i + 1
+    return None
+
+
+def exempt_lines(lines: list[str]) -> set[int]:
+    """Line indices inside a 'Worked example' heading section or blockquote."""
+    ex: set[int] = set()
+    i = 0
+    while i < len(lines):
+        if "Worked example" not in lines[i]:
+            i += 1
+            continue
+        h = HEADING.match(lines[i])
+        if h:
+            level, j = len(h.group(1)), i + 1
+            ex.add(i)
+            while j < len(lines):
+                nxt = HEADING.match(lines[j])
+                if nxt and len(nxt.group(1)) <= level:
+                    break
+                ex.add(j)
+                j += 1
+            i = j
+        elif QUOTE.match(lines[i]):
+            s = i
+            while s > 0 and QUOTE.match(lines[s - 1]):
+                s -= 1
+            j = i
+            while j < len(lines) and QUOTE.match(lines[j]):
+                j += 1
+            ex.update(range(s, j))
+            i = j
+        else:
+            ex.add(i)
+            i += 1
+    return ex
+
+
+def check_paths(path: Path, body: str, rel: str, r: Report) -> None:
+    for token in sorted(set(BACKTICKED.findall(body))):
+        if token in ROOT_FILES:
+            target = REPO / token
+        elif token.startswith(REPO_PREFIXES):
+            # `bin/check-freeze.sh` is written relative to the skill's own dir;
+            # `core/freeze/SKILL.md` is written from the repo root. Accept both.
+            target = REPO / token
+            if not target.exists():
+                target = path.parent / token
+        else:
+            continue
+        if not target.exists():
+            r.fail(rel, "paths", f"`{token}` does not exist")
+
+
+def check_tokens(lines: list[str], rel: str, r: Report) -> None:
+    if rel in EXEMPT_FILES:
+        return
+    skip = exempt_lines(lines)
+    for n, line in enumerate(lines):
+        if n in skip:
+            continue
+        for pattern, label in FORBIDDEN:
+            if pattern.search(line):
+                r.fail(rel, "tokens", f"line {n + 1}: forbidden token {label!r} outside a Worked example")
+                break
+
+
+def check_doc(path: Path, r: Report) -> dict[str, str] | None:
+    rel = path.relative_to(REPO).as_posix()
+    text = path.read_text(encoding="utf-8")
+    parsed = frontmatter(text)
+    if parsed is None:
+        r.fail(rel, "frontmatter", "no --- delimited frontmatter block")
+        return None
+    meta, body_start = parsed
+
+    for key in ("name", "version", "description"):
+        if not meta.get(key):
+            r.fail(rel, "frontmatter", f"missing `{key}`")
+    desc = meta.get("description", "")
+    if desc:
+        size = len(desc.encode("utf-8"))
+        if size > DESC_HARD:
+            r.fail(rel, "description", f"{size} bytes exceeds the {DESC_HARD}-byte cap")
+        elif size > DESC_SOFT:
+            r.warn(rel, "description", f"{size} bytes; target is <= {DESC_SOFT}")
+        if not desc.rstrip().endswith(SUFFIX):
+            r.fail(rel, "description", f"does not end with {SUFFIX}")
+
+    name = meta.get("name", "")
+    expected = path.parent.name if path.name == "SKILL.md" else path.stem
+    if name and name != expected:
+        kind = "directory" if path.name == "SKILL.md" else "filename"
+        r.fail(rel, "name", f"{kind} is {expected!r} but frontmatter name is {name!r}")
+
+    lines = text.splitlines()
+    body = "\n".join(lines[body_start:])
+    check_paths(path, body, rel, r)
+    check_tokens(lines, rel, r)
+    if path.name == "SKILL.md":
+        first = next((ln for ln in lines[body_start:] if ln.startswith("## ")), "")
+        if first.strip() != "## When to invoke":
+            r.warn(rel, "structure", f"first body section is {first.strip() or '(none)'!r}, not '## When to invoke'")
+    return meta
+
+
+def check_scripts(r: Report) -> list[Path]:
+    scripts = sorted(p for d in REPO.rglob("bin") if d.is_dir() for p in d.iterdir() if p.is_file())
+    for p in scripts:
+        rel = p.relative_to(REPO).as_posix()
+        shebang = p.open(encoding="utf-8", errors="replace").readline()
+        is_shell = p.suffix == ".sh" or re.search(r"\b(ba)?sh\b", shebang)
+        if not p.stat().st_mode & 0o111:
+            r.fail(rel, "exec", "not executable (chmod +x)")
+        if is_shell:
+            out = subprocess.run(["bash", "-n", str(p)], capture_output=True, text=True)
+            if out.returncode != 0:
+                r.fail(rel, "syntax", f"bash -n failed: {out.stderr.strip().splitlines()[0]}")
+    return scripts
+
+
+def targets() -> list[Path]:
+    skills = [p for t in TIERS for p in sorted((REPO / t).rglob("SKILL.md")) if (REPO / t).is_dir()]
+    roles = sorted(p for p in (REPO / "roles").glob("*.md")) if (REPO / "roles").is_dir() else []
+    return skills + roles
+
+
+def tier_of(path: Path) -> str:
+    parts = path.relative_to(REPO).parts
+    return "tools/" + parts[1] if parts[0] == "tools" and len(parts) > 2 else parts[0]
+
+
+def do_list() -> int:
+    groups: dict[str, list[tuple[str, str, str]]] = {}
+    for path in targets():
+        parsed = frontmatter(path.read_text(encoding="utf-8"))
+        meta = parsed[0] if parsed else {}
+        desc = meta.get("description", "")
+        head = re.split(r"(?<=[.!?])\s", desc.strip(), maxsplit=1)[0] if desc else "(no description)"
+        groups.setdefault(tier_of(path), []).append(
+            (meta.get("name", path.stem), meta.get("version", "?"), head)
+        )
+    for tier in sorted(groups):
+        print(f"\n{tier}/")
+        for name, version, head in sorted(groups[tier]):
+            print(f"  {name:<22} {version:<7} {head}")
+    print()
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if "--list" in argv:
+        return do_list()
+    r = Report()
+    docs = targets()
+    for path in docs:
+        check_doc(path, r)
+    scripts = check_scripts(r)
+
+    for where, check, msg in r.warns:
+        print(f"WARN  {where}  [{check}] {msg}")
+    for where, check, msg in r.fails:
+        print(f"FAIL  {where}  [{check}] {msg}")
+    print(f"\nchecked {len(docs)} docs, {len(scripts)} scripts in {REPO}")
+    print(f"-> {len(r.fails)} failure(s), {len(r.warns)} warning(s)")
+    return 1 if r.fails else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

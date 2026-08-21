@@ -1,0 +1,455 @@
+<title>khalilou-stack Skill Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root {
+  --ground:      #f4f6f5;
+  --panel:       #ffffff;
+  --panel-sunk:  #eaeeed;
+  --ink:         #16292b;
+  --ink-soft:    #4a6265;
+  --ink-faint:   #7e9497;
+  --rule:        #d4dcdb;
+  --rule-strong: #b6c4c3;
+  --signal:      #b8690c;
+  --signal-soft: #f6e6cf;
+
+  --t-core:      #1d6a63;
+  --t-core-bg:   #ddeeec;
+  --t-roles:     #7a4b9c;
+  --t-roles-bg:  #ece0f4;
+  --t-gh:        #1f5f92;
+  --t-gh-bg:     #dceaf5;
+  --t-linear:    #a04360;
+  --t-linear-bg: #f6dee5;
+
+  --shadow: 0 1px 2px rgba(22,41,43,.06), 0 8px 24px -16px rgba(22,41,43,.28);
+
+  --step--1: clamp(.75rem, .72rem + .12vw, .82rem);
+  --step-0:  clamp(.94rem, .91rem + .16vw, 1.02rem);
+  --step-1:  clamp(1.12rem, 1.05rem + .34vw, 1.35rem);
+  --step-2:  clamp(1.5rem, 1.32rem + .9vw, 2.1rem);
+  --step-3:  clamp(2rem, 1.6rem + 2vw, 3.2rem);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:      #0e1a1c;
+    --panel:       #16262a;
+    --panel-sunk:  #111f22;
+    --ink:         #e2ecea;
+    --ink-soft:    #a3b8b8;
+    --ink-faint:   #6f8789;
+    --rule:        #26393d;
+    --rule-strong: #375054;
+    --signal:      #e9a33c;
+    --signal-soft: #3a2a12;
+
+    --t-core:      #5ec4b6;
+    --t-core-bg:   #123330;
+    --t-roles:     #c19ae0;
+    --t-roles-bg:  #291a38;
+    --t-gh:        #74b5e6;
+    --t-gh-bg:     #10293c;
+    --t-linear:    #e894ac;
+    --t-linear-bg: #371b25;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:      #0e1a1c;
+  --panel:       #16262a;
+  --panel-sunk:  #111f22;
+  --ink:         #e2ecea;
+  --ink-soft:    #a3b8b8;
+  --ink-faint:   #6f8789;
+  --rule:        #26393d;
+  --rule-strong: #375054;
+  --signal:      #e9a33c;
+  --signal-soft: #3a2a12;
+
+  --t-core:      #5ec4b6;
+  --t-core-bg:   #123330;
+  --t-roles:     #c19ae0;
+  --t-roles-bg:  #291a38;
+  --t-gh:        #74b5e6;
+  --t-gh-bg:     #10293c;
+  --t-linear:    #e894ac;
+  --t-linear-bg: #371b25;
+
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.9);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  font-size: var(--step-0);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: clamp(1.5rem, 4vw, 4rem) clamp(1rem, 4vw, 2.5rem) 5rem; }
+
+/* ---------- masthead ---------- */
+.mast { display: grid; gap: 1.25rem; padding-bottom: 2rem; border-bottom: 2px solid var(--ink); }
+.eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: var(--step--1); font-weight: 500;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--signal);
+}
+h1 {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-optical-sizing: auto; font-weight: 700;
+  font-size: var(--step-3); line-height: 1.02; letter-spacing: -.02em;
+  margin: 0; text-wrap: balance;
+}
+.dek { margin: 0; max-width: 60ch; color: var(--ink-soft); font-size: var(--step-1); line-height: 1.45; }
+
+/* ---------- filter ---------- */
+.filter-bar { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin: 2rem 0 .5rem; }
+.field { position: relative; flex: 1 1 22rem; }
+.field input {
+  width: 100%; padding: .7rem .9rem .7rem 2.4rem;
+  font-family: "IBM Plex Mono", monospace; font-size: var(--step-0);
+  color: var(--ink); background: var(--panel);
+  border: 1.5px solid var(--rule-strong); border-radius: 2px;
+}
+.field input::placeholder { color: var(--ink-faint); }
+.field input:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; border-color: var(--signal); }
+.field::before {
+  content: "›"; position: absolute; left: .95rem; top: 50%; transform: translateY(-52%);
+  font-family: "IBM Plex Mono", monospace; font-size: 1.2rem; font-weight: 600; color: var(--signal);
+}
+.count { font-family: "IBM Plex Mono", monospace; font-size: var(--step--1); color: var(--ink-faint); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.chip {
+  font-family: "IBM Plex Mono", monospace; font-size: var(--step--1);
+  padding: .34rem .6rem; border-radius: 2px; cursor: pointer;
+  border: 1.5px solid var(--rule-strong); background: transparent; color: var(--ink-soft);
+}
+.chip[aria-pressed="true"] { border-color: currentColor; }
+.chip:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+.chip.core[aria-pressed="true"]   { color: var(--t-core);   background: var(--t-core-bg); }
+.chip.roles[aria-pressed="true"]  { color: var(--t-roles);  background: var(--t-roles-bg); }
+.chip.gh[aria-pressed="true"]     { color: var(--t-gh);     background: var(--t-gh-bg); }
+.chip.linear[aria-pressed="true"] { color: var(--t-linear); background: var(--t-linear-bg); }
+
+/* ---------- phases ---------- */
+.phase { margin-top: 2.75rem; }
+.phase-head { display: flex; align-items: baseline; gap: .8rem; margin-bottom: .9rem; padding-bottom: .5rem; border-bottom: 1px solid var(--rule); }
+.phase-num {
+  font-family: "IBM Plex Mono", monospace; font-size: var(--step--1); font-weight: 600;
+  color: var(--ground); background: var(--ink); padding: .1rem .45rem; border-radius: 2px;
+}
+.phase-name {
+  font-family: "Bricolage Grotesque", sans-serif; font-weight: 700;
+  font-size: var(--step-1); letter-spacing: -.01em; margin: 0;
+}
+.phase-when { font-size: var(--step--1); color: var(--ink-faint); margin-left: auto; text-align: right; }
+
+.grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); }
+
+.card {
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+  padding: .9rem 1rem 1rem; box-shadow: var(--shadow);
+  display: grid; gap: .55rem; align-content: start;
+  border-left: 3px solid var(--tier-c, var(--rule-strong));
+}
+.card.core   { --tier-c: var(--t-core); }
+.card.roles  { --tier-c: var(--t-roles); }
+.card.gh     { --tier-c: var(--t-gh); }
+.card.linear { --tier-c: var(--t-linear); }
+.card[hidden] { display: none; }
+
+.card-top { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.name {
+  font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: var(--step-0);
+  color: var(--tier-c); letter-spacing: -.01em;
+}
+.badge {
+  font-family: "IBM Plex Mono", monospace; font-size: .68rem; letter-spacing: .06em;
+  text-transform: uppercase; padding: .12rem .38rem; border-radius: 2px; white-space: nowrap;
+}
+.badge.hook   { background: var(--ink); color: var(--ground); }
+.badge.tool   { border: 1.5px solid var(--ink-soft); color: var(--ink-soft); }
+.badge.prompt { border: 1.5px dashed var(--ink-faint); color: var(--ink-faint); }
+.badge.ro     { background: var(--signal-soft); color: var(--signal); }
+
+.does { margin: 0; font-size: var(--step--1); color: var(--ink-soft); line-height: 1.5; }
+.says { display: grid; gap: .22rem; margin: 0; padding: .5rem .6rem; background: var(--panel-sunk); border-radius: 2px; }
+.says li { list-style: none; font-size: var(--step--1); color: var(--ink); font-style: italic; }
+.says li::before { content: "“"; color: var(--ink-faint); }
+.says li::after  { content: "”"; color: var(--ink-faint); }
+
+.empty { padding: 2rem; text-align: center; color: var(--ink-faint); font-family: "IBM Plex Mono", monospace; font-size: var(--step--1); }
+.empty[hidden] { display: none; }
+
+/* ---------- ladder ---------- */
+.section { margin-top: 4rem; }
+.section > h2 {
+  font-family: "Bricolage Grotesque", sans-serif; font-weight: 700;
+  font-size: var(--step-2); letter-spacing: -.02em; margin: 0 0 .3rem; text-wrap: balance;
+}
+.section > .sub { margin: 0 0 1.4rem; color: var(--ink-soft); max-width: 62ch; }
+
+.ladder { display: grid; gap: 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--panel); }
+.rung { display: grid; grid-template-columns: minmax(11rem, 15rem) 1fr; gap: 0; border-top: 1px solid var(--rule); }
+.rung:first-child { border-top: 0; }
+.rung-key { padding: .85rem 1rem; background: var(--panel-sunk); border-right: 1px solid var(--rule); }
+.rung-key code { font-family: "IBM Plex Mono", monospace; font-size: var(--step--1); font-weight: 600; color: var(--signal); overflow-wrap: anywhere; }
+.rung-key p { margin: .25rem 0 0; font-size: var(--step--1); color: var(--ink-faint); line-height: 1.4; }
+.rung-val { padding: .85rem 1rem; display: flex; flex-wrap: wrap; gap: .35rem; align-content: start; }
+.pill {
+  font-family: "IBM Plex Mono", monospace; font-size: var(--step--1);
+  padding: .18rem .45rem; border-radius: 2px; border: 1px solid var(--rule-strong); color: var(--ink-soft);
+}
+.pill.core   { color: var(--t-core);   border-color: var(--t-core);   background: var(--t-core-bg); }
+.pill.roles  { color: var(--t-roles);  border-color: var(--t-roles);  background: var(--t-roles-bg); }
+.pill.gh     { color: var(--t-gh);     border-color: var(--t-gh);     background: var(--t-gh-bg); }
+.pill.linear { color: var(--t-linear); border-color: var(--t-linear); background: var(--t-linear-bg); }
+
+/* ---------- tables ---------- */
+.scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 40rem; font-size: var(--step--1); }
+caption { text-align: left; padding: .8rem 1rem; font-weight: 600; color: var(--ink); border-bottom: 1px solid var(--rule); background: var(--panel-sunk); }
+th, td { padding: .6rem .8rem; text-align: left; vertical-align: top; border-top: 1px solid var(--rule); }
+thead th { border-top: 0; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+tbody th { font-weight: 600; color: var(--ink); }
+td code, th code { font-family: "IBM Plex Mono", monospace; color: var(--signal); font-weight: 500; }
+td.na { color: var(--ink-faint); }
+
+/* ---------- refusals ---------- */
+.refuse { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.refuse-item { border-left: 3px solid var(--signal); background: var(--panel); padding: .7rem .9rem; border-radius: 0 3px 3px 0; box-shadow: var(--shadow); }
+.refuse-item strong { display: block; font-family: "IBM Plex Mono", monospace; font-size: var(--step--1); color: var(--signal); margin-bottom: .2rem; }
+.refuse-item span { font-size: var(--step--1); color: var(--ink-soft); }
+
+/* ---------- legend / footer ---------- */
+.legend { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-top: 1rem; padding: .9rem 1rem; background: var(--panel-sunk); border-radius: 3px; }
+.legend div { display: flex; align-items: center; gap: .45rem; font-size: var(--step--1); color: var(--ink-soft); }
+
+footer { margin-top: 4rem; padding-top: 1.2rem; border-top: 2px solid var(--ink); font-size: var(--step--1); color: var(--ink-faint); }
+footer code { font-family: "IBM Plex Mono", monospace; color: var(--ink-soft); }
+
+@media (max-width: 40rem) {
+  .rung { grid-template-columns: 1fr; }
+  .rung-key { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .phase-when { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card { transition: border-color .15s ease, transform .15s ease; }
+  .card:hover { transform: translateY(-1px); border-color: var(--tier-c); }
+}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">khalilou-stack · v0.1.0 · 20 skills</div>
+  <h1>What do I run, and what does it need?</h1>
+  <p class="dek">One agent harness across every project. Skills are grouped by <strong>when</strong> in the work you reach for them, and colored by <strong>what they depend on</strong> — because that is what decides whether a skill works in a fresh repo or needs a key in <code>.agents/stack.yml</code> first.</p>
+</header>
+
+<div class="filter-bar">
+  <div class="field">
+    <input id="q" type="search" placeholder="type what you'd actually say — &quot;this is broken&quot;, &quot;open a PR&quot;, &quot;what's next&quot;" aria-label="Filter skills by trigger phrase">
+  </div>
+  <span class="count" id="count"></span>
+</div>
+<div class="chips" id="chips">
+  <button class="chip core"   data-tier="core"   aria-pressed="true">core · git only</button>
+  <button class="chip roles"  data-tier="roles"  aria-pressed="true">roles · scope doc</button>
+  <button class="chip gh"     data-tier="gh"     aria-pressed="true">github · gh cli</button>
+  <button class="chip linear" data-tier="linear" aria-pressed="true">linear · workspace</button>
+</div>
+
+<div id="phases"></div>
+<p class="empty" id="empty" hidden>Nothing matches. The router's rule: when in doubt, invoke the skill anyway.</p>
+
+<div class="legend">
+  <div><span class="badge hook">hook</span> a PreToolUse hook blocks the call</div>
+  <div><span class="badge tool">tool-list</span> the capability is absent from the agent</div>
+  <div><span class="badge prompt">prompt</span> the contract asks; nothing checks</div>
+  <div><span class="badge ro">read-only</span> proposes, never mutates</div>
+</div>
+
+<section class="section">
+  <h2>The configuration ladder</h2>
+  <p class="sub">Every general skill reads <code>.agents/stack.yml</code> instead of hardcoding your project. Each key you fill in unlocks the skills below it. A missing key is a supported state — the skill asks you, or refuses naming the key. It never guesses.</p>
+  <div class="ladder" id="ladder"></div>
+</section>
+
+<section class="section">
+  <h2>Which review do I run?</h2>
+  <p class="sub">Four skills touch a pull request. The split is deliberate: the reviewer and the responder post under different GitHub identities, so no single skill does both halves.</p>
+  <div class="scroll">
+    <table>
+      <caption>Review cluster — who is reviewing × what stage</caption>
+      <thead><tr><th scope="col">Who</th><th scope="col">Produce the review</th><th scope="col">Answer existing comments</th><th scope="col">Drive rounds unattended</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Me, by hand</th><td>the project's own gate, when the diff is inside <code>review_gate.scope</code></td><td class="na">—</td><td class="na">—</td></tr>
+        <tr><th scope="row">The Codex side</th><td><code>/review-claude-pr</code> — P0–P3 as a comment review</td><td class="na">—</td><td class="na">—</td></tr>
+        <tr><th scope="row">Me, as the bot</th><td class="na">—</td><td><code>/review-comments</code> — fix, then reply</td><td class="na">—</td></tr>
+        <tr><th scope="row">Nobody watching</th><td class="na">—</td><td class="na">—</td><td><code>/pr-loop</code> — runs both halves, bounded rounds</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2>Which decision skill?</h2>
+  <p class="sub">One axis: which direction the work is moving. <code>/next</code> and <code>/triage</code> are complements, not alternatives — one looks forward at what to start, the other backward at what was left unfinished.</p>
+  <div class="scroll">
+    <table>
+      <caption>Decide cluster — direction of travel</caption>
+      <thead><tr><th scope="col">Direction</th><th scope="col">The question</th><th scope="col">Route to</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">A new idea coming in</th><td>should we build this at all?</td><td><code>/spec</code> — the gate runs first and alone; only an in-scope verdict spends three more agents</td></tr>
+        <tr><th scope="row">One narrow question</th><td>is just this in scope? how long? which component? what proves it?</td><td>the single role contract, dispatched alone</td></tr>
+        <tr><th scope="row">The backlog, forward</th><td>what do I pick up next?</td><td><code>/next</code> — recommends exactly one thing</td></tr>
+        <tr><th scope="row">Open work, backward</th><td>what about everything unfinished?</td><td><code>/triage</code> — scores it, executes nothing</td></tr>
+        <tr><th scope="row">A decision already made</th><td>file it</td><td><code>/linear-feature-intake</code> — executes a verdict, never forms one</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2>What the stack refuses to do</h2>
+  <p class="sub">The refusals are the point. This harness was extracted from a repo that once carried 27 open PRs, 80 unmerged branches and 55 worktrees — every one of which started as a good idea. The missing constraint was never idea generation.</p>
+  <div class="refuse">
+    <div class="refuse-item"><strong>no auto-decide pipeline</strong><span>Nothing chains reviews and answers their questions for you. Reviews surface decisions; you make them.</span></div>
+    <div class="refuse-item"><strong>/land stops at the PR</strong><span>Branch, gates, atomic commits, open the PR. Merging is a human decision and routes nowhere.</span></div>
+    <div class="refuse-item"><strong>the scope gate defaults to OUT</strong><span>An idea with no citation in the scope doc is out of scope by default. It must argue its way in.</span></div>
+    <div class="refuse-item"><strong>a merged PR is not gate evidence</strong><span>Shared verbatim by the retro and the release audit. Shipping code is not the same as passing a gate.</span></div>
+    <div class="refuse-item"><strong>no activity metrics</strong><span>Commits, lines changed and PR counts are never scores. The retro refuses to compute them.</span></div>
+    <div class="refuse-item"><strong>no criterion without a runnable check</strong><span>Acceptance criteria name the command that verifies them, or they do not ship.</span></div>
+  </div>
+</section>
+
+<footer>
+  Canonical files live once, at <code>&lt;tier&gt;/&lt;name&gt;/SKILL.md</code>. Hosts and projects point at them and never restate the procedure — a second copy of a prompt drifts, and the drift stays invisible until two harnesses disagree about the same proposal. Project skills shadow stack skills of the same name; domain skills stay in their own repo.
+</footer>
+
+</div>
+
+<script>
+const SKILLS = [
+  { n:"/stack", t:"core", p:0, e:null, does:"The router. Matches what you said against every skill's trigger phrases and names one. Never does the work itself.", says:["which skill fits this?","/stack"] },
+
+  { n:"/spec", t:"roles", p:1, e:"ro", does:"The product gate. The scope role runs first and alone; only an in-scope verdict fans out to tech-lead and designer, then qa. A rejection costs one agent instead of four.", says:["should we build X?","spec this out","is this worth building"] },
+  { n:"/next", t:"linear", p:1, e:"ro", does:"Reads the whole board — cycles, priorities, deadlines, blockers — and recommends exactly one thing to pick up, with a ranked top three and paste-ready kickoff text.", says:["what's next?","what should I work on"] },
+  { n:"/triage", t:"roles", p:1, e:"ro", does:"Scores every open PR, unmerged branch and worktree against the scope doc. Writes a dated proposal; closes, merges and deletes nothing.", says:["triage the backlog","which branches can we delete"] },
+  { n:"product-manager", t:"roles", p:1, e:"tool", does:"One verdict, citing the exact line of the scope doc that justifies it. Defaults to OUT. Refuses to write specs, estimate, or soften a rejection.", says:["is this in scope?"] },
+  { n:"tech-lead", t:"roles", p:1, e:"prompt", does:"Reuse-vs-build delta naming real files and symbols, the seam it touches, collisions with open PRs, an estimate in half-days. Refuses to estimate what it cannot name.", says:["how long would this take?","does this already exist?"] },
+  { n:"designer", t:"roles", p:1, e:"tool", does:"Which existing components render this, what data shape they need, what states it has. Refuses to invent a component when one exists; a spec conflict stops the run.", says:["which component renders this?"] },
+  { n:"qa", t:"roles", p:1, e:"tool", does:"Acceptance criteria that are runnable checks, plus the false-positive definition that stops a demo being mistaken for evidence.", says:["what would prove this works?"] },
+  { n:"/linear-feature-intake", t:"linear", p:1, e:null, does:"Turns a scope verdict into the right tracker records and nothing else. Searches for duplicates first; performs no scope assessment of its own.", says:["file this","turn this into tickets"] },
+
+  { n:"/investigate", t:"core", p:2, e:"hook", does:"Root-cause debugging under one rule: no fix before the cause is found. Three failed attempts stops the run. Every fix ships a test that failed before and passes after.", says:["why is this broken?","it worked yesterday","wtf"] },
+  { n:"/careful", t:"core", p:2, e:"hook", does:"Pre-checks every shell command. Recursive deletes rooted at / or $HOME and force-pushes to the default branch are denied outright; the rest of the destructive set asks first.", says:["be careful","we're touching prod"] },
+  { n:"/freeze", t:"core", p:2, e:"hook", does:"Locks edits to one directory for the session. Anything outside is blocked, not warned — including a symlink inside the boundary that points out of it.", says:["only edit this folder","lock the scope"] },
+  { n:"/unfreeze", t:"core", p:2, e:"hook", does:"Clears the boundary without ending the session, and reports what it was.", says:["unfreeze","allow all edits"] },
+  { n:"/explain-diff-html", t:"core", p:2, e:null, does:"Builds a self-contained interactive page teaching a change — background, mechanism, diagrams, and a five-question quiz. A bundled validator hard-gates the output.", says:["explain this diff","teach the team what changed"] },
+
+  { n:"/review-claude-pr", t:"gh", p:3, e:null, does:"The reviewer half: a defect-first pass posted as a P0–P3 comment review, marked with the head SHA so a round is never paid for twice.", says:["review PR #N","give me a defect review"] },
+  { n:"/review-comments", t:"gh", p:3, e:null, does:"The responder half: finds genuinely unanswered threads across all three feedback surfaces, fixes the code, replies as the bot, and posts the summary comment last.", says:["answer the review comments","address the feedback"] },
+  { n:"/pr-loop", t:"gh", p:3, e:null, does:"Runs both halves unattended until clean, blocked, or out of rounds. Bounded by a round cap and a repeat-finding detector that persists across invocations.", says:["drive the review until it's clean"] },
+
+  { n:"/land", t:"core", p:4, e:null, does:"Dedicated branch, gates green, atomic commits, PR opened — with the concurrent-session guards: re-verify the branch and the staged set before every commit. Stops at the PR.", says:["land this","commit and push","open a PR"] },
+
+  { n:"/health", t:"core", p:5, e:"ro", does:"Runs the project's own gates, scores them, and reports the trend against the last run. Never edits, never fixes.", says:["how healthy is this codebase?","quality score"] },
+  { n:"/delivery-retro", t:"gh", p:5, e:"ro", does:"Was this period fruitful versus the previous equal period? Measures outcomes, flow, quality and focus — and refuses commits, lines and PR counts as scores.", says:["was this week fruitful?","what did we ship"] },
+  { n:"/session-titles", t:"gh", p:5, e:"ro", does:"Sweeps open agent sessions across both harnesses, resolves each to a branch, PR and issue key, and retitles them so the session list is scannable.", says:["what is each session working on?"] },
+  { n:"/linear-steward", t:"linear", p:5, e:null, does:"Structural health of the tracker: unprojected, stale, GitHub-contradicted, duplicated, superseded, ungateable. Mutates nothing unless explicitly applied.", says:["audit the board","these statuses are wrong"] },
+  { n:"/linear-release-audit", t:"linear", p:5, e:"ro", does:"Audits a release against its gate criteria using tracker and GitHub evidence together. Headline finding: issues marked done with no acceptance evidence.", says:["is the release ready?","what's blocking the release"] },
+];
+
+const PHASES = [
+  { name:"Route",    when:"you don't know which skill" },
+  { name:"Decide",   when:"before any code exists" },
+  { name:"Build",    when:"while changing the code" },
+  { name:"Review",   when:"once there's a pull request" },
+  { name:"Land",     when:"getting it onto a branch" },
+  { name:"Operate",  when:"after it ships" },
+];
+
+const TIER_LABEL = { core:"core", roles:"roles", gh:"github", linear:"linear" };
+const E_LABEL = { hook:"hook", tool:"tool-list", prompt:"prompt", ro:"read-only" };
+
+const host = document.getElementById("phases");
+PHASES.forEach((ph, i) => {
+  const items = SKILLS.filter(s => s.p === i);
+  if (!items.length) return;
+  const sec = document.createElement("section");
+  sec.className = "phase";
+  sec.dataset.phase = i;
+  sec.innerHTML = `<div class="phase-head">
+      <span class="phase-num">${String(i).padStart(2,"0")}</span>
+      <h2 class="phase-name">${ph.name}</h2>
+      <span class="phase-when">${ph.when}</span>
+    </div><div class="grid"></div>`;
+  const grid = sec.querySelector(".grid");
+  items.forEach(s => {
+    const card = document.createElement("article");
+    card.className = "card " + s.t;
+    card.dataset.tier = s.t;
+    card.dataset.hay = (s.n + " " + s.does + " " + s.says.join(" ") + " " + TIER_LABEL[s.t]).toLowerCase();
+    const badges = [`<span class="badge tool" style="border-color:var(--tier-c);color:var(--tier-c)">${TIER_LABEL[s.t]}</span>`];
+    if (s.e) badges.push(`<span class="badge ${s.e}">${E_LABEL[s.e]}</span>`);
+    card.innerHTML = `<div class="card-top"><span class="name">${s.n}</span>${badges.join("")}</div>
+      <p class="does">${s.does}</p>
+      <ul class="says">${s.says.map(x => `<li>${x}</li>`).join("")}</ul>`;
+    grid.appendChild(card);
+  });
+  host.appendChild(sec);
+});
+
+const LADDER = [
+  { k:"(nothing)", d:"a fresh repo, no config", v:[["core","/stack"],["core","/investigate"],["core","/careful"],["core","/freeze"],["core","/unfreeze"],["core","/explain-diff-html"]] },
+  { k:"gates.lint · gates.test", d:"your authoritative commands", v:[["core","/land"],["core","/health"]] },
+  { k:"scope_doc", d:"what's in and out right now", v:[["roles","/spec"],["roles","/triage"],["roles","product-manager"],["roles","tech-lead"],["roles","designer"],["roles","qa"]] },
+  { k:"identities.reviewer · identities.bot", d:"who publishes, who replies", v:[["gh","/review-claude-pr"],["gh","/review-comments"],["gh","/pr-loop"]] },
+  { k:"issue_prefix", d:"your tracker's key format", v:[["gh","/session-titles"],["gh","/delivery-retro"]] },
+  { k:"workspace_contract", d:"your tracker's own rules", v:[["linear","/next"],["linear","/linear-steward"],["linear","/linear-feature-intake"],["linear","/linear-release-audit"]] },
+];
+document.getElementById("ladder").innerHTML = LADDER.map(r => `
+  <div class="rung">
+    <div class="rung-key"><code>${r.k}</code><p>${r.d}</p></div>
+    <div class="rung-val">${r.v.map(([t,n]) => `<span class="pill ${t}">${n}</span>`).join("")}</div>
+  </div>`).join("");
+
+const q = document.getElementById("q");
+const chips = [...document.querySelectorAll(".chip")];
+const countEl = document.getElementById("count");
+const emptyEl = document.getElementById("empty");
+
+function apply() {
+  const term = q.value.trim().toLowerCase();
+  const on = new Set(chips.filter(c => c.getAttribute("aria-pressed") === "true").map(c => c.dataset.tier));
+  let shown = 0;
+  document.querySelectorAll(".card").forEach(card => {
+    const ok = on.has(card.dataset.tier) && (!term || card.dataset.hay.includes(term));
+    card.hidden = !ok;
+    if (ok) shown++;
+  });
+  document.querySelectorAll(".phase").forEach(sec => {
+    sec.hidden = ![...sec.querySelectorAll(".card")].some(c => !c.hidden);
+  });
+  countEl.textContent = shown === SKILLS.length ? `${shown} skills` : `${shown} of ${SKILLS.length}`;
+  emptyEl.hidden = shown > 0;
+}
+q.addEventListener("input", apply);
+chips.forEach(c => c.addEventListener("click", () => {
+  c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") === "true" ? "false" : "true");
+  apply();
+}));
+apply();
+</script>

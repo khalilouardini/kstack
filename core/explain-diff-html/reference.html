@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference page — the explanation gate</title>
+<style>
+  :root {
+    --ink: #1a1c1f;
+    --muted: #5b6068;
+    --rule: #dcdfe4;
+    --bg: #ffffff;
+    --panel: #f6f7f9;
+    --accent: #2f5d8a;
+    --warn: #8a5a2f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e6e8ec; --muted: #a0a6b0; --rule: #33373d;
+      --bg: #16181b; --panel: #1e2126; --accent: #7fb0dd; --warn: #d6a373;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 5rem; max-width: 46rem;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  h1 { font-size: 1.8rem; line-height: 1.25; margin: 0 0 .5rem; }
+  h2 { font-size: 1.25rem; margin: 2.5rem 0 .75rem; padding-top: .75rem; border-top: 1px solid var(--rule); }
+  h3 { font-size: 1rem; margin: 1.5rem 0 .5rem; }
+  p, li { color: var(--ink); }
+  .lede { color: var(--muted); font-size: 1.05rem; }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  nav.toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: .75rem 1rem; }
+  nav.toc ol { margin: 0; padding-left: 1.25rem; }
+  pre, code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .875rem;
+  }
+  pre {
+    white-space: pre-wrap;
+    overflow-x: auto;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: .75rem 1rem;
+  }
+  code { background: var(--panel); padding: .1em .35em; border-radius: 4px; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .925rem; }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  /* Pipeline diagram: semantic HTML + CSS, never characters in a <pre>. */
+  .pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; margin: 1rem 0; padding: 0; list-style: none; }
+  .pipeline li {
+    flex: 1 1 8rem; background: var(--panel); border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent); border-radius: 6px; padding: .6rem .7rem;
+  }
+  .pipeline li b { display: block; font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .pipeline li.terminal { border-left-color: var(--warn); }
+  .q-card { border: 1px solid var(--rule); border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+  .q-card p.stem { font-weight: 600; margin: 0 0 .75rem; }
+  .opts { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; }
+  .opts button {
+    width: 100%; text-align: left; cursor: pointer; font: inherit; color: inherit;
+    background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; padding: .5rem .7rem;
+  }
+  .opts button[disabled] { cursor: default; }
+  .opts button.hit { border-color: var(--accent); background: var(--panel); }
+  .opts button.miss { border-color: var(--warn); }
+  .verdict { margin: .75rem 0 0; color: var(--muted); font-size: .925rem; }
+  footer { margin-top: 3rem; color: var(--muted); font-size: .875rem; }
+</style>
+</head>
+<body>
+
+<h1>Delivery is now gated by a validator, not by rereading</h1>
+<p class="lede">This page is the reference artifact for <code>explain-diff-html</code>. It explains one
+change — the introduction of a hard gate on generated explanation pages — and it is also the
+executable version of the spec: it passes every check the gate applies.</p>
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#the-change">What the system does now</a></li>
+    <li><a href="#why">Why rereading was not enough</a></li>
+    <li><a href="#how-it-works">How the gate works</a></li>
+    <li><a href="#quiz">Check your understanding</a></li>
+  </ol>
+</nav>
+
+<h2 id="the-change">What the system does now</h2>
+
+<p>Before, a generated explanation page was finished when its author had read it back. Now a page is
+finished when <code>validate_explanation.py</code> exits <code>0</code>. Nothing about the writing
+step changed; what changed is that the author's judgment is no longer the last thing standing
+between a broken artifact and the reader.</p>
+
+<p>The gate is stdlib-only Python, reads one file, and speaks in exit codes. It has no configuration
+and no network access, which means it produces the same verdict on the author's machine and on the
+reviewer's.</p>
+
+<h2 id="why">Why rereading was not enough</h2>
+
+<p>The failures worth catching are the ones invisible to whoever wrote the page. Three recur:</p>
+
+<ul>
+  <li><b>Assets that only exist on the author's machine.</b> A stylesheet or font pulled from a
+    remote host renders perfectly for the person who has it cached and silently degrades for
+    everyone else.</li>
+  <li><b>Code samples with no <code>white-space</code> rule.</b> The browser collapses every sample
+    onto one line — and the page still looks plausible to the author, whose eye supplies the
+    structure the markup lost.</li>
+  <li><b>A comprehension check that can be scored without comprehension.</b> If the right option is
+    reliably the longest one, or reliably in the same slot, the quiz measures pattern-matching.</li>
+</ul>
+
+<p>None of these are caught by reading. All three are caught by a program.</p>
+
+<h2 id="how-it-works">How the gate works</h2>
+
+<p>One parse pass collects the material each check needs, then the checks run independently and
+accumulate into a report. Failures block; warnings are printed and do not affect the exit code.</p>
+
+<ol class="pipeline">
+  <li><b>Step 1</b>Read the file as text</li>
+  <li><b>Step 2</b>Parse once into title, ids, pre blocks, styles, scripts</li>
+  <li><b>Step 3</b>Run every check against that material</li>
+  <li class="terminal"><b>Exit</b>Non-zero if any check failed</li>
+</ol>
+
+<h3>The checks</h3>
+
+<table>
+  <thead><tr><th>Check</th><th>Blocks when</th></tr></thead>
+  <tbody>
+    <tr><td><code>document</code></td><td>No doctype, no closing tag, or an empty title — the signature of a truncated write</td></tr>
+    <tr><td><code>offline</code></td><td>A remote asset, an <code>@import</code>, or a network call in an inline script</td></tr>
+    <tr><td><code>code-blocks</code></td><td>No CSS rule targeting <code>pre</code> sets a preserving <code>white-space</code></td></tr>
+    <tr><td><code>diagrams</code></td><td>Box-drawing characters or ASCII art appear inside a <code>pre</code></td></tr>
+    <tr><td><code>structure</code></td><td>A required section is absent, or an anchor points at no id</td></tr>
+    <tr><td><code>quiz</code></td><td>The question set is not five well-formed entries</td></tr>
+    <tr><td><code>quiz-position</code></td><td>One slot holds three answers, or fewer than three slots are used</td></tr>
+    <tr><td><code>quiz-length</code></td><td>The right option is the single longest in over half the questions</td></tr>
+    <tr><td><code>quiz-leak</code></td><td>Markup reveals correctness before the reader chooses</td></tr>
+  </tbody>
+</table>
+
+<h3>Why outbound links are allowed but assets are not</h3>
+
+<p>An <code>&lt;a href&gt;</code> to a remote page is a reference: follow it or do not, the page still
+renders. A remote <code>src</code> is a dependency: without it the page is wrong. The
+<code>offline</code> check draws the line exactly there, which is why it inspects every element
+except <code>a</code>.</p>
+
+<h3>The quiz-data contract</h3>
+
+<p>Auditing a quiz requires it to be machine-readable, so the questions live in one JSON block and
+the option elements carry no correctness marker at all:</p>
+
+<pre><code>&lt;script type="application/json" id="quiz-data"&gt;
+[{"question": "...", "options": ["...", "..."], "answer": 2,
+  "explanation": "...", "distractors": {"0": "the misreading this encodes"}}]
+&lt;/script&gt;</code></pre>
+
+<p>Two consequences follow. The <code>answer</code> field indexes the options exactly as emitted, so
+shuffling is an authoring-time decision and the page stays reproducible. And because correctness
+lives only in the JSON that the script reads on click, "do not leak the answer" becomes something a
+program can verify rather than something an author promises.</p>
+
+<h3>Running it</h3>
+
+<pre><code>python3 validate_explanation.py /tmp/2026-01-01-explanation-slug.html</code></pre>
+
+<h2 id="quiz">Check your understanding</h2>
+
+<p class="lede">Five questions. Each one asks you to predict what the gate does in a case this page
+did not spell out.</p>
+
+<div id="quiz-mount"></div>
+
+<script type="application/json" id="quiz-data">
+[
+  {
+    "question": "A reviewer opens the page on a plane and every code sample has collapsed onto a single line. Which check should have blocked delivery?",
+    "options": [
+      "offline, because the stylesheet never loaded without a working network connection",
+      "code-blocks, because no CSS rule set a preserving value on pre",
+      "diagrams, because the sample was really art rather than code",
+      "document, because the write was truncated before the styles arrived"
+    ],
+    "answer": 1,
+    "explanation": "code-blocks exists for exactly this failure: it looks fine to the author and is broken for the reader. The samples were inline in the page, so nothing needed to load; the missing piece was a CSS rule.",
+    "distractors": {
+      "0": "reads the symptom as a loading problem, but an inline sample has nothing to load",
+      "3": "assumes a truncated write, which document would have caught by other means"
+    }
+  },
+  {
+    "question": "The author adds a stylesheet link pointing at a font host and the page looks noticeably better. What does the gate do?",
+    "options": [
+      "Passes it, because the offline check inspects only inline script bodies and never markup attributes",
+      "Warns about it, on the grounds that typography is cosmetic rather than structural",
+      "Blocks it under offline — a remote asset makes rendering depend on the network",
+      "Blocks it under document, because an extra head element breaks the parse"
+    ],
+    "answer": 2,
+    "explanation": "offline scans asset-bearing attributes on every element except a. A font host is a dependency, so the page would render differently — or unstyled — for a reader with no connection.",
+    "distractors": {
+      "0": "confuses the script-body scan with the attribute scan; offline does both"
+    }
+  },
+  {
+    "question": "Every right answer sits in the same slot, but all options are the same length and no markup marks any of them. Which check fails?",
+    "options": [
+      "quiz-position, because one slot carrying three answers is the key",
+      "quiz-leak, since a predictable slot is itself a marker embedded in markup",
+      "quiz-length, because equal-length options leave the answer undetermined",
+      "Nothing fails; balanced option lengths satisfy every rule about quizzes"
+    ],
+    "answer": 0,
+    "explanation": "quiz-position counts how often each slot holds the answer and how many distinct slots are used. Predictability is the defect, and it is independent of both markup and option length.",
+    "distractors": {
+      "1": "quiz-leak only inspects markup; a pattern across questions is not in the markup"
+    }
+  },
+  {
+    "question": "You move the options out of the JSON and render all of them in static HTML, leaving only the answer index in the JSON. What happens?",
+    "options": [
+      "It is blocked under quiz-leak, because options in static markup always leak",
+      "It is blocked under structure, since relocating the options removes the section identifier that the required-sections rule depends on",
+      "It is allowed but warned about, because static options weaken keyboard support",
+      "It is allowed, provided every option renders and not only the right one"
+    ],
+    "answer": 3,
+    "explanation": "The leak rule is about asymmetry, not about static markup. Rendering all options server-side is fine; rendering only the right one is the failure, because the reader can see the answer before choosing.",
+    "distractors": {
+      "0": "treats static rendering itself as the defect rather than the asymmetry"
+    }
+  },
+  {
+    "question": "A page clears every check and prints two warnings. Is it deliverable?",
+    "options": [
+      "No — a warning and a failure block equally, which is precisely what distinguishes a hard gate from advice",
+      "Yes; warnings never affect the exit code, and the exit code decides",
+      "Only when the warnings concern accessibility rather than the document",
+      "No, because warnings indicate the author has not reread the page"
+    ],
+    "answer": 1,
+    "explanation": "The gate's verdict is its exit code, and only failures set it. Warnings name things that should normally be fixed — missing focus styling, a missing viewport tag — without holding up delivery.",
+    "distractors": {
+      "2": "invents a severity ordering between checks that the gate does not have"
+    }
+  }
+]
+</script>
+
+<script>
+(function () {
+  var raw = document.getElementById('quiz-data').textContent;
+  var quiz = JSON.parse(raw);
+  var mount = document.getElementById('quiz-mount');
+
+  quiz.forEach(function (q, qi) {
+    var card = document.createElement('div');
+    card.className = 'q-card';
+
+    var stem = document.createElement('p');
+    stem.className = 'stem';
+    stem.textContent = (qi + 1) + '. ' + q.question;
+    card.appendChild(stem);
+
+    var list = document.createElement('ul');
+    list.className = 'opts';
+    var verdict = document.createElement('p');
+    verdict.className = 'verdict';
+    verdict.setAttribute('role', 'status');
+
+    q.options.forEach(function (text, oi) {
+      var li = document.createElement('li');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = text;
+      btn.addEventListener('click', function () {
+        var chosen = oi === q.answer;
+        Array.prototype.forEach.call(list.querySelectorAll('button'), function (b, bi) {
+          b.disabled = true;
+          if (bi === q.answer) { b.className = 'hit'; }
+          else if (bi === oi) { b.className = 'miss'; }
+        });
+        var note = q.distractors && q.distractors[String(oi)];
+        verdict.textContent = (chosen ? 'Right. ' : 'Not quite. ') + q.explanation +
+          (!chosen && note ? ' Your choice ' + note + '.' : '');
+      });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+
+    card.appendChild(list);
+    card.appendChild(verdict);
+    mount.appendChild(card);
+  });
+})();
+</script>
+
+<footer>
+  <p>Generated by <code>explain-diff-html</code>. Regenerate rather than hand-edit: the gate runs on
+  the generated file, and a hand edit is unverified until it runs again.</p>
+</footer>
+
+</body>
+</html>
