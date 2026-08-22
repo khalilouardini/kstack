@@ -4,8 +4,7 @@
 Checks every skill (`*/SKILL.md` under router/, core/, roles/, tools/) and every
 role contract (`roles/*.md`) against CONVENTIONS.md, plus the shell scripts under
 any `bin/`. Exits non-zero if anything fails. `--list` prints the catalog instead.
-
-Stdlib only. Run it from anywhere: paths resolve against this file's repo.
+Stdlib only; paths resolve against this file's repo, so run it from anywhere.
 """
 
 from __future__ import annotations

@@ -197,7 +197,7 @@ fi
 
 printf '\nhost=%s  dest=%s\n' "$HOST" "$DEST"
 printf 'repo=%s\n' "$REPO"
-if [ "$UNINSTALL" -eq 0 ]; then
+if [ "$UNINSTALL" -eq 0 ] && [ "$DRY" -eq 0 ]; then
   printf 'stack-root recorded at %s/stack-root\n' "$STATE_DIR"
 fi
 printf '%d unchanged, %d changed, %d skipped' "$COUNT_OK" "$COUNT_CHANGED" "$COUNT_SKIPPED"
