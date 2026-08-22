@@ -137,7 +137,7 @@ paper over it — surface what it said it needed, and mark the spec `BLOCKED` in
 the verdict block. A spec with a fabricated estimate is worse than a spec with
 none.
 
-If `designer` returns a **⚠ DESIGN-CONTRACT CONFLICT**, surface it prominently and
+If `designer` returns a **⚠ DESIGN-SPEC CONFLICT**, surface it prominently and
 mark the spec `BLOCKED — owner decision`. Design-contract conflicts are flagged,
 never silently resolved by this skill.
 

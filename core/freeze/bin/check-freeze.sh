@@ -70,9 +70,20 @@ FILE_PATH=$(kstack_hook_extract_field "$INPUT" file_path)
 EXTRACT_RC=$?
 set -e
 
+# Empty payload: DENY. Execution only reaches here with a boundary configured
+# (the no-boundary case returned above), and a PreToolUse hook always receives a
+# JSON payload — empty stdin means the invocation is broken, not that the tool
+# call is harmless. Allowing here is the same fail-open the deny polarity exists
+# to prevent, and it is reachable: an upstream wrapper that swallows stdin
+# disables the boundary silently, with no error anywhere.
+if [ -z "$INPUT" ]; then
+  kstack_hook_decision deny "[freeze] No tool payload received, so the target file cannot be checked against the boundary. Blocked (fail closed). Freeze boundary: $FREEZE_DIR"
+  exit 0
+fi
+
 # Unparseable payload (or no parser available): DENY. A boundary hook that
 # allows what it cannot read is not a boundary.
-if [ "$EXTRACT_RC" -ne 0 ] && [ -n "$INPUT" ]; then
+if [ "$EXTRACT_RC" -ne 0 ]; then
   kstack_hook_decision deny "[freeze] Could not parse the tool payload to check the freeze boundary. Blocked (fail closed). Freeze boundary: $FREEZE_DIR"
   exit 0
 fi

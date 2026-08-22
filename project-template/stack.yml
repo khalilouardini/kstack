@@ -41,11 +41,20 @@ issue_prefix: null               # e.g. ACME  → matches ACME-123
 # The commands this repo considers authoritative. Skills run YOUR commands and
 # never infer one from the file tree — an inferred gate that passes proves
 # nothing. Both keys refuse rather than default.
+#
+# `lint` and `test` are the two every skill may assume exist. Any additional key
+# here is treated as one more check by `/health`, which scores whatever it finds
+# — so a project with a `dead_code` or `shellcheck` command can declare it and
+# get it scored without a schema change. Only `lint` and `test` gate a push.
 gates:
   lint: null                     # must pass before any commit or push claim, e.g. "npm run lint"
   test: null                     # the fast suite — the default gate, e.g. "npm test"
   test_full: null                # the full suite, if it is slower than `test`.
                                  # null → `test` is the only suite; --full is unavailable.
+  typecheck: null                # e.g. "tsc --noEmit" — scored by /health, does not gate a push
+  build: null                    # e.g. "npm run build" — scored by /health.
+                                 # Declare it even when typecheck passes: a green
+                                 # typecheck does not prove the build is green.
 
 # A project-local "prove the bug" review skill, if this repo has one. Stack
 # review skills defer to it when the diff falls inside `scope`, instead of

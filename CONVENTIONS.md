@@ -20,7 +20,15 @@ docs/             — migration guides, deep dives
 
 Tier rule: a skill lives in the **least capable tier that can run it**. If it
 works with only git + the local filesystem it is `core/`; if it needs `gh` it is
-`tools/github/`; if it needs Linear it is `tools/linear/`. Project-specific
+`tools/github/`; if it needs Linear it is `tools/linear/`.
+
+The tier is set by what a skill needs to deliver its **core** value, not by
+every optional step. `core/land` is the standing example: branch, gates, atomic
+commits and push are all git, and only the final PR step wants `gh`. Without a
+forge CLI it stops after push and reports the branch — degraded, not broken, so
+it stays in `core/`. A skill that would produce *nothing* without the higher
+tier does not get this latitude; it belongs in that tier. Any skill using the
+exception must say in its own text what it does when the tool is absent. Project-specific
 skills never live here — they stay in the consuming project's repo
 (`.claude/skills/` + `.agents/skills/`), and project-level skills shadow
 stack-level skills of the same name.
@@ -39,17 +47,20 @@ project: <slug>
 scope_doc: <path|null>          # scope/priority contract — roles, spec, triage, next
 workspace_contract: <path|null> # Linear workspace rules — tools/linear
 issue_prefix: <PREFIX|null>     # e.g. OGUR — session-titles, next
-gates:
+gates:                          # `lint` + `test` are the two any skill may assume.
   lint: <cmd|null>              # must pass before any commit/push claim
   test: <cmd|null>              # fast suite
   test_full: <cmd|null>
+  typecheck: <cmd|null>         # additional keys are permitted and are scored by
+  build: <cmd|null>             # /health; only lint + test gate a push
 review_gate:
   skill_path: <path|null>       # project "prove the bug" review skill (e.g. review-engine)
   scope: <glob|null>            # diff paths that trigger it
 identities:
   reviewer: <gh-login|null>     # the human account
   bot: <gh-login|null>          # bot identity for review replies
-protected_branches: []          # globs triage may never propose CLOSE for
+protected_branches: []          # fnmatch globs (`demo/*`) matched against the
+                                # branch name; triage may never propose CLOSE for one
 role_appendix_dir: <path|null>  # per-role project appendices (traps, factories, gates)
 spec_output_dir: <path|null>
 ```

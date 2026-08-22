@@ -82,7 +82,7 @@ trap 'rm -rf "$SCRATCH"' EXIT
 
 # durable, per-PR answered-findings ledger — OUTSIDE $SCRATCH and outside $REPO_ROOT,
 # because the repeat-finding guard must survive this invocation. See step 5.
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/kstack-pr-loop"
+STATE_DIR="${KSTACK_STATE:-$HOME/.kstack}/pr-loop"
 mkdir -p "$STATE_DIR"
 LEDGER="$STATE_DIR/$OWNER-$REPO-$PR"
 touch "$LEDGER"
