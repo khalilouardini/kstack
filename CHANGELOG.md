@@ -27,6 +27,18 @@ contracts are dispatched as subagents rather than invoked, so they are not linke
   `bin/check-stack`, `hosts/HOSTS.md`, `docs/skill-map.html`.
 
 ### Fixed
+- `core/freeze/bin/check-freeze.sh` denies on an empty payload when a boundary
+  is set. It reached that branch only with a boundary configured, and a
+  `PreToolUse` hook always receives one — so empty stdin meant a broken
+  invocation, and allowing it let an upstream wrapper that swallowed stdin
+  disable the boundary with no error anywhere.
+- `roles/spec` and `roles/designer` disagreed on the blocking token: designer
+  emits `⚠ DESIGN-SPEC CONFLICT`, spec waited for `⚠ DESIGN-CONTRACT CONFLICT`
+  and would never have recognised a conflict stop. Aligned on designer's.
+- `tools/github/pr-loop` kept its ledger under `XDG_STATE_HOME` instead of the
+  `KSTACK_STATE` root this repo declares. All state references now agree.
+- `gates.typecheck` and `gates.build` are read by `/health` but were missing
+  from the schema, so `/health` documented keys nobody could discover.
 - `core/freeze/bin/check-freeze.sh` resolves the deepest **existing** ancestor
   before comparing against the boundary. Resolving only the immediate parent
   left a path unresolved whenever its subdirectory did not exist yet, so on any
