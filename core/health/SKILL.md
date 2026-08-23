@@ -1,7 +1,7 @@
 ---
 name: health
 version: 0.1.0
-description: Read-only code-quality dashboard — runs the consuming repo's own gates from .agents/stack.yml, scores each check 0-10 from real exit codes and real output, and reports a weighted composite plus the trend versus the previous run. Never edits, never fixes. Use when asked to "health check", "code quality", "how healthy is this codebase", "run all the checks", "quality score", or "/health". (khalilou-stack)
+description: Read-only code-quality dashboard — runs the consuming repo's own gates from .agents/stack.yml, scores each check 0-10 from real exit codes and real output, and reports a weighted composite plus the trend versus the previous run. Never edits, never fixes. Use when asked to "health check", "code quality", "how healthy is this codebase", "run all the checks", "quality score", or "/health". (kstack)
 ---
 
 # health — run the project's own gates, score them, track the trend
@@ -19,7 +19,7 @@ rather than as a score.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before running anything.
 
 - **`project`** — the slug that names the history file. Missing or null →

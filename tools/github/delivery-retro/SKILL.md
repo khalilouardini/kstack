@@ -1,7 +1,7 @@
 ---
 name: delivery-retro
 version: 0.1.0
-description: Assess whether a period of engineering work was fruitful, against the previous period of equal length, from GitHub (and optionally tracker) evidence — delivered outcomes, flow, quality, focus, review effectiveness. Never commits, changed lines, or merged-PR count as a standalone score. Read-only; ends with one bounded experiment. Use when asked "was this week fruitful?", "engineering retro", "what did we ship this week", or "/delivery-retro --days 7". (khalilou-stack)
+description: Assess whether a period of engineering work was fruitful, against the previous period of equal length, from GitHub (and optionally tracker) evidence — delivered outcomes, flow, quality, focus, review effectiveness. Never commits, changed lines, or merged-PR count as a standalone score. Read-only; ends with one bounded experiment. Use when asked "was this week fruitful?", "engineering retro", "what did we ship this week", or "/delivery-retro --days 7". (kstack)
 ---
 
 # delivery-retro — was this period fruitful?
@@ -19,7 +19,7 @@ those are separate skills.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before gathering anything:
 
 - **`scope_doc`** — the scope/priority contract the milestone attribution is

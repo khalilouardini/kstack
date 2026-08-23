@@ -1,7 +1,7 @@
 ---
 name: unfreeze
 version: 0.1.0
-description: Clear the edit boundary set by /freeze so Edit and Write are allowed everywhere again, reporting what the boundary was. Use when asked to "unfreeze", "unlock edits", "remove the freeze", "clear the edit boundary", or "allow all edits". (khalilou-stack)
+description: Clear the edit boundary set by /freeze so Edit and Write are allowed everywhere again, reporting what the boundary was. Use when asked to "unfreeze", "unlock edits", "remove the freeze", "clear the edit boundary", or "allow all edits". (kstack)
 ---
 
 # unfreeze — clear the freeze boundary

@@ -1,7 +1,7 @@
 ---
 name: investigate
 version: 0.1.0
-description: Debug a failure by finding its root cause before any fix: reproduce, gather evidence, write a hypothesis ledger with confidence, test the most falsifiable hypothesis first, then fix with a regression test that failed before it and passes after. Use when asked to "debug this", "fix this bug", "why is this broken", "investigate this error", or "root cause analysis". Proactively suggest when the user reports a stack trace, a 500, unexpected behavior, or "it was working yesterday". (khalilou-stack)
+description: Debug a failure by finding its root cause before any fix: reproduce, gather evidence, write a hypothesis ledger with confidence, test the most falsifiable hypothesis first, then fix with a regression test that failed before it and passes after. Use when asked to "debug this", "fix this bug", "why is this broken", "investigate this error", or "root cause analysis". Proactively suggest when the user reports a stack trace, a 500, unexpected behavior, or "it was working yesterday". (kstack)
 ---
 
 # investigate — root-cause debugging under the Iron Law
@@ -48,7 +48,7 @@ current phase:
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before Phase 5:
 
 - **`gates.test`** — the command that runs the fast suite. Every regression-test

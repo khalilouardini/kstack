@@ -1,7 +1,7 @@
 ---
 name: linear-release-audit
 version: 0.1.0
-description: Audit a release project against its gate criteria using Linear and GitHub evidence together — what is complete, active, blocked, unstarted, or falsely complete (Done with no acceptance evidence) — plus date/dependency incoherence, open review findings, and red CI. Never treats a merged implementation PR as proof a gate passed. Ends with three next actions. Use when asked "will we hit the release date", "audit the release", or "/linear-release-audit "<project>" [--apply]". (khalilou-stack)
+description: Audit a release project against its gate criteria using Linear and GitHub evidence together — what is complete, active, blocked, unstarted, or falsely complete (Done with no acceptance evidence) — plus date/dependency incoherence, open review findings, and red CI. Never treats a merged implementation PR as proof a gate passed. Ends with three next actions. Use when asked "will we hit the release date", "audit the release", or "/linear-release-audit "<project>" [--apply]". (kstack)
 ---
 
 # linear-release-audit — is the release gate actually met?
@@ -25,7 +25,7 @@ only whether the criteria in the scope doc would pass on today's evidence.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before gathering anything:
 
 - **`workspace_contract`** — the tracker's workspace rules. Missing, null, or

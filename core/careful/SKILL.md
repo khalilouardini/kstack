@@ -1,7 +1,7 @@
 ---
 name: careful
 version: 0.1.0
-description: Guard destructive shell commands — recursive delete, SQL DROP/TRUNCATE, force-push, git reset --hard, kubectl delete, docker prune — by asking before each one runs, and hard-denying recursive delete of / or $HOME and force-push to the default branch. Use when asked to "be careful", "safety mode", "careful mode", "prod mode", or before touching production or a shared environment. (khalilou-stack)
+description: Guard destructive shell commands — recursive delete, SQL DROP/TRUNCATE, force-push, git reset --hard, kubectl delete, docker prune — by asking before each one runs, and hard-denying recursive delete of / or $HOME and force-push to the default branch. Use when asked to "be careful", "safety mode", "careful mode", "prod mode", or before touching production or a shared environment. (kstack)
 hooks:
   PreToolUse:
     - matcher: "Bash"

@@ -1,7 +1,7 @@
 ---
 name: freeze
 version: 0.1.0
-description: Restrict Edit and Write to one directory for the session — every file outside the boundary is blocked, not warned. Use when asked to "freeze edits", "restrict edits to <dir>", "only edit this folder", "lock the editing scope", or while debugging, to stop unrelated code being "fixed" along the way. Clear it with /unfreeze. (khalilou-stack)
+description: Restrict Edit and Write to one directory for the session — every file outside the boundary is blocked, not warned. Use when asked to "freeze edits", "restrict edits to <dir>", "only edit this folder", "lock the editing scope", or while debugging, to stop unrelated code being "fixed" along the way. Clear it with /unfreeze. (kstack)
 hooks:
   PreToolUse:
     - matcher: "Edit"

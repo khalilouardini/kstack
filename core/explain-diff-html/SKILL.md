@@ -1,7 +1,7 @@
 ---
 name: explain-diff-html
 version: 0.1.0
-description: Explain a code change as one self-contained offline HTML page — investigation first, semantic diagrams, a five-question quiz — then gate it with a stdlib validator that blocks remote assets, collapsed code samples, and a quiz scoreable without reading the page. Use when asked to "explain this diff", "write up this change", "onboard someone onto this PR", or "/explain-diff-html [branch | PR | commit range | paths]". (khalilou-stack)
+description: Explain a code change as one self-contained offline HTML page — investigation first, semantic diagrams, a five-question quiz — then gate it with a stdlib validator that blocks remote assets, collapsed code samples, and a quiz scoreable without reading the page. Use when asked to "explain this diff", "write up this change", "onboard someone onto this PR", or "/explain-diff-html [branch | PR | commit range | paths]". (kstack)
 ---
 
 # explain-diff-html — teach a change, then prove the page is not broken

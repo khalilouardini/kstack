@@ -1,4 +1,4 @@
-# khalilou-stack
+# kstack
 
 A personal agent harness that travels across projects. Twenty skills and four
 role contracts, each defined once, pointed at by every host and every repo that
@@ -9,8 +9,8 @@ request to the right skill. [Skill map (visual)](docs/skill-map.html) shows the
 same thing as a filterable board.
 
 ```bash
-git clone <this repo> ~/projects/khalilou-stack
-cd ~/projects/khalilou-stack && bin/install            # Claude Code
+git clone <this repo> ~/projects/kstack
+cd ~/projects/kstack && bin/install            # Claude Code
 bin/install --host codex                               # Codex CLI
 ```
 

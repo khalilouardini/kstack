@@ -1,7 +1,7 @@
 ---
 name: pr-loop
 version: 0.1.0
-description: Drive an unattended reviewer↔responder loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED: each round runs the Codex reviewer via `codex exec`, answers findings with review-comments (fix + reply as the bot), then re-checks the exit gates. Bounded by a round cap, a repeat-finding ledger that survives invocations, and a head-SHA marker so no round is paid twice. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge]". (khalilou-stack)
+description: Drive an unattended reviewer↔responder loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED: each round runs the Codex reviewer via `codex exec`, answers findings with review-comments (fix + reply as the bot), then re-checks the exit gates. Bounded by a round cap, a repeat-finding ledger that survives invocations, and a head-SHA marker so no round is paid twice. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge]". (kstack)
 ---
 
 # pr-loop — run the review ping-pong to a stop condition
@@ -17,7 +17,7 @@ approving — see "What this skill is NOT for".
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before preflight:
 
 - **`identities.reviewer`** — the human maintainer's gh login. This is the
@@ -48,9 +48,9 @@ Missing `.agents/stack.yml` altogether → refuse and name the file.
 This skill is the **driver** for two review skills that already exist and are
 not changed here:
 
-- **the reviewer** — khalilou-stack [`tools/github/review-claude-pr`](../review-claude-pr/SKILL.md),
+- **the reviewer** — kstack [`tools/github/review-claude-pr`](../review-claude-pr/SKILL.md),
   run by Codex, posts a `COMMENT` review as `identities.reviewer`.
-- **the responder** — khalilou-stack [`review-comments`](../review-comments/SKILL.md),
+- **the responder** — kstack [`review-comments`](../review-comments/SKILL.md),
   run by you, fixes the code and replies as `identities.bot`.
 
 Neither one decides when to stop. This one does. It is **unattended by design**:

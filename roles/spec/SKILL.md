@@ -1,7 +1,7 @@
 ---
 name: spec
 version: 0.1.0
-description: Take an idea, feature request, or "should we build X?" question through the product gate — product-manager decides scope first and alone, and only when the verdict is IN for the currently active milestone do tech-lead, designer, and qa run. Emits one spec file with a single verdict block, or a one-paragraph rejection that costs one agent instead of four. Use when asked to "spec this", "should we build X", "is this in scope", or "/spec [--milestone <id>] <idea>". (khalilou-stack)
+description: Take an idea, feature request, or "should we build X?" question through the product gate — product-manager decides scope first and alone, and only when the verdict is IN for the currently active milestone do tech-lead, designer, and qa run. Emits one spec file with a single verdict block, or a one-paragraph rejection that costs one agent instead of four. Use when asked to "spec this", "should we build X", "is this in scope", or "/spec [--milestone <id>] <idea>". (kstack)
 ---
 
 # spec — the product gate
@@ -26,7 +26,7 @@ backlog of things you will never build.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2):
 
 - **`scope_doc`** — the scope contract. Missing, null, or unreadable → **stop**.

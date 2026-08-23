@@ -1,7 +1,7 @@
 ---
 name: linear-feature-intake
 version: 0.1.0
-description: Turn a gated feature request into the correct Linear records — and nothing else. Searches for equivalent existing work first, then executes only the disposition a product-manager verdict block implies: no ticket for OUT, one research issue for NEEDS-EVIDENCE, one backlog issue for a future milestone, a meta issue plus children for the active one. Never overrides the verdict. Use when asked to "file this", "create the tickets for this", or "/linear-feature-intake …". (khalilou-stack)
+description: Turn a gated feature request into the correct Linear records — and nothing else. Searches for equivalent existing work first, then executes only the disposition a product-manager verdict block implies: no ticket for OUT, one research issue for NEEDS-EVIDENCE, one backlog issue for a future milestone, a meta issue plus children for the active one. Never overrides the verdict. Use when asked to "file this", "create the tickets for this", or "/linear-feature-intake …". (kstack)
 ---
 
 # linear-feature-intake — the verdict's hands, not its judgement
@@ -29,7 +29,7 @@ records that already exist, and not for a release-readiness question.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before anything else:
 
 - **`workspace_contract`** — the tracker's workspace rules. Missing, null, or

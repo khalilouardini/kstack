@@ -1,4 +1,4 @@
-# Adopting khalilou-stack in a project
+# Adopting kstack in a project
 
 Six steps, in order. Steps 1–2 are required; 3–6 unlock progressively more of
 the suite. Nothing here is destructive — if the project already has its own

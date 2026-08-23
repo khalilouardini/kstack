@@ -1,7 +1,7 @@
 ---
 name: review-claude-pr
 version: 0.1.0
-description: Review an open PR authored by the consuming repo's bot identity and immediately post prioritized P0–P3 findings as a Codex-attributed COMMENT review from the human reviewer account. Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (khalilou-stack)
+description: Review an open PR authored by the consuming repo's bot identity and immediately post prioritized P0–P3 findings as a Codex-attributed COMMENT review from the human reviewer account. Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
 # review-claude-pr — review a bot-authored PR as Codex
@@ -18,7 +18,7 @@ defects, and never answers, fixes, or resolves them — that is
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before anything else:
 
 - **`identities.reviewer`** — the gh login that must be active for every write

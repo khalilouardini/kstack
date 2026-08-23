@@ -1,4 +1,4 @@
-# khalilou-stack conventions
+# kstack conventions
 
 Every skill, role, and doc in this repo follows these rules. `bin/check-stack`
 machine-checks the checkable ones.
@@ -86,7 +86,7 @@ defaults open is not a gate).
   the cross-host drift detector), `description`.
 - Description formula, in order: one sentence of what it does; `Use when asked
   to "<literal user phrasings>"`; optionally `Proactively suggest when <situation>`;
-  ends with `(khalilou-stack)`. Hard cap 1024 bytes; target ≤500. The
+  ends with `(kstack)`. Hard cap 1024 bytes; target ≤500. The
   description is paid every session — the body only on invocation.
 - First body section is `## When to invoke` (routing altitude), then the
   procedure. A reader deciding *which* skill never has to read *how* one works.

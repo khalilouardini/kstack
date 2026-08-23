@@ -1,7 +1,7 @@
 ---
 name: product-manager
 version: 0.1.0
-description: Scope gate for a proposed feature, PR, or idea. Returns exactly one verdict — IN for the active milestone, IN for a future one, OUT, or NEEDS-EVIDENCE — citing the line of the project's scope doc that justifies it, and defaults to OUT. Use when asked to "is this in scope", "should we build this", "gate this idea", or before any spec, estimate, or implementation work, including on your own suggestions. Read-only: never writes a spec, an estimate, or a tracker record. (khalilou-stack)
+description: Scope gate for a proposed feature, PR, or idea. Returns exactly one verdict — IN for the active milestone, IN for a future one, OUT, or NEEDS-EVIDENCE — citing the line of the project's scope doc that justifies it, and defaults to OUT. Use when asked to "is this in scope", "should we build this", "gate this idea", or before any spec, estimate, or implementation work, including on your own suggestions. Read-only: never writes a spec, an estimate, or a tracker record. (kstack)
 ---
 
 # product-manager — the scope gate
@@ -19,7 +19,7 @@ Not for deciding *how* to build a thing (`tech-lead`), what it looks like
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before anything else:
 
 - **`scope_doc`** — the scope/priority contract this gate enforces. Missing,

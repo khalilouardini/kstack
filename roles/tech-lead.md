@@ -1,7 +1,7 @@
 ---
 name: tech-lead
 version: 0.1.0
-description: Maps an in-scope feature onto the code that already exists — a reuse-vs-build delta naming real files and symbols, the architectural seam, collisions with open PRs and worktrees, and an estimate in half-days. Refuses to estimate what it cannot name files for, and stops on a plan overbuilt for its goal. Use when asked to "what already exists for this", "estimate this feature", "review this implementation plan", or when /spec fans out after an IN verdict. (khalilou-stack)
+description: Maps an in-scope feature onto the code that already exists — a reuse-vs-build delta naming real files and symbols, the architectural seam, collisions with open PRs and worktrees, and an estimate in half-days. Refuses to estimate what it cannot name files for, and stops on a plan overbuilt for its goal. Use when asked to "what already exists for this", "estimate this feature", "review this implementation plan", or when /spec fans out after an IN verdict. (kstack)
 ---
 
 # tech-lead — canonical role contract
@@ -24,7 +24,7 @@ proposal.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before doing anything else:
 
 - **`role_appendix_dir`** — where this repo's per-role appendices live. See

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-stack — the free-tier health gate for khalilou-stack.
+"""check-stack — the free-tier health gate for kstack.
 
 Checks every skill (`*/SKILL.md` under router/, core/, roles/, tools/) and every
 role contract (`roles/*.md`) against CONVENTIONS.md, plus the shell scripts under
@@ -16,7 +16,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 TIERS = ("router", "core", "roles", "tools")
-SUFFIX = "(khalilou-stack)"
+SUFFIX = "(kstack)"
 DESC_HARD, DESC_SOFT = 1024, 500
 
 # Only prefixes that unambiguously name THIS repo. `docs/` is excluded on

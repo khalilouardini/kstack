@@ -1,7 +1,7 @@
 ---
 name: session-titles
 version: 0.1.0
-description: Sweep open agent sessions (Claude Code and Codex), resolve the GitHub PR and issue key each one is working on, and prefix each session title so the session list is scannable at a glance. Dry-run by default; nothing is renamed until --apply. Use when asked to "label my sessions", "what is each session working on?", "retitle the agent sessions", or "/session-titles [--apply] [--include-archived]". (khalilou-stack)
+description: Sweep open agent sessions (Claude Code and Codex), resolve the GitHub PR and issue key each one is working on, and prefix each session title so the session list is scannable at a glance. Dry-run by default; nothing is renamed until --apply. Use when asked to "label my sessions", "what is each session working on?", "retitle the agent sessions", or "/session-titles [--apply] [--include-archived]". (kstack)
 ---
 
 # session-titles — label sessions with their PR / issue key
@@ -18,7 +18,7 @@ sessions — this only rewrites titles.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2):
 
 - **`issue_prefix`** — the issue-tracker key prefix (e.g. a three-to-five letter

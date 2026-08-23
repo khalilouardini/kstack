@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hook-extract.sh — SHARED JSON helpers for khalilou-stack PreToolUse hooks.
+# hook-extract.sh — SHARED JSON helpers for kstack PreToolUse hooks.
 # Sourced (never executed) by core/careful/bin/check-careful.sh and
 # core/freeze/bin/check-freeze.sh via a physical path relative to each hook
 # script.

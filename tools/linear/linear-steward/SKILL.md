@@ -1,7 +1,7 @@
 ---
 name: linear-steward
 version: 0.1.0
-description: Audit and repair the structural health of a Linear workspace against its workspace contract — issues with no project, stale statuses, statuses contradicted by GitHub, duplicates, superseded work, and issues too vague to gate. Produces an evidence ledger and mutates nothing unless explicitly invoked with apply. Use when asked to "clean up Linear", "is the board accurate?", "reconcile Linear with GitHub", or "/linear-steward audit|apply|reconcile-finished [team|project]". (khalilou-stack)
+description: Audit and repair the structural health of a Linear workspace against its workspace contract — issues with no project, stale statuses, statuses contradicted by GitHub, duplicates, superseded work, and issues too vague to gate. Produces an evidence ledger and mutates nothing unless explicitly invoked with apply. Use when asked to "clean up Linear", "is the board accurate?", "reconcile Linear with GitHub", or "/linear-steward audit|apply|reconcile-finished [team|project]". (kstack)
 ---
 
 # linear-steward — keep the board's claims true
@@ -20,7 +20,7 @@ board's claims against evidence and repairs the ones that are wrong.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before any tracker call:
 
 - **`workspace_contract`** — the workspace rules doc. Missing, null, or

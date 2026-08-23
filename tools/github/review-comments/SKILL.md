@@ -1,7 +1,7 @@
 ---
 name: review-comments
 version: 0.1.0
-description: Find the unanswered review feedback on a PR (inline threads, review summaries, conversation comments), make the code fix where one is warranted, and reply under the consuming repo's bot identity, with the active gh account always restored and re-verified in a separate call. Use when asked to "answer the review comments", "reply to the review", "address the PR feedback", or "/review-comments [PR#]". (khalilou-stack)
+description: Find the unanswered review feedback on a PR (inline threads, review summaries, conversation comments), make the code fix where one is warranted, and reply under the consuming repo's bot identity, with the active gh account always restored and re-verified in a separate call. Use when asked to "answer the review comments", "reply to the review", "address the PR feedback", or "/review-comments [PR#]". (kstack)
 ---
 
 # review-comments — answer a PR's open review comments as the bot
@@ -16,7 +16,7 @@ changing PR state — see "What this skill is NOT for".
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before doing anything else:
 
 - **`identities.reviewer`** — the human maintainer's gh login, normally the

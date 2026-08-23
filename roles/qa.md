@@ -1,7 +1,7 @@
 ---
 name: qa
 version: 0.1.0
-description: Turns an in-scope feature into acceptance criteria that are runnable checks — each naming the exact command or test that decides it — plus a per-criterion false-positive definition and an explicit Human-judgement section for what genuinely cannot be executed. Refuses any criterion with no execution path. Use when asked to "write the acceptance criteria", "how would we know this works", "definition of done", or when /spec runs its last gate. (khalilou-stack)
+description: Turns an in-scope feature into acceptance criteria that are runnable checks — each naming the exact command or test that decides it — plus a per-criterion false-positive definition and an explicit Human-judgement section for what genuinely cannot be executed. Refuses any criterion with no execution path. Use when asked to "write the acceptance criteria", "how would we know this works", "definition of done", or when /spec runs its last gate. (kstack)
 ---
 
 # qa — canonical role contract
@@ -21,7 +21,7 @@ proposal.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before doing anything else:
 
 - **`gates.lint`, `gates.test`, `gates.test_full`** — the commands that exist in

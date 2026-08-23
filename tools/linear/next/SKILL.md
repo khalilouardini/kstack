@@ -1,7 +1,7 @@
 ---
 name: next
 version: 0.1.0
-description: Read Linear — open issues, cycles, projects, milestones, deadlines, blockers — and make exactly ONE recommendation for what to work on next, with a ranked top 3 and paste-ready kickoff paragraphs, gated against the consuming repo's scope doc. Read-only; never creates, closes, or reassigns an issue, and never invents one. Use when asked to "what should I work on next", "what's next", "pick my next ticket", or "/next [<milestone-id>|any]". (khalilou-stack)
+description: Read Linear — open issues, cycles, projects, milestones, deadlines, blockers — and make exactly ONE recommendation for what to work on next, with a ranked top 3 and paste-ready kickoff paragraphs, gated against the consuming repo's scope doc. Read-only; never creates, closes, or reassigns an issue, and never invents one. Use when asked to "what should I work on next", "what's next", "pick my next ticket", or "/next [<milestone-id>|any]". (kstack)
 ---
 
 # next — what to pick up now
@@ -25,7 +25,7 @@ choice back.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before touching the tracker:
 
 - **`scope_doc`** — the scope/priority contract every candidate is gated against.

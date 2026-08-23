@@ -1,7 +1,7 @@
 ---
 name: triage
 version: 0.1.0
-description: Score every open PR, unmerged branch, and worktree against the consuming repo's scope doc and propose MERGE / REBASE+MERGE / CLOSE / PARK for each, with every verdict citing a scope-doc line. Read-only — writes one dated proposal file and never closes, merges, deletes, or pushes. Use when asked to "triage the backlog", "clean up the open PRs", "which branches can we delete?", or "/triage [prs|branches|worktrees|all]". (khalilou-stack)
+description: Score every open PR, unmerged branch, and worktree against the consuming repo's scope doc and propose MERGE / REBASE+MERGE / CLOSE / PARK for each, with every verdict citing a scope-doc line. Read-only — writes one dated proposal file and never closes, merges, deletes, or pushes. Use when asked to "triage the backlog", "clean up the open PRs", "which branches can we delete?", or "/triage [prs|branches|worktrees|all]". (kstack)
 ---
 
 # triage — score the backlog against the scope contract
@@ -17,7 +17,7 @@ not for picking what to work on next.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before doing anything else:
 
 - **`scope_doc`** — the scope/priority contract every verdict is scored

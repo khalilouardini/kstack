@@ -1,7 +1,7 @@
 ---
 name: designer
 version: 0.1.0
-description: Defines the surface contract for an in-scope feature — which EXISTING components render it, the data shape they need, and every state including empty and error. Refuses to invent a component when one already fits, and stops the run with a decision block when the feature contradicts the design spec rather than silently deviating. Use when asked to "what does this look like", "which components render this", "write the design contract", or when /spec fans out after an IN verdict. (khalilou-stack)
+description: Defines the surface contract for an in-scope feature — which EXISTING components render it, the data shape they need, and every state including empty and error. Refuses to invent a component when one already fits, and stops the run with a decision block when the feature contradicts the design spec rather than silently deviating. Use when asked to "what does this look like", "which components render this", "write the design contract", or when /spec fans out after an IN verdict. (kstack)
 ---
 
 # designer — canonical role contract
@@ -22,7 +22,7 @@ proposal.
 
 ## Configuration — read `.agents/stack.yml` first
 
-Read `.agents/stack.yml` at the consuming repo's root (schema: khalilou-stack
+Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before doing anything else:
 
 - **`role_appendix_dir`** — where this repo's per-role appendices live. Read

@@ -1,4 +1,4 @@
-# .agents/stack.yml — what this repo tells khalilou-stack about itself.
+# .agents/stack.yml — what this repo tells kstack about itself.
 #
 # Copy to <your-repo>/.agents/stack.yml and fill it in. General skills read this
 # file instead of hardcoding your project; every value below is something a

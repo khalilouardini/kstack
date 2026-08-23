@@ -1,4 +1,4 @@
-# Migrating OGUR onto khalilou-stack
+# Migrating OGUR onto kstack
 
 OGUR is where this stack came from, so it is the first consumer and the test of
 whether the general/project split holds. Nothing here is destructive: the stack
