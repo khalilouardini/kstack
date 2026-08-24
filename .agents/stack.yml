@@ -31,6 +31,14 @@ review_gate:
   skill_path: null
   scope: null
 
+# Model + effort for pr-loop's `codex exec` reviewer rounds (CONVENTIONS.md §2).
+# Effort escalates by diff size; the tier does not — cross-tier is `--model`.
+review_model:
+  slug: gpt-5.6-terra
+  effort: medium
+  escalate_above_lines: 400
+  escalated_effort: high
+
 identities:
   maintainer: khalilouardini
   reviewer: ogur-codex-bot
