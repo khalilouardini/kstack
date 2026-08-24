@@ -79,21 +79,31 @@ tell the user — never post review answers from the wrong identity.
 A PR carries feedback on three surfaces. Fetch all three (reading as `$ORIG` is fine — no switch needed to read).
 
 **Inline review threads** — the load-bearing query. Threads carry resolution state, which is how you tell "still open" from "done":
+**Walk every cursor.** A long-running PR exceeds any single page, and an
+unanswered thread that fell off page 2 is indistinguishable in the output from
+one that does not exist — the skill would post its mandatory summary while
+leaving real feedback unanswered. Follow `reviewThreads.pageInfo` until
+`hasNextPage` is false, re-query any thread whose `comments.pageInfo.hasNextPage`
+is true, and pass `--paginate` on both REST calls below. If any surface cannot be
+exhausted, say which and stop rather than filtering a partial set.
+
 ```bash
+AFTER=null   # then the endCursor of the previous page, until hasNextPage is false
 gh api graphql -f query='
-query($owner:String!, $repo:String!, $pr:Int!) {
+query($owner:String!, $repo:String!, $pr:Int!, $after:String) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$pr) {
-      reviewThreads(first:100) {
+      reviewThreads(first:100, after:$after) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           id isResolved isOutdated path
-          comments(first:50) { nodes { databaseId author { login } body createdAt pullRequestReview { state } } }
+          comments(first:100) { pageInfo { hasNextPage } nodes { databaseId author { login } body createdAt pullRequestReview { state } } }
         }
       }
-      reviews(first:50) { nodes { author { login } state body submittedAt } }
+      reviews(first:100) { pageInfo { hasNextPage } nodes { author { login } state body submittedAt } }
     }
   }
-}' -F owner="$OWNER" -F repo="$REPO" -F pr="$PR"
+}' -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" -F after="$AFTER"
 ```
 For the line number and `diff_hunk` context a thread is anchored to (the GraphQL above omits them), supplement with REST:
 ```bash

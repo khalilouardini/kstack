@@ -135,12 +135,24 @@ _resolve_path() {
     _dir="$(dirname "$_dir")"
   done
   _dir="$(cd "$_dir" 2>/dev/null && pwd -P || printf '%s' "$_dir")"
-  printf '%s/%s' "$_dir" "$_tail"
+  # At the filesystem root both dirname and basename are "/", so the naive
+  # join produced "///" and the prefix test then rejected every real path --
+  # a boundary of "/" denied everything instead of allowing everything.
+  # Collapse the separators the join can duplicate.
+  printf '%s/%s' "$_dir" "$_tail" | sed -e 's|/\{2,\}|/|g' -e 's|\(.\)/$|\1|'
 }
 FILE_PATH=$(_resolve_path "$FILE_PATH")
 FREEZE_DIR=$(_resolve_path "$FREEZE_DIR")
 
 # Check: does the file path start with the freeze directory?
+# A boundary of "/" contains every absolute path, but the generic prefix below
+# would build "//" and match nothing -- denying everything instead of allowing
+# everything, the exact inversion of what was configured.
+if [ "$FREEZE_DIR" = "/" ]; then
+  echo '{}'
+  exit 0
+fi
+
 case "$FILE_PATH" in
   "${FREEZE_DIR}/"*|"${FREEZE_DIR}")
     # Inside freeze boundary — allow

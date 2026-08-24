@@ -54,9 +54,20 @@ splits git work into two kinds of call, and the split is load-bearing:
   Branch-then-stage-then-commit, in one call.
 
 ```bash
-# narrows the window in which a sibling session can move HEAD under you
-git checkout -b feat/session-expiry && git add src/session.py tests/test_session.py && git commit -m "fix: redirect on expired session cookie"
+# assert, then commit — the assertions are what make this safe, not the &&
+git checkout -b feat/session-expiry && \
+  git add src/session.py tests/test_session.py && \
+  test "$(git branch --show-current)" = feat/session-expiry && \
+  test "$(git diff --cached --name-only)" = "$(printf 'src/session.py\ntests/test_session.py')" && \
+  git commit -m "fix: redirect on expired session cookie"
 ```
+
+The two `test` lines are the point. A sibling can move `HEAD` between the
+`add` and the `commit`, and paths staged by another session sit in the shared
+index waiting to be swept into your commit — so the branch and the staged set
+are both re-checked *after* staging and *immediately* before committing.
+Showing a bare checkout→add→commit chain would contradict the Step 4 rule that
+calls those assertions the guarantee.
 
 **Be precise about why, because the obvious reason is wrong.** `git checkout -b`
 writes the worktree's `HEAD`, which lives in `.git` and persists across shells

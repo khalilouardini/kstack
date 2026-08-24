@@ -98,9 +98,21 @@ document, not about the backlog.
 Do not read every diff. Get the facts first, in one call:
 
 ```bash
-gh pr list --state open --limit 100 \
-  --json number,title,isDraft,headRefName,updatedAt,additions,deletions,mergeable,statusCheckRollup
+# --limit is a CAP, not a page size: gh silently returns the first N and says
+# nothing about the rest. A repo with 101+ open PRs would produce a proposal
+# that claims to cover every open PR while omitting the remainder from every
+# bucket and every total. Ask for more than could exist, then assert.
+gh pr list --state open --limit 1000 \
+  --json number,title,isDraft,headRefName,updatedAt,additions,deletions,mergeable,statusCheckRollup \
+  > /tmp/triage-prs.json
+TOTAL=$(gh pr list --state open --limit 1000 --json number --jq 'length')
+echo "open PRs fetched: $TOTAL"
 ```
+
+If `TOTAL` equals the limit you passed, assume the list was truncated: raise the
+limit and re-run, or **fail closed and disclose the cap** in the proposal. Never
+report bucket totals over a subset while promising a disposition for every open
+PR.
 
 Then bucket mechanically, before any judgement:
 

@@ -101,6 +101,33 @@ contracts are dispatched as subagents rather than invoked, so they are not linke
   be running, which made the feature unusable from `codex exec` — its own
   documented host. It now excludes the invoking session and refuses on others.
 
+### Fixed in review (kstack#1, Codex round 3)
+- `core/careful` denied `rm -rf /` and `//` but only asked on `///`, `////`,
+  `/.` and `/./` — all names for the same filesystem root. Enumerating spellings
+  cannot keep up, so targets are now normalized (repeated separators collapsed,
+  `/.` components dropped) before the tier is decided.
+- `core/freeze` with a boundary of `/` denied **everything**: `_resolve_path /`
+  produced `///`, and the prefix test then built `//` and matched nothing — the
+  exact inversion of what was configured.
+- `validate_explanation.py`'s offline gate scanned `fetch`/XHR/WebSocket but not
+  ES module loading, so `import("https://cdn…")` and
+  `import x from "https://cdn…"` passed while the delivered page fetched a
+  remote module at load time.
+- `delivery-retro`'s freshness guard treated an old fetched tip as proof of a
+  stale checkout. A successful fetch already proves the ref is current, so an
+  old tip means a *quiet period* — the guard was refusing to report the
+  zero-delivery window it was asked for, contradicting its own acceptance
+  scenario. It now blocks only on a failed fetch or a tip newer than "today".
+- `review-comments` capped every review surface at one page with no `pageInfo`,
+  so on a long PR an unanswered thread past page 1 was indistinguishable from
+  one that did not exist — while the skill still posted its summary. All
+  surfaces now paginate to exhaustion or stop.
+- `roles/triage` fetched `--limit 100` open PRs while promising a disposition
+  for every one, silently omitting the remainder from all totals.
+- `core/land`'s example still showed a bare checkout→add→commit chain,
+  contradicting the prose that calls the branch and staged-path assertions the
+  guarantee. The example now performs both assertions before committing.
+
 ### Deliberately not ported
 gstack's `autoplan` and `ship` auto-decide pipelines. The gate agents exist to
 decline; a pipeline that answers their questions for them removes the constraint

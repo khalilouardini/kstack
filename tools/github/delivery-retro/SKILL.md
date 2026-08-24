@@ -104,12 +104,20 @@ fi
 
 Then evaluate the printed date against the resolved window:
 
-- **Newest `origin/<default-branch>` commit is older than the window's `from`** →
-  **BLOCK**: "Retro window is stale. Latest commit on `origin/<default-branch>`
-  was `<DATE>`, but the window covers `<from>` to `<to>`. Either today's date is
-  wrong in this session, or `origin/<default-branch>` is materially behind the
-  remote. Confirm the date, run `git fetch origin <default-branch>`, and re-run."
-  Stop until the user resolves it.
+- **The `git fetch` failed, or could not be verified** → **BLOCK**: the local
+  remote-tracking ref may be arbitrarily behind and nothing computed from it is
+  trustworthy. Say the fetch failed and stop.
+- **The fetch succeeded and the newest `origin/<default-branch>` commit predates
+  the window's `from`** → **proceed, and say so**:
+  `RETRO_GUARD: no default-branch commits in window (latest <DATE>) — reporting a zero-delivery window.`
+  A successful fetch already established the ref is current, so an old tip is
+  evidence of a **quiet period, not a stale checkout**. Blocking here would
+  refuse to report exactly the window most worth reporting — and would
+  contradict acceptance scenario 6, which requires a zero-delivery window to
+  produce a retro rather than an error.
+- **The session's stated date is inconsistent with the fetched tip** (the tip is
+  *newer* than "today") → **BLOCK**: that is a real clock problem, and it is the
+  only date inconsistency this guard can actually establish.
 - Otherwise print `RETRO_GUARD: latest commit <DATE> within window — proceeding.`
 
 **Take "today" from the session's stated current date, never from `date` on the

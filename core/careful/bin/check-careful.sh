@@ -111,6 +111,21 @@ if [ "$_IS_SIMPLE" -eq 1 ]; then
         # Skip non-target decoration: options, `--`, redirections (2>/dev/null
         # is the most common suffix on agent-generated commands), backgrounding.
         sudo|rm|-*|--|[0-9]'>'*|'>'*|'<'*|'&') continue ;;
+      esac
+      # Normalize BEFORE classifying. Enumerating spellings cannot keep up:
+      # `///`, `////`, `/.` and `/./` all name the filesystem root, and each one
+      # reached the overridable ask tier while `rm -rf /` was hard-denied.
+      # Collapse repeated separators and drop `/.` components so every alias
+      # arrives at the case below in one canonical form.
+      case "$_TOK" in
+        /*)
+          # squeeze duplicate slashes, remove /./ and trailing /., keep a single
+          # leading / so the root stays root rather than becoming empty
+          _TOK=$(printf '%s' "$_TOK" | sed -e 's|/\{2,\}|/|g' -e 's|/\./|/|g' -e 's|/\.$|/|' -e 's|\(.\)/$|\1|')
+          [ -z "$_TOK" ] && _TOK=/
+          ;;
+      esac
+      case "$_TOK" in
         '/'|'~'|'~/'|'$HOME'|'$HOME/'|'${HOME}'|'${HOME}/'|'/*'|'//') _ROOT_TARGETS=1 ;;
         *)
           # The shell spellings above are not the only way to name the home

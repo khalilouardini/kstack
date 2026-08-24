@@ -46,6 +46,12 @@ ASCII_ART_LINE = re.compile(r"^[\s|+\-=*/\\_<>^v.'`~]*$")
 # is no boundary there and the whole alternative silently never fires.
 NETWORK_CALL = re.compile(
     r"\bfetch\s*\(|\b(?:XMLHttpRequest|WebSocket|EventSource|navigator\.sendBeacon)\b"
+    # ES module loading is a network call the APIs above never mention. Both
+    # `import("https://…")` and `import x from "https://…"` fetch at load time,
+    # and a page using them passed the offline gate while depending on a CDN.
+    r"|\bimport\s*\(\s*['\"](?://|https?:)"
+    r"|\bimport\b[^;\n]*?\bfrom\s*['\"](?://|https?:)"
+    r"|\bimport\s*['\"](?://|https?:)"
 )
 CSS_REMOTE_URL = re.compile(r"url\(\s*['\"]?\s*(?://|https?:)", re.I)
 CSS_IMPORT = re.compile(r"@import\b", re.I)
