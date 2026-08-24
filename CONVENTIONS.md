@@ -56,6 +56,11 @@ gates:                          # `lint` + `test` are the two any skill may assu
 review_gate:
   skill_path: <path|null>       # project "prove the bug" review skill (e.g. review-engine)
   scope: <glob|null>            # diff paths that trigger it
+review_model:                   # which model reviews, and how hard — pr-loop only
+  slug: <model-slug|null>       # passed to `codex exec -m`
+  effort: <low|medium|high|xhigh|max|null>
+  escalate_above_lines: <int|null>   # changed lines above which escalated_effort applies
+  escalated_effort: <effort|null>
 identities:
   maintainer: <gh-login|null>   # human owner: governs and merges
   reviewer: <gh-login|null>     # review agent; Codex by default
@@ -65,6 +70,14 @@ protected_branches: []          # fnmatch globs (`demo/*`) matched against the
 role_appendix_dir: <path|null>  # per-role project appendices (traps, factories, gates)
 spec_output_dir: <path|null>
 ```
+
+`review_model` is the one block that defaults rather than refuses, and the
+reason is the asymmetry: an unset gate command silently passes a check that
+never ran, while an unset review model still produces a review — just at
+whatever tier the host's `~/.codex/config.toml` happens to name, which is a
+cost bug, not a correctness one. Refusing there would cost more than
+defaulting. The skill states the resolved model, effort, and where each came
+from in its report, so the default is never silent.
 
 **Missing-key policy — never silently default.** A skill that needs a key and
 does not find it either asks the user (interactive judgment calls) or refuses

@@ -42,6 +42,12 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
+This skill does not choose the model it runs on: it inherits whatever Codex
+session invoked it. Launched by `pr-loop`, that is the pair `pr-loop` resolved
+from `review_model.*`; launched by hand from an interactive Codex session, it
+is that session's own model and effort. If cost matters on a hand-run review,
+set them on the `codex` invocation — there is nothing to set here.
+
 ## Non-negotiable boundaries
 
 Every boundary here is **prompt-level**: this skill holds a shell, so nothing in

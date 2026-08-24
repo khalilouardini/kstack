@@ -7,6 +7,14 @@ capability tiers, and the decision and review clusters. The README now links to
 this guide first while retaining the filterable HTML map as a local interactive
 view.
 
+`pr-loop` now pins the review model and reasoning effort on every `codex exec`
+round instead of inheriting `~/.codex/config.toml`. New `review_model` block in
+`.agents/stack.yml` (`slug`, `effort`, `escalate_above_lines`,
+`escalated_effort`) with `--model` / `--effort` invocation overrides. Default is
+`gpt-5.6-terra` at `medium`, escalating effort — not tier — above 400 changed
+lines. This is the only stack.yml block that defaults rather than refuses; the
+resolved pair is stated in the preflight and the final report.
+
 ## 0.3.0 — 2026-08-24
 
 Replaced the ambiguous two-account review configuration with three explicit

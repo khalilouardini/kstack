@@ -64,6 +64,33 @@ review_gate:
   skill_path: null               # e.g. .claude/skills/review-engine/SKILL.md
   scope: null                    # glob of diff paths that trigger it, e.g. "src/engine/**"
 
+# Which model reviews, and how hard it thinks. Read by pr-loop when it launches
+# the Codex reviewer; ignored by every other skill. This is about the MODEL the
+# review agent runs on, not the account it posts under — that is
+# `identities.reviewer`, below.
+#
+# Unset → the reviewer round inherits whatever `~/.codex/config.toml` sets,
+# which on a workstation tuned for interactive work is the frontier model at
+# high effort, paid once per round up to `--max-rounds` times. That is the cost
+# this block exists to stop.
+#
+# `escalate_above_lines` routes by diff size: PRs at or below it review at
+# `effort`, PRs above it at `escalated_effort`. Size is `additions + deletions`
+# from `gh pr view --json additions,deletions`, and it raises EFFORT, not the
+# model tier — effort is the cheaper axis, and a bigger diff needs more
+# thinking over the same reading, not a different reader. Cross-tier
+# escalation stays a deliberate per-invocation `--model` flag.
+#
+# null on any key → pr-loop uses the documented default shown here and says so
+# in its report. This block never refuses: an unset review model produces a
+# review, just an overpriced one, so a refusal would cost more than a default.
+review_model:
+  slug: gpt-5.6-terra            # any model slug `codex exec -m` accepts
+  effort: medium                 # low | medium | high | xhigh | max
+  escalate_above_lines: 400      # changed lines above which `escalated_effort` applies.
+                                 # null → no size routing; `effort` is used for every PR.
+  escalated_effort: high
+
 # GitHub logins. No defaults, ever — the human governs and merges, the reviewer
 # publishes findings (Codex by default), and the implementer opens PRs, fixes,
 # and replies (Claude by default). A skill refuses when a role it needs is null.

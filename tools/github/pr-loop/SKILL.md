@@ -1,7 +1,7 @@
 ---
 name: pr-loop
-version: 0.2.0
-description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED: each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, a durable repeat-finding ledger, and a head-SHA marker. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge]". (kstack)
+version: 0.3.0
+description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED: each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, a durable repeat-finding ledger, a head-SHA marker, and a pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E]". (kstack)
 ---
 
 # pr-loop — run the review ping-pong to a stop condition
@@ -11,7 +11,7 @@ description: Drive an unattended reviewer↔implementer loop on one open PR to C
 One open PR needs review rounds driven to a stop condition without a human in
 the seat: review → fix → reply → re-review, until the PR is clean, a
 disagreement blocks it, or the round budget runs out. Invoke as
-`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author]`. Not for reviewing a
+`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--model M] [--effort E]`. Not for reviewing a
 human-authored PR, not for deciding contested design questions, and not for
 approving — see "What this skill is NOT for".
 
@@ -43,6 +43,16 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   say so once in the final report, plainly: *"no project review gate configured
   (`review_gate.skill_path: null`) — rounds ran with the generic reviewer
   only."* Do not substitute a guessed skill.
+
+- **`review_model.slug`, `review_model.effort`,
+  `review_model.escalate_above_lines`, `review_model.escalated_effort`** —
+  which model runs the reviewer round and at what reasoning effort. This is the
+  model the review agent runs on, not the account it posts under
+  (`identities.reviewer`). **The one block that defaults instead of refusing**
+  (CONVENTIONS.md §2): missing or null → `gpt-5.6-terra` at `medium`,
+  escalating to `high` above 400 changed lines. The default is never silent —
+  the preflight resolution and the final report both state the resolved pair
+  and where each half came from.
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
@@ -94,6 +104,20 @@ STATE_DIR="${KSTACK_STATE:-$HOME/.kstack}/pr-loop"
 mkdir -p "$STATE_DIR"
 LEDGER="$STATE_DIR/$OWNER-$REPO-$PR"
 touch "$LEDGER"
+
+# review-model routing — resolved ONCE, here, and reported. Precedence at each of
+# the two slots independently: invocation flag > .agents/stack.yml > stack default.
+MODEL="<review_model.slug, or gpt-5.6-terra>"            # --model overrides
+BASE_EFFORT="<review_model.effort, or medium>"           # --effort overrides, and
+ESCALATED_EFFORT="<review_model.escalated_effort, or high>"    # pins BOTH slots — an
+ESCALATE_ABOVE="<review_model.escalate_above_lines, or 400>"   # explicit effort is not
+                                                         # silently escalated past
+SIZE=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json additions,deletions \
+  --jq '.additions + .deletions')
+EFFORT="$BASE_EFFORT"
+if [ -n "$ESCALATE_ABOVE" ] && [ "$SIZE" -gt "$ESCALATE_ABOVE" ]; then
+  EFFORT="$ESCALATED_EFFORT"
+fi
 
 # the reviewer contract this loop delegates to, resolved through the host's installed
 # skill path (bin/install symlinks stack skills there). If your host installs skills
@@ -248,9 +272,16 @@ The reviewer invocation, verified against `codex-cli 0.147.0`:
 
 ```bash
 GH_TOKEN="$REVIEWER_TOKEN" codex exec -C "$REPO_ROOT" -s danger-full-access -o "$SCRATCH/codex-round-$N.txt" \
+  -m "$MODEL" -c model_reasoning_effort="$EFFORT" \
   "Use \$review-claude-pr to review PR #$PR and post the findings."
 ```
 
+- `-m` and `-c model_reasoning_effort` are required, and both come from the
+  preflight resolution above. Omit either and the round inherits
+  `~/.codex/config.toml`, which on a workstation tuned for interactive work is
+  the frontier model at high effort — paid again every round up to
+  `--max-rounds`. Pass `$MODEL` and `$EFFORT` even when they equal the host
+  default; the flags are what make the cost reproducible across machines.
 - `-s danger-full-access` is required: the reviewer must reach the GitHub API
   and run `gh`, which the `workspace-write` sandbox blocks. It therefore runs
   unsandboxed against the real repo, which is what makes the reviewer skill's
@@ -388,6 +419,12 @@ Report one of these, always with the round count and what it cost:
 
 Design pushback ("this approach is wrong") is **always** `BLOCKED`, never
 something you concede to in an unattended round. That call is the user's.
+
+Every verdict report also carries the review-model routing as one line — model,
+effort, changed-line count, and the source of each half — for example:
+*"review model: gpt-5.6-terra / high (stack.yml; 812 changed lines > escalate_above_lines 400)"*.
+Without it the escalation is invisible and the next reader cannot tell a cheap
+round from an expensive one.
 
 Every verdict report also carries: the `--any-author` exception if it was used,
 and — when `review_gate.skill_path` is null — the one-line statement that rounds
