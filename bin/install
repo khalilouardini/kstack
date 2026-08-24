@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+# install — wire this kstack checkout into a host agent.
+#
+#   bin/install                      symlink every skill into ~/.claude/skills/
+#   bin/install --dry-run            print what would happen, change nothing
+#   bin/install --force              also replace symlinks that point somewhere else
+#   bin/install --uninstall          remove only the links this repo owns
+#   bin/install --host codex         generate ~/.codex/skills/<name>/SKILL.md pointers
+#
+# The claude host gets symlinks, so editing the repo is live. The codex host gets
+# a generated pointer file per skill — Codex does not follow symlinked skill dirs
+# reliably, and a pointer that names the canonical path cannot drift from it,
+# because it never restates the procedure.
+#
+# Safety: a real directory in the way is never removed, with or without --force.
+
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+STATE_DIR="${KSTACK_STATE:-$HOME/.kstack}"
+HOST="claude"
+DRY=0
+FORCE=0
+UNINSTALL=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --host)      HOST="${2:-}"; shift 2 ;;
+    --host=*)    HOST="${1#*=}"; shift ;;
+    --dry-run|-n) DRY=1; shift ;;
+    --force|-f)  FORCE=1; shift ;;
+    --uninstall) UNINSTALL=1; shift ;;
+    -h|--help)   awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' \
+                   "${BASH_SOURCE[0]}"; exit 0 ;;
+    *)           echo "install: unknown argument '$1' (try --help)" >&2; exit 2 ;;
+  esac
+done
+
+case "$HOST" in
+  claude) DEST="$HOME/.claude/skills" ;;
+  codex)  DEST="${CODEX_HOME:-$HOME/.codex}/skills" ;;
+  *)      echo "install: unknown host '$HOST' (expected: claude, codex)" >&2; exit 2 ;;
+esac
+
+ROWS=()
+COUNT_OK=0
+COUNT_CHANGED=0
+COUNT_SKIPPED=0
+
+row() { # row ACTION NAME DETAIL
+  ROWS+=("$1|$2|$3")
+  case "$1" in
+    current|absent)                COUNT_OK=$((COUNT_OK + 1)) ;;
+    linked|relinked|removed|wrote) COUNT_CHANGED=$((COUNT_CHANGED + 1)) ;;
+    *)                             COUNT_SKIPPED=$((COUNT_SKIPPED + 1)) ;;
+  esac
+}
+
+run() { # run <command...> — honors --dry-run
+  if [ "$DRY" -eq 1 ]; then return 0; fi
+  "$@"
+}
+
+# Every directory holding a SKILL.md under an installable tier. Enumerated
+# rather than listed, so a new skill needs no edit here; roles/*.md are role
+# contracts read by reference and are deliberately not installed.
+skill_dirs() {
+  local tier
+  for tier in "$REPO/router" "$REPO/core" "$REPO/roles" "$REPO/tools"/*; do
+    [ -d "$tier" ] || continue
+    find "$tier" -mindepth 1 -maxdepth 2 -name SKILL.md -print 2>/dev/null \
+      | while read -r skill; do dirname "$skill"; done
+  done | sort -u
+}
+
+# Print the value of one frontmatter key from a SKILL.md, verbatim.
+frontmatter_value() { # frontmatter_value FILE KEY
+  awk -v key="$2" '
+    NR == 1 && $0 == "---" { inblock = 1; next }
+    inblock && $0 == "---" { exit }
+    inblock && index($0, key ": ") == 1 { print substr($0, length(key) + 3); exit }
+  ' "$1"
+}
+
+# Does PATH resolve to somewhere inside this repo?
+owned_by_repo() { # owned_by_repo LINK
+  local target
+  target="$(cd "$(dirname "$1")" && cd "$(dirname "$(readlink "$1")")" 2>/dev/null && pwd -P)" || return 1
+  case "$target/" in "$REPO"/*) return 0 ;; *) return 1 ;; esac
+}
+
+install_claude() { # install_claude SRC NAME
+  local src="$1" name="$2" link="$DEST/$name"
+  if [ -L "$link" ]; then
+    local cur
+    cur="$(readlink "$link")"
+    if [ "$cur" = "$src" ]; then row current "$name" "already linked"; return; fi
+    # `a && b` on one line would trip `set -e` when a fails; use an if.
+    local kind="foreign"
+    if owned_by_repo "$link"; then kind="stale"; fi
+    if [ "$FORCE" -eq 0 ]; then
+      row skipped "$name" "$kind symlink -> $cur (use --force to replace)"; return
+    fi
+    run rm -f "$link"
+    run ln -s "$src" "$link"
+    row relinked "$name" "was $cur"
+  elif [ -e "$link" ]; then
+    row skipped "$name" "a real directory or file is in the way — move it yourself"
+  else
+    run mkdir -p "$DEST"
+    run ln -s "$src" "$link"
+    row linked "$name" "$src"
+  fi
+}
+
+install_codex() { # install_codex SRC NAME
+  local src="$1" name="$2" dir="$DEST/$name" file="$DEST/$name/SKILL.md" desc ver real
+  desc="$(frontmatter_value "$src/SKILL.md" description)"
+  ver="$(frontmatter_value "$src/SKILL.md" version)"
+  # Refuse to write through a symlink. Checking only $file is not enough: if
+  # $dir is a symlink to somewhere else and that target has no SKILL.md, the
+  # existence check below is false, `mkdir -p` happily accepts the symlink, and
+  # the redirection creates the pointer OUTSIDE the destination entirely.
+  # Verified: a `careful` symlink pointing at a scratch dir received the file.
+  if [ -L "$dir" ] || [ -L "$file" ]; then
+    row skipped "$name" "destination is a symlink — refusing to write through it"
+    return
+  fi
+  # Belt and braces: the resolved directory must still live under the resolved
+  # destination, so an ancestor symlink cannot relocate the write either.
+  if [ -d "$dir" ]; then
+    real="$(cd "$dir" 2>/dev/null && pwd -P)" || real=""
+    case "$real/" in
+      "$(cd "$DEST" 2>/dev/null && pwd -P)"/*) ;;
+      *) row skipped "$name" "resolves outside $DEST — refusing to write"; return ;;
+    esac
+  fi
+  if [ -e "$file" ] && ! grep -q "kstack pointer" "$file" 2>/dev/null; then
+    row skipped "$name" "existing SKILL.md was not generated by this installer"
+    return
+  fi
+  if [ "$DRY" -eq 0 ]; then
+    mkdir -p "$dir"
+    cat > "$file" <<EOF
+---
+name: $name
+version: $ver
+description: $desc
+---
+
+<!-- kstack pointer — generated by bin/install; do not edit. -->
+
+Read \`$src/SKILL.md\` with your file-reading tool and follow it exactly.
+Skip sections labeled 'Claude Code only'.
+This adapter never restates the procedure.
+EOF
+  fi
+  row wrote "$name" "$file"
+}
+
+uninstall_one() { # uninstall_one SRC NAME
+  local name="$2" link="$DEST/$name"
+  if [ "$HOST" = "claude" ]; then
+    if [ -L "$link" ] && owned_by_repo "$link"; then
+      run rm -f "$link"; row removed "$name" "$link"
+    elif [ -L "$link" ]; then
+      row skipped "$name" "symlink points outside this repo — left alone"
+    elif [ -e "$link" ]; then
+      row skipped "$name" "not a symlink — left alone"
+    else
+      row absent "$name" "nothing installed"
+    fi
+  else
+    local file="$DEST/$name/SKILL.md"
+    if [ -f "$file" ] && grep -q "kstack pointer" "$file" && grep -qF "$REPO/" "$file"; then
+      # Remove the generated pointer, then the directory ONLY if that left it
+      # empty. `rm -rf` on the directory after checking just SKILL.md destroys
+      # any sidecar a user or another tool put there -- verified by losing a
+      # `user-notes.txt` on uninstall -- and contradicts this script's contract
+      # of removing only what it owns. `rmdir` fails harmlessly when anything
+      # else remains, which is the outcome we want.
+      run rm -f "$file"
+      run rmdir "$DEST/$name" 2>/dev/null || true
+      if [ "$DRY" -eq 0 ] && [ -d "$DEST/$name" ]; then
+        row removed "$name" "pointer removed; directory kept (other files present)"
+      else
+        row removed "$name" "$DEST/$name"
+      fi
+    elif [ -e "$file" ]; then
+      row skipped "$name" "not a pointer generated from this repo — left alone"
+    else
+      row absent "$name" "nothing installed"
+    fi
+  fi
+}
+
+while read -r src; do
+  [ -n "$src" ] || continue
+  name="$(basename "$src")"
+  if [ "$UNINSTALL" -eq 1 ]; then
+    uninstall_one "$src" "$name"
+  elif [ "$HOST" = "claude" ]; then
+    install_claude "$src" "$name"
+  else
+    install_codex "$src" "$name"
+  fi
+done <<EOF
+$(skill_dirs)
+EOF
+
+if [ "$UNINSTALL" -eq 0 ]; then
+  if [ "$DRY" -eq 0 ]; then
+    mkdir -p "$STATE_DIR"
+    printf '%s\n' "$REPO" > "$STATE_DIR/stack-root"
+  fi
+fi
+
+printf '\n%-10s  %-22s  %s\n' ACTION SKILL DETAIL
+printf '%-10s  %-22s  %s\n' "---------" "----------------------" "------"
+# bash 3.2 (macOS) treats "${ROWS[@]}" on an empty array as unbound under set -u.
+if [ "${#ROWS[@]}" -gt 0 ]; then
+  for r in "${ROWS[@]}"; do
+    printf '%-10s  %-22s  %s\n' \
+      "$(printf '%s' "$r" | cut -d'|' -f1)" \
+      "$(printf '%s' "$r" | cut -d'|' -f2)" \
+      "$(printf '%s' "$r" | cut -d'|' -f3-)"
+  done
+fi
+
+printf '\nhost=%s  dest=%s\n' "$HOST" "$DEST"
+printf 'repo=%s\n' "$REPO"
+if [ "$UNINSTALL" -eq 0 ] && [ "$DRY" -eq 0 ]; then
+  printf 'stack-root recorded at %s/stack-root\n' "$STATE_DIR"
+fi
+printf '%d unchanged, %d changed, %d skipped' "$COUNT_OK" "$COUNT_CHANGED" "$COUNT_SKIPPED"
+if [ "$DRY" -eq 1 ]; then printf '  (--dry-run: nothing was written)'; fi
+printf '\n'
+
+[ "$COUNT_SKIPPED" -eq 0 ]

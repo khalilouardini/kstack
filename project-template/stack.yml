@@ -1,0 +1,90 @@
+# .agents/stack.yml — what this repo tells kstack about itself.
+#
+# Copy to <your-repo>/.agents/stack.yml and fill it in. General skills read this
+# file instead of hardcoding your project; every value below is something a
+# skill would otherwise have to guess.
+#
+# Missing-key policy (CONVENTIONS.md §2) — never silently default. A skill that
+# needs a key and does not find it either ASKS you (judgment calls: which scope
+# doc, which output directory) or REFUSES naming the exact key. `gates` and
+# `identities` always refuse: a gate that defaults open is not a gate, and a
+# review comment posted under the wrong identity is not fixable by a retry.
+#
+# `null` and "key absent" mean the same thing: not configured. Leaving a key
+# null is a supported state, not a broken one — it turns off the skills that
+# need it and leaves the rest working.
+
+stack: 1                 # config schema version. Bump only when the schema itself changes.
+project: <slug>          # REQUIRED. Short slug for this repo. Names the per-project
+                         # state dir at ${KSTACK_STATE:-$HOME/.kstack}/projects/<slug>/
+                         # (health history, ledgers). Lowercase, no spaces.
+
+# The scope/priority contract: the document that says what is in and out for the
+# currently active milestone, and how that changes. Read by the four role
+# contracts, the spec pipeline, triage, and next — every verdict they emit must
+# cite a line of it.
+# null → those skills ask you for the path once per session, and still refuse to
+# invent a verdict without one.
+scope_doc: null                  # e.g. docs/product/scope.md
+
+# Your tracker's own rules document: naming conventions, status meanings,
+# project/milestone structure, what an agent may create unprompted. Read by the
+# tools/linear skills.
+# null → they run read-only and refuse structural writes.
+workspace_contract: null         # e.g. docs/product/tracker-contract.md
+
+# Issue-key prefix used by your tracker, without the number. Read by
+# session-titles (title prefixes) and next (issue references).
+# null → session-titles falls back to PR numbers only.
+issue_prefix: null               # e.g. ACME  → matches ACME-123
+
+# The commands this repo considers authoritative. Skills run YOUR commands and
+# never infer one from the file tree — an inferred gate that passes proves
+# nothing. Both keys refuse rather than default.
+#
+# `lint` and `test` are the two every skill may assume exist. Any additional key
+# here is treated as one more check by `/health`, which scores whatever it finds
+# — so a project with a `dead_code` or `shellcheck` command can declare it and
+# get it scored without a schema change. Only `lint` and `test` gate a push.
+gates:
+  lint: null                     # must pass before any commit or push claim, e.g. "npm run lint"
+  test: null                     # the fast suite — the default gate, e.g. "npm test"
+  test_full: null                # the full suite, if it is slower than `test`.
+                                 # null → `test` is the only suite; --full is unavailable.
+  typecheck: null                # e.g. "tsc --noEmit" — scored by /health, does not gate a push
+  build: null                    # e.g. "npm run build" — scored by /health.
+                                 # Declare it even when typecheck passes: a green
+                                 # typecheck does not prove the build is green.
+
+# A project-local "prove the bug" review skill, if this repo has one. Stack
+# review skills defer to it when the diff falls inside `scope`, instead of
+# reviewing those paths themselves.
+# Both keys null → no deferral; stack review skills handle the whole diff.
+review_gate:
+  skill_path: null               # e.g. .claude/skills/review-engine/SKILL.md
+  scope: null                    # glob of diff paths that trigger it, e.g. "src/engine/**"
+
+# GitHub logins. No defaults, ever — the reviewer publishes findings and the bot
+# posts fixes and replies, and swapping them is not recoverable by a retry.
+# Either key null → the GitHub review skills refuse, naming the key.
+identities:
+  reviewer: null                 # the human account that publishes reviews
+  bot: null                      # the bot account that posts fixes and replies
+
+# Branch-name globs triage may never propose CLOSE for. Branches carrying hand
+# edits nobody has extracted yet belong here — they read as stale and are not.
+# Empty list is a valid answer, and means "nothing is protected".
+protected_branches: []           # e.g. ["demo/*", "release/*"]
+
+# Per-role project appendices, one file per role:
+#   <role_appendix_dir>/{product-manager,tech-lead,designer,qa}.md
+# This is where project specifics go — trap ledgers, architecture maps, test
+# factories and baselines, the component inventory. They are spliced in at the
+# point each canonical role contract names.
+# NEVER edit the canonical contracts in the stack to add project detail.
+# null → roles proceed with a documented degradation, and say so in their output.
+role_appendix_dir: null          # e.g. .agents/appendices
+
+# Where the spec pipeline writes its spec files.
+# null → spec asks once where to write, and does not guess a directory.
+spec_output_dir: null            # e.g. docs/product/specs
