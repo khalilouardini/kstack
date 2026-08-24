@@ -1,16 +1,16 @@
 ---
 name: review-claude-pr
-version: 0.1.0
-description: Review an open PR authored by the consuming repo's bot identity and immediately post prioritized P0–P3 findings as a Codex-attributed COMMENT review from the human reviewer account. Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
+version: 0.2.0
+description: Review an open PR authored by the consuming repo's implementer identity and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
 # review-claude-pr — review a bot-authored PR as Codex
 
 ## When to invoke
 
-A PR authored by the consuming repo's bot identity is open and needs a
-defect-first review published to GitHub from the human reviewer account. Invoke
-as `/review-claude-pr [PR# | URL]`, or with no target to run the resolution
+A PR authored by the consuming repo's implementer identity is open and needs a
+defect-first review published from the reviewer account (Codex by default).
+Invoke as `/review-claude-pr [PR# | URL]`, or with no target to run the resolution
 ladder below. This is the reviewer half of the review loop: it finds and posts
 defects, and never answers, fixes, or resolves them — that is
 `tools/github/review-comments`, and the unattended pairing of the two is
@@ -21,15 +21,15 @@ defects, and never answers, fixes, or resolves them — that is
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before anything else:
 
-- **`identities.reviewer`** — the gh login that must be active for every write
-  this skill performs. Missing or null → **refuse**, naming
+- **`identities.reviewer`** — the review-agent gh login, normally Codex, that
+  publishes every review. Missing or null → **refuse**, naming
   `identities.reviewer`. Called `$REVIEWER` below.
-- **`identities.bot`** — the login whose PRs this skill reviews; it is the
+- **`identities.implementer`** — the login whose PRs this skill reviews; it is the
   authorship precondition, not a writer. Missing or null → **refuse**, naming
-  `identities.bot`, because the skill cannot then verify it is reviewing
+  `identities.implementer`, because the skill cannot then verify it is reviewing
   bot-authored work. One sanctioned override: the user explicitly names a PR
   and asks for it reviewed regardless of author — record that in the review
-  body. Called `$BOT` below.
+  body. Called `$IMPLEMENTER` below.
 - **`review_gate.skill_path`** and **`review_gate.scope`** — the project's
   "prove the bug" review skill and the diff paths that trigger it. Both null →
   there is no project proof gate; run the general review and say so in the
@@ -52,8 +52,10 @@ the post-submit verification checks after the fact. Treat them as hard rules.
   threads, merge, approve, dismiss, or edit the PR description. Temporary proof
   artifacts may live only in a disposable worktree or temporary directory and
   must be removed.
-- Use `$REVIEWER` for every GitHub write. Never switch accounts automatically
-  and never post from `$BOT` or another identity.
+- Use `$REVIEWER` for every GitHub read and write. Resolve its stored credential
+  once with `gh auth token --user "$REVIEWER"`, pass it only through `GH_TOKEN` on
+  each `gh` invocation, and never call `gh auth switch`. Never post from
+  `$IMPLEMENTER`, the maintainer, or another identity.
 - Put `**Review performed by Codex.**` in the body of every submitted GitHub
   review. This means the review body attached to the PR, not the PR description.
 - Post the completed review immediately. Do not show drafts or ask the user to
@@ -85,7 +87,7 @@ Resolve the target in this order, and stop rather than guess:
    ambiguity, not a tie to break.
 4. **The current branch's PR**, as the fallback:
    ```bash
-   gh pr view --json number,url,state,isDraft,author,baseRefName,headRefName,headRefOid
+   GH_TOKEN="$REVIEWER_TOKEN" gh pr view --json number,url,state,isDraft,author,baseRefName,headRefName,headRefOid
    ```
 5. **Otherwise stop and ask for an explicit target.** Absent or genuinely
    ambiguous context is a reason to stop, never a reason to review the branch
@@ -106,21 +108,25 @@ explicitly, because that is the step most likely to be wrong.
 The authorship check and the head-SHA idempotency marker below are unchanged by
 this ordering; they apply to whichever PR is resolved.
 
-Resolve the repository and verify the active writer before reviewing:
+Resolve the reviewer credential and verify the writer before reviewing. Keep the
+token in this shell only; do not print it or export it into unrelated commands:
 
 ```bash
-OWNER_REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-ACTIVE_LOGIN=$(gh api user --jq .login)
-test "$ACTIVE_LOGIN" = "$REVIEWER"      # REVIEWER = identities.reviewer
+REVIEWER="<identities.reviewer>"
+REVIEWER_TOKEN=$(gh auth token --hostname github.com --user "$REVIEWER")
+ACTIVE_LOGIN=$(GH_TOKEN="$REVIEWER_TOKEN" gh api user --jq .login)
+test "$ACTIVE_LOGIN" = "$REVIEWER"
+OWNER_REPO=$(GH_TOKEN="$REVIEWER_TOKEN" gh repo view --json nameWithOwner --jq .nameWithOwner)
 ```
 
 If the identity check fails, stop without posting and report the active login.
-Do not switch it. Require an open PR. A draft PR may be reviewed, but identify
-it as a draft in the summary.
+Do not switch accounts. Prefix **every** later `gh` call in this skill with
+`GH_TOKEN="$REVIEWER_TOKEN"`. Require an open PR. A draft PR may be reviewed, but
+identify it as a draft in the summary.
 
-Confirm the PR author is `$BOT`. If it is not, inspect the PR commits for that
-author. If neither the PR nor its commits are attributable to `$BOT`, stop unless
-the user explicitly requested that exact PR despite its author.
+Confirm the PR author is `$IMPLEMENTER`. If it is not, inspect the PR commits for
+that author. If neither the PR nor its commits are attributable to `$IMPLEMENTER`,
+stop unless the user explicitly requested that exact PR despite its author.
 
 Use a hidden idempotency marker tied to the reviewed head SHA:
 
@@ -263,8 +269,8 @@ Submit through the GitHub review API so the body, event, and ordered inline
 comments are one review. Set `event` explicitly to `COMMENT` unless the user
 explicitly requested `REQUEST_CHANGES`; never leave a pending review. Do not
 infer `REQUEST_CHANGES` from P0/P1/P2 findings. Re-check
-`gh api user --jq .login` immediately before the write and compare it against
-`$REVIEWER`; a mismatch at that moment stops the post.
+`GH_TOKEN="$REVIEWER_TOKEN" gh api user --jq .login` immediately before the write
+and compare it against `$REVIEWER`; a mismatch at that moment stops the post.
 
 If an explicitly requested `REQUEST_CHANGES` review is rejected because
 `$REVIEWER` owns the PR, verify that no review with the idempotency marker was

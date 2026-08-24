@@ -43,7 +43,7 @@ skills that need it and leaves the rest working.
 | `gates.lint` + `gates.test` | `/land` (gates before commit) and `/health` (scores your own checks). Both **refuse** without them — a gate that defaults open is not a gate. |
 | `gates.test_full` | `/health --full`, and `/land`'s full-suite path. |
 | `scope_doc` | the four role contracts, `/spec`, `/triage`, and `/next` gating. Without it they ask for the path and still refuse to invent a verdict. |
-| `identities.reviewer` + `identities.bot` | `/review-claude-pr`, `/review-comments`, `/pr-loop`. All three refuse without both, naming the key. |
+| `identities.maintainer` + `identities.reviewer` + `identities.implementer` | The GitHub review cluster. Codex normally fills reviewer and Claude implementer; unattended `/pr-loop` requires all three roles. |
 | `review_gate.skill_path` + `review_gate.scope` | stack review skills defer to your project's own review gate on the paths it claims. |
 | `workspace_contract` | `/dispatch-implementation`, `/linear-steward`, `/linear-feature-intake`, `/linear-release-audit` need the tracker's status and mutation rules. Without it they refuse writes. |
 | `issue_prefix` | `/session-titles` labels by issue key, and `/next` resolves issue references. |

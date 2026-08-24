@@ -1,7 +1,7 @@
 ---
 name: pr-loop
-version: 0.1.0
-description: Drive an unattended reviewer↔responder loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED: each round runs the Codex reviewer via `codex exec`, answers findings with review-comments (fix + reply as the bot), then re-checks the exit gates. Bounded by a round cap, a repeat-finding ledger that survives invocations, and a head-SHA marker so no round is paid twice. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge]". (kstack)
+version: 0.2.0
+description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED: each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, a durable repeat-finding ledger, and a head-SHA marker. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge]". (kstack)
 ---
 
 # pr-loop — run the review ping-pong to a stop condition
@@ -20,16 +20,19 @@ approving — see "What this skill is NOT for".
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before preflight:
 
-- **`identities.reviewer`** — the human maintainer's gh login. This is the
-  loop's `$ORIG`, the account the reviewer posts under, and the only account
-  that ever merges. Missing or null → **refuse**, naming `identities.reviewer`.
-- **`identities.bot`** — the responder identity that authors every reply.
-  Missing or null → **refuse**, naming `identities.bot`. Both identities are
-  required *here*, unlike `review-comments`, which degrades to human-account
-  replies when no bot is configured. This loop is unattended: posting under the
+- **`identities.maintainer`** — the human maintainer's gh login. This account
+  governs the repository and is the only account that ever merges.
+  Missing or null → **refuse**, naming `identities.maintainer`.
+- **`identities.reviewer`** — the review-agent login, normally Codex, that
+  publishes every review. Missing or null → **refuse**, naming `identities.reviewer`.
+- **`identities.implementer`** — the implementation-agent login, normally
+  Claude, that authors the PR, fixes, and replies. Missing or null → **refuse**,
+  naming `identities.implementer`. All three identities are required *here*,
+  unlike `review-comments`, which degrades to human-account replies when no
+  implementer is configured. This loop is unattended: posting under the
   maintainer's own account with nobody watching is not a degradation the loop
   gets to choose on its own.
-- **`gates.lint`, `gates.test`** — the responder's pre-push gate,
+- **`gates.lint`, `gates.test`** — the implementer's pre-push gate,
   `<gates.lint> && <gates.test>`. Either missing or null → **refuse**, naming
   the exact key. A gate that defaults open is not a gate.
 - **`review_gate.skill_path`** — the project's "prove the bug" review skill,
@@ -50,8 +53,8 @@ not changed here:
 
 - **the reviewer** — kstack [`tools/github/review-claude-pr`](../review-claude-pr/SKILL.md),
   run by Codex, posts a `COMMENT` review as `identities.reviewer`.
-- **the responder** — kstack [`review-comments`](../review-comments/SKILL.md),
-  run by you, fixes the code and replies as `identities.bot`.
+- **the implementer** — kstack [`review-comments`](../review-comments/SKILL.md),
+  fixes the code and replies as `identities.implementer`.
 
 Neither one decides when to stop. This one does. It is **unattended by design**:
 it posts, pushes, and replies without asking. It never merges unless `--merge`
@@ -67,15 +70,20 @@ PR=<number>
 MAX_ROUNDS=5; N=0                                        # --max-rounds overrides MAX_ROUNDS
                                                          # N counts rounds in THIS invocation only —
                                                          # see "Resuming after ROUNDS_EXHAUSTED"
-REVIEWER="<identities.reviewer>"                         # from .agents/stack.yml
-BOT="<identities.bot>"                                   # from .agents/stack.yml
+MAINTAINER="<identities.maintainer>"                    # from .agents/stack.yml
+REVIEWER="<identities.reviewer>"                        # Codex by default
+IMPLEMENTER="<identities.implementer>"                  # Claude by default
 
 codex --version                                          # the loop is not runnable without it
-gh auth status                                           # must list BOTH $REVIEWER and $BOT
-ORIG=$(gh api user --jq .login); test "$ORIG" = "$REVIEWER"
+MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
+REVIEWER_TOKEN=$(gh auth token --hostname github.com --user "$REVIEWER")
+IMPLEMENTER_TOKEN=$(gh auth token --hostname github.com --user "$IMPLEMENTER")
+test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
+test "$(GH_TOKEN="$REVIEWER_TOKEN" gh api user --jq .login)" = "$REVIEWER"
+test "$(GH_TOKEN="$IMPLEMENTER_TOKEN" gh api user --jq .login)" = "$IMPLEMENTER"
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
-OWNER_REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+OWNER_REPO=$(GH_TOKEN="$MAINTAINER_TOKEN" gh repo view --json nameWithOwner --jq .nameWithOwner)
 OWNER=${OWNER_REPO%/*}; REPO=${OWNER_REPO#*/}
 SCRATCH=$(mktemp -d)                                     # session scratch, never inside $REPO_ROOT
 trap 'rm -rf "$SCRATCH"' EXIT
@@ -90,7 +98,7 @@ touch "$LEDGER"
 # the reviewer contract this loop delegates to, resolved through the host's installed
 # skill path (bin/install symlinks stack skills there). If your host installs skills
 # somewhere else, assert that path instead — but assert one.
-test -r "$HOME/.claude/skills/review-claude-pr/SKILL.md"
+test -r "$HOME/.codex/skills/review-claude-pr/SKILL.md"
 
 # the project review gate, ONLY when review_gate.skill_path is non-null — tracked,
 # because an untracked copy is not a dependency
@@ -99,12 +107,12 @@ git -C "$REPO_ROOT" ls-files --error-unmatch "<review_gate.skill_path>" >/dev/nu
 # baseline of files already untracked here, so the pre-push guard can tell them
 # from anything THIS loop leaves uncommitted
 git status --porcelain --untracked-files=all | sort > "$SCRATCH/untracked-baseline.txt"
-gh pr view "$PR" --json number,state,isDraft,headRefName,headRefOid,mergeable,author
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json number,state,isDraft,headRefName,headRefOid,mergeable,author
 
 # authorship scope — see below
-AUTHOR=$(gh pr view "$PR" --json author --jq .author.login)
-COMMIT_AUTHORS=$(gh pr view "$PR" --json commits --jq '[.commits[].authors[].login] | unique | join(",")')
-CLAUDE_COMMITS=$(gh pr view "$PR" --json commits \
+AUTHOR=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json author --jq .author.login)
+COMMIT_AUTHORS=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json commits --jq '[.commits[].authors[].login] | unique | join(",")')
+CLAUDE_COMMITS=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json commits \
   --jq '[.commits[] | select(([.authors[].login] | index("claude"))
         or (.messageBody | split("\n") | any(test("^Co-Authored-By: Claude\\b.*<[^>]+>\\s*$"; "i"))))] | length')
 ```
@@ -119,24 +127,23 @@ for a reason that looks like a Codex failure but is a missing dependency.
 
 ### Authorship scope — enforced here, not assumed
 
-`review-claude-pr` is scoped to PRs attributable to `$BOT`, but it has an
+`review-claude-pr` is scoped to PRs attributable to `$IMPLEMENTER`, but it has an
 explicit-request exception, and this loop *always* passes an exact PR number —
 which trips that exception every time. Without a check here, `/pr-loop` silently
 extends the reviewer to any PR, including a maintainer's own.
 
 Stop unless one of these holds, each machine-checked in preflight:
 
-- `$AUTHOR` or one of `$COMMIT_AUTHORS` is `$BOT` — a PR the bot has already
+- `$AUTHOR` or one of `$COMMIT_AUTHORS` is `$IMPLEMENTER` — a PR the implementer has already
   touched in earlier rounds; or
-- `$CLAUDE_COMMITS` is non-zero — a head commit is authored by the `claude`
+- `$CLAUDE_COMMITS` is non-zero — the compatibility case for an older PR opened
+  under the maintainer account: a head commit is authored by the `claude`
   login or carries a `Co-Authored-By: Claude` **trailer line**: a whole line
   starting `Co-Authored-By: Claude` and ending in an `<email>` address. A prose
   mention of the phrase mid-sentence does not count — the match is anchored per
   line, so a human-only commit that merely discusses the trailer format stays at
-  `0`. This is the **first-draft case**: the agent pushes the initial PR
-  directly under `$REVIEWER`, and `$BOT` only appears once review rounds start,
-  so requiring the bot identity up front would lock the loop out of every
-  round-1 review.
+  `0`. New PRs should be opened directly under `$IMPLEMENTER` and satisfy the
+  first condition without relying on commit-message evidence.
 
 The remaining exception is an explicit `--any-author` on the invocation — for a
 PR with no machine-attributable commit at all — which the user is stating
@@ -155,21 +162,21 @@ default branch or an unrelated branch would apply fixes to the wrong branch and
 leave PR 123 untouched. Bind explicitly:
 
 ```bash
-HEAD_REF=$(gh pr view "$PR" --json headRefName --jq .headRefName)
-HEAD_OID=$(gh pr view "$PR" --json headRefOid  --jq .headRefOid)
+HEAD_REF=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefName --jq .headRefName)
+HEAD_OID=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid  --jq .headRefOid)
 
 test "$(git rev-parse --abbrev-ref HEAD)" = "$HEAD_REF"   # right branch
 test "$(git rev-parse HEAD)" = "$HEAD_OID"                # not behind or ahead of the PR head
 test -z "$(git status --porcelain -uno)"                  # no unstaged tracked changes to sweep into a fix commit
 ```
 
-Re-run this block **at the start of every responder pass**, not just once — the
+Re-run this block **at the start of every implementer pass**, not just once — the
 PR head moves each round, and a concurrent session sharing this working
 directory can move the branch underneath you.
 
 ### The pre-push guard — a different check, not the same one
 
-The block above cannot be reused before the push. By then the responder has
+The block above cannot be reused before the push. By then the implementer has
 committed its fix, so `git rev-parse HEAD` is the *new* commit while
 `headRefOid` is still the old remote one until the push lands — the equality
 assertion would fail on every round that actually fixed something, and the loop
@@ -195,7 +202,7 @@ Two of those lines are easy to get wrong, and both failures are silent:
   work. The relaxed ancestry rule replaces the *`HEAD` OID* equality from the
   binding block, never the branch name.
 - **`git status --porcelain` here, without `-uno`.** `-uno` hides untracked
-  files, and the responder contract asks for new regression tests where they
+  files, and the implementer contract asks for new regression tests where they
   fit — an unstaged new test file leaves the cleanliness check passing while the
   code change pushes without its test.
 
@@ -220,7 +227,7 @@ test -z "$(comm -3 "$SCRATCH/untracked-baseline.txt" "$SCRATCH/untracked-now.txt
 ```
 
 **`comm -3`, both directions — not `comm -13`.** A one-way check catches only
-*additions*, and the dangerous case is a *disappearance*. If the responder
+*additions*, and the dangerous case is a *disappearance*. If the implementer
 reaches for `git add -A`, every pre-existing untracked file is swept into the
 fix commit; their `??` lines vanish from `untracked-now`, a one-way diff comes
 back empty, every guard passes, and the push publishes unrelated workspace
@@ -233,14 +240,14 @@ Any line unique to `untracked-now` is a file this loop produced and did not
 commit; any line unique to the baseline is a file this loop committed or deleted
 that it had no business touching. Either way, exit `BLOCKED` and name the paths.
 
-This is also why the responder must stage explicitly — `git add <path>` for the
+This is also why the implementer must stage explicitly — `git add <path>` for the
 files it changed, never `git add -A` in a tree carrying hundreds of untracked
 paths.
 
 The reviewer invocation, verified against `codex-cli 0.147.0`:
 
 ```bash
-codex exec -C "$REPO_ROOT" -s danger-full-access -o "$SCRATCH/codex-round-$N.txt" \
+GH_TOKEN="$REVIEWER_TOKEN" codex exec -C "$REPO_ROOT" -s danger-full-access -o "$SCRATCH/codex-round-$N.txt" \
   "Use \$review-claude-pr to review PR #$PR and post the findings."
 ```
 
@@ -267,8 +274,8 @@ for the reviewer's marker:
 
 ```bash
 N=$((N+1)); test "$N" -le "$MAX_ROUNDS"   # false ⇒ stop the loop, verdict ROUNDS_EXHAUSTED
-HEAD=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
-gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews" --jq '.[].body' \
+HEAD=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .headRefOid)
+GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews" --jq '.[].body' \
   | grep -c "codex-review head:$HEAD"
 ```
 
@@ -292,16 +299,16 @@ exits non-zero or posts nothing, do not retry blindly — record it and exit
 - only `P3`, or `No findings.` → exit `CLEAN`. **P3 is not worth another paid
   round**; leave those threads open for the human.
 
-**4. Respond.** Re-run the branch-binding block first — the head moved if the
+**4. Implement and reply.** Re-run the branch-binding block first — the head moved if the
 previous round pushed — and the pre-push guard immediately before the push,
 which is a different check. Then: read `../review-comments/SKILL.md` with the
 Read tool and follow it top to bottom, **skipping the section "The confirm gate
 — draft, do not post"**; if it is unreadable, say so and stop. That skipped
 section is the **one documented override**: it assumes an interactive run, and
 this loop has none, so post directly. Every other invariant in that skill still
-holds — its thread-selection rules, its fix-don't-just-reply rule, its identity
-subshell, its `<gates.lint> && <gates.test>` gate, restoring `$ORIG` and
-verifying it in a **later, separate call**, never resolving threads, and posting
+holds — its thread-selection rules, its fix-don't-just-reply rule, its
+per-command implementer token, its `<gates.lint> && <gates.test>` gate, never
+switching global `gh` identity, never resolving threads, and posting
 the conversation-level summary comment **last**.
 
 If `<gates.lint>` or `<gates.test>` fails after your fixes, you get **one**
@@ -330,14 +337,14 @@ title-only key was tolerable while the comparison spanned two adjacent rounds;
 across the life of a PR it is not. Reviewers reuse generic titles — "Validate
 the identifier", "Handle the empty case" — so a title answered in one file would
 block an unrelated finding of the same name in another, and it would block it
-*before the responder ever reads it*. Whatever the key includes, it must at
+*before the implementer ever reads it*. Whatever the key includes, it must at
 minimum separate two findings that differ only by file. A finding parsed without
 a path falls back to `-`, which groups all path-less findings together; that is
 the one place the collision survives, and it is the conservative direction.
 
 A hit means Codex and you disagree: exit `BLOCKED` with both positions quoted,
 and do not argue across another round. A miss means it is new; after the
-responder pass in step 4 lands, record it:
+implementer pass in step 4 lands, record it:
 
 ```bash
 printf '%s\t%s\n' "$HEAD" "$K" >> "$LEDGER"
@@ -393,7 +400,7 @@ restart the review from round 1**, and it never re-pays for a review of code
 already reviewed. What it does *not* usually do is skip the Codex call, and the
 reason is the round ordering:
 
-**The cap fires at the top of a round, not before the responder.** Step 1
+**The cap fires at the top of a round, not before the implementer.** Step 1
 increments `N` and tests it, so `ROUNDS_EXHAUSTED` is raised at the *start* of
 the round that would exceed the cap — after the previous round already ran to
 completion. That previous round answered its `P0`–`P2` findings in step 4 and,
@@ -410,7 +417,7 @@ recorded in the ledger, and only the unreviewed delta is paid for.
   moved *and* preflight passes.** That second condition rules out most of the
   exits you would expect to qualify. The binding block runs before step 1 and
   asserts `HEAD == headRefOid` and a clean tracked worktree, so: a `BLOCKED` on
-  a failed `<gates.lint>`/`<gates.test>` gate left the responder's edits
+  a failed `<gates.lint>`/`<gates.test>` gate left the implementer's edits
   **uncommitted** and fails the cleanliness assertion; a `BLOCKED` on a moved
   remote left a local commit ahead of `headRefOid` and fails the head assertion.
   Neither reaches the marker check at all — the rerun stops in preflight until a
@@ -437,15 +444,15 @@ total-across-invocations budget, by design — the human deciding to run it agai
 Merge only when **all** hold, checked in this order:
 
 ```bash
-gh pr checks "$PR"                                  # every required check green
-gh pr view "$PR" --json mergeable --jq .mergeable   # MERGEABLE, not CONFLICTING
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr checks "$PR"                                  # every required check green
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json mergeable --jq .mergeable   # MERGEABLE, not CONFLICTING
 ```
 
 plus verdict `CLEAN`, plus no unresolved thread carrying a `P0`–`P2` finding.
-Merge as `$ORIG` (`identities.reviewer`), never as the bot:
+Merge as `$MAINTAINER` (`identities.maintainer`), never as the reviewer or implementer:
 
 ```bash
-gh pr merge "$PR" --squash --delete-branch
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr merge "$PR" --squash --delete-branch
 ```
 
 If any condition fails, do not merge and say which one blocked it. Without
@@ -465,7 +472,7 @@ Every invariant here is **prompt-level**: no hook blocks a violating `git`,
 `gh`, or `codex` call — the procedure asserts, and the guards check before each
 outward step. Treat them as hard rules anyway.
 
-1. **The reviewer never edits code; the responder never reviews its own work.**
+1. **The reviewer never edits code; the implementer never reviews its own work.**
    Keep the two roles in their own skills and their own processes.
 2. **One paid Codex round per head SHA, enforced by the marker check.**
 3. **Bounded rounds and a repeat-finding guard** — an unbounded loop between two
@@ -474,13 +481,12 @@ outward step. Treat them as hard rules anyway.
    because `N` resets and `ROUNDS_EXHAUSTED` does not persist. A repeat guard
    living only in `$SCRATCH` would be erased by the `trap` before the rerun that
    needs it.
-4. **`$ORIG` is restored and verified** after every bot-identity block, per
-   `review-comments` — including its later, separate verification call, because
-   `gh` auth state is global mutable state and a same-shell check proves nothing.
+4. **Global `gh` identity is never switched.** Every GitHub API call receives
+   the intended role's verified token through `GH_TOKEN`.
 5. **No merge without `--merge` and green checks.** Codex posting
    `No findings.` is not a merge authorization; CI is.
 6. **Every fix lands on the PR's own branch**, verified by the binding block
-   before each responder pass and by the pre-push guard before each push — never
+   before each implementer pass and by the pre-push guard before each push — never
    on whatever happened to be checked out. Both guards assert the **branch
    name**, because ancestry alone cannot tell two branches apart when one
    descends from the other.
@@ -488,18 +494,18 @@ outward step. Treat them as hard rules anyway.
    should not have.** The pre-push guard diffs untracked paths against the
    loop-start baseline **both ways** (`comm -3`, wrapped in `test -z`): a new
    regression test left unstaged blocks the push, and so does a baseline file
-   that disappeared into the commit. The responder stages explicitly with
+   that disappeared into the commit. The implementer stages explicitly with
    `git add <path>` — never `git add -A` in a tree carrying hundreds of
    untracked paths.
 8. **Authorship is checked in preflight**, not inherited from the reviewer
    skill, whose explicit-number exception this loop would otherwise trip on
-   every run. First-draft PRs pushed under `identities.reviewer` qualify only
-   through commit-level evidence (`claude` author login or
-   `Co-Authored-By: Claude` trailer), never through the loop's impression of the
-   PR.
-9. **Both identities are required.** No bot identity configured → refuse. An
-   unattended loop does not silently reassign the bot's replies to the
-   maintainer's account.
+   every run. New PRs qualify through `identities.implementer`; older PRs opened
+   under the maintainer qualify only through commit-level evidence (`claude`
+   author login or `Co-Authored-By: Claude` trailer), never through the loop's
+   impression of the PR.
+9. **All three identities are required.** No maintainer, reviewer, or implementer
+   identity configured → refuse. An unattended loop does not silently reassign
+   replies to the maintainer's account.
 
 ## What this skill is NOT for
 

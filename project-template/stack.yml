@@ -14,7 +14,7 @@
 # null is a supported state, not a broken one — it turns off the skills that
 # need it and leaves the rest working.
 
-stack: 1                 # config schema version. Bump only when the schema itself changes.
+stack: 2                 # config schema version. Bump only when the schema itself changes.
 project: <slug>          # REQUIRED. Short slug for this repo. Names the per-project
                          # state dir at ${KSTACK_STATE:-$HOME/.kstack}/projects/<slug>/
                          # (health history, ledgers). Lowercase, no spaces.
@@ -64,12 +64,13 @@ review_gate:
   skill_path: null               # e.g. .claude/skills/review-engine/SKILL.md
   scope: null                    # glob of diff paths that trigger it, e.g. "src/engine/**"
 
-# GitHub logins. No defaults, ever — the reviewer publishes findings and the bot
-# posts fixes and replies, and swapping them is not recoverable by a retry.
-# Either key null → the GitHub review skills refuse, naming the key.
+# GitHub logins. No defaults, ever — the human governs and merges, the reviewer
+# publishes findings (Codex by default), and the implementer opens PRs, fixes,
+# and replies (Claude by default). A skill refuses when a role it needs is null.
 identities:
-  reviewer: null                 # the human account that publishes reviews
-  bot: null                      # the bot account that posts fixes and replies
+  maintainer: null               # human account that governs and merges
+  reviewer: null                 # review-agent account; Codex by default
+  implementer: null              # implementation-agent account; Claude by default
 
 # Branch-name globs triage may never propose CLOSE for. Branches carrying hand
 # edits nobody has extracted yet belong here — they read as stale and are not.
