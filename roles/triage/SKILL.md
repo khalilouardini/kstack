@@ -60,7 +60,11 @@ week and a stale figure in a proposal is a claim you cannot support:
 
 ```bash
 DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
-gh pr list --state open --limit 200 --json number | python3 -c 'import json,sys;print(len(json.load(sys.stdin)),"open PRs")'
+# --limit is a cap with no truncation signal, so a repo at or above it reports
+# the cap as if it were the count. Ask for more than could exist, then assert.
+gh pr list --state open --limit 1000 --json number \
+  | python3 -c 'import json,sys;d=json.load(sys.stdin);n=len(d);print(n,"open PRs");sys.exit(1) if n>=1000 else None' \
+  || echo "TRUNCATED — raise the limit and re-measure before reporting any count"
 git branch --no-merged "$DEFAULT_BRANCH" | wc -l   # unmerged local branches
 git worktree list | wc -l                          # worktrees
 ```

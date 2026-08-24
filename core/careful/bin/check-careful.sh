@@ -121,7 +121,30 @@ if [ "$_IS_SIMPLE" -eq 1 ]; then
         /*)
           # squeeze duplicate slashes, remove /./ and trailing /., keep a single
           # leading / so the root stays root rather than becoming empty
-          _TOK=$(printf '%s' "$_TOK" | sed -e 's|/\{2,\}|/|g' -e 's|/\./|/|g' -e 's|/\.$|/|' -e 's|\(.\)/$|\1|')
+          # Lexical canonicalization, not just separator squeezing: `..` names
+          # the parent, so `/tmp/../*` expands over exactly the entries
+          # `rm -rf /*` does while reaching only the overridable ask tier.
+          # Resolve `.` and `..` textually (never with the filesystem -- the
+          # path may not exist, and a hook must not stat attacker-chosen paths),
+          # keeping the leading slash so root stays root.
+          _TOK=$(printf '%s' "$_TOK" | awk '
+            {
+              path = $0
+              trail = (path ~ /\/$/) ? "/" : ""
+              n = split(path, seg, "/")
+              top = 0
+              for (i = 1; i <= n; i++) {
+                s = seg[i]
+                if (s == "" || s == ".") continue
+                if (s == "..") { if (top > 0) top--; continue }   # at root, .. is root
+                out[++top] = s
+              }
+              res = ""
+              for (i = 1; i <= top; i++) res = res "/" out[i]
+              if (res == "") res = "/"
+              else res = res trail
+              print res
+            }')
           [ -z "$_TOK" ] && _TOK=/
           ;;
       esac

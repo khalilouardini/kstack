@@ -88,9 +88,12 @@ is true, and pass `--paginate` on both REST calls below. If any surface cannot b
 exhausted, say which and stop rather than filtering a partial set.
 
 ```bash
-AFTER=null   # then the endCursor of the previous page, until hasNextPage is false
+AFTER=null    # reviewThreads cursor — advance until its hasNextPage is false
+RAFTER=null   # reviews cursor — a SEPARATE connection with its own pages. Advancing
+              # only AFTER re-fetches the same first 100 summaries forever, so a PR
+              # with 100+ submitted reviews silently loses the later ones.
 gh api graphql -f query='
-query($owner:String!, $repo:String!, $pr:Int!, $after:String) {
+query($owner:String!, $repo:String!, $pr:Int!, $after:String, $rafter:String) {
   repository(owner:$owner, name:$repo) {
     pullRequest(number:$pr) {
       reviewThreads(first:100, after:$after) {
@@ -100,15 +103,17 @@ query($owner:String!, $repo:String!, $pr:Int!, $after:String) {
           comments(first:100) { pageInfo { hasNextPage } nodes { databaseId author { login } body createdAt pullRequestReview { state } } }
         }
       }
-      reviews(first:100) { pageInfo { hasNextPage } nodes { author { login } state body submittedAt } }
+      reviews(first:100, after:$rafter) { pageInfo { hasNextPage endCursor } nodes { author { login } state body submittedAt } }
     }
   }
-}' -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" -F after="$AFTER"
+}' -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" -F after="$AFTER" -F rafter="$RAFTER"
 ```
 For the line number and `diff_hunk` context a thread is anchored to (the GraphQL above omits them), supplement with REST:
 ```bash
-gh api "repos/$OWNER/$REPO/pulls/$PR/comments"           # inline comments: path, line, diff_hunk, in_reply_to_id, user.login
-gh api "repos/$OWNER/$REPO/issues/$PR/comments"          # top-level conversation comments
+# --paginate is not optional: without it gh returns only the first page, and a
+# later unanswered comment is then indistinguishable from one that never existed.
+gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/comments"   # inline comments: path, line, diff_hunk, in_reply_to_id, user.login
+gh api --paginate "repos/$OWNER/$REPO/issues/$PR/comments"  # top-level conversation comments
 ```
 
 Now filter to what is **genuinely unanswered** — this is the whole "pending/new" judgement:

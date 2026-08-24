@@ -86,11 +86,15 @@ if [ -z "$_GUARD_VERDICT" ]; then
   fi
 fi
 
-# Pre-check C: fetch the default branch; if it fails, warn but proceed.
+# Pre-check C: fetch the default branch. A failed fetch STOPS the run.
+# Without a successful fetch the local remote-tracking ref may be arbitrarily
+# behind, so "the newest commit is old" cannot be distinguished from "my copy
+# is old" -- and every freshness conclusion below depends on telling those
+# apart. Proceeding on a warning would build the retro from an unknown ref.
 if [ -z "$_GUARD_VERDICT" ]; then
   if ! git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null; then
-    echo "RETRO_GUARD: 'git fetch origin $DEFAULT_BRANCH' failed (offline?) — proceeding against last-known origin/$DEFAULT_BRANCH"
-    _GUARD_VERDICT="warn-fetch-failed"
+    echo "RETRO_GUARD: 'git fetch origin $DEFAULT_BRANCH' failed (offline?) — STOP. The retro cannot be freshness-verified against an unfetched ref."
+    _GUARD_VERDICT="block-fetch-failed"
   fi
 fi
 
@@ -125,9 +129,11 @@ local clock** — containerized harnesses run hours or days off, and a shifted
 anchor moves both windows together, which looks like a valid comparison. If the
 current date cannot be established reliably, stop and ask rather than proceed.
 
-The three skip paths (`skip-no-remote`, `skip-detached`, `warn-fetch-failed`)
-proceed to §1, and the report must carry the reason as a disclosure line
-("offline run, window not freshness-verified") rather than silently misreporting.
+The two skip paths (`skip-no-remote`, `skip-detached`) proceed to §1, and the
+report must carry the reason as a disclosure line ("no remote to verify against,
+window not freshness-verified") rather than silently misreporting. **`block-fetch-failed`
+is not a skip path — it stops the run**, because unlike the other two it leaves a
+ref that *looks* usable while being arbitrarily stale.
 
 ### Guard 2 — same-window-only comparison
 

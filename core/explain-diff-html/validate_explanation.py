@@ -44,6 +44,24 @@ ASCII_ART_LINE = re.compile(r"^[\s|+\-=*/\\_<>^v.'`~]*$")
 # The \b belongs to the bare identifiers only. Anchoring it after `fetch\s*\(`
 # would never match: `(` and the character after it are both non-word, so there
 # is no boundary there and the whole alternative silently never fires.
+BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+LINE_COMMENT = re.compile(r"//[^\n]*")
+
+
+def _normalize_js(src: str) -> str:
+    """Strip comments and collapse whitespace for the offline scan only.
+
+    Never use this for anything the reader sees -- it destroys formatting. Its
+    single job is to make whitespace- and comment-based spellings of the same
+    network call converge before NETWORK_CALL runs.
+    """
+    # Line comments first would eat the `//` inside `https://`, so remove block
+    # comments, then only line comments that are not part of a URL scheme.
+    src = BLOCK_COMMENT.sub(" ", src)
+    src = re.sub(r"(?<![:a-zA-Z])//[^\n]*", " ", src)
+    return re.sub(r"\s+", " ", src)
+
+
 NETWORK_CALL = re.compile(
     r"\bfetch\s*\(|\b(?:XMLHttpRequest|WebSocket|EventSource|navigator\.sendBeacon)\b"
     # ES module loading is a network call the APIs above never mention. Both
@@ -202,7 +220,12 @@ def check_offline(raw: str, page: Page, r: Report) -> None:
     if CSS_REMOTE_URL.search(css):
         r.fail("offline", "url(https://…) in CSS — embed the asset as a data: URI instead")
     for script in page.scripts:
-        hit = NETWORK_CALL.search(script)
+        # Normalize before matching: strip JS comments and collapse newlines, so
+        # a valid multiline `import {\n x \n} from "https://…"` and a
+        # `import(/* webpackIgnore */ "https://…")` are seen for what they are.
+        # Matching the raw text only ever caught the single-line spellings while
+        # both of these fetched a remote module at load time.
+        hit = NETWORK_CALL.search(_normalize_js(script))
         if hit:
             r.fail("offline", f"network call `{hit.group(0)}` in an inline script")
 

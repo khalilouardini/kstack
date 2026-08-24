@@ -62,12 +62,25 @@ git checkout -b feat/session-expiry && \
   git commit -m "fix: redirect on expired session cookie"
 ```
 
-The two `test` lines are the point. A sibling can move `HEAD` between the
-`add` and the `commit`, and paths staged by another session sit in the shared
-index waiting to be swept into your commit — so the branch and the staged set
-are both re-checked *after* staging and *immediately* before committing.
-Showing a bare checkout→add→commit chain would contradict the Step 4 rule that
-calls those assertions the guarantee.
+The two `test` lines narrow the window. **They are not a guarantee, and this
+skill should not call them one.** `test` and `git commit` are still separate
+processes, so a sibling can move `HEAD` or stage foreign paths after the last
+assertion passes and before the commit starts. That is a time-of-check to
+time-of-use race, and no ordering of checks inside a shared worktree closes it.
+
+So the rule is:
+
+- **Use an isolated worktree for anything that commits.** `git worktree add`
+  gives this session its own `HEAD` and its own index, which is the only
+  arrangement where the commit *cannot* land on another branch or absorb another
+  session's staged paths. In an isolated worktree you do not need the chain or
+  the assertions.
+- **If you must commit from a shared worktree**, run the assertions above and
+  treat the result as best-effort: they catch drift that has already happened,
+  they cannot prevent drift that happens next. Say so when reporting — "committed
+  from a shared worktree; branch and staged set were verified immediately before
+  the commit, which narrows but does not eliminate the race" — rather than
+  reporting the commit as verified.
 
 **Be precise about why, because the obvious reason is wrong.** `git checkout -b`
 writes the worktree's `HEAD`, which lives in `.git` and persists across shells
@@ -88,8 +101,9 @@ Two things actually protect you, in order:
    isolated worktree the chaining above is unnecessary** — split the steps
    across calls freely and read each result.
 2. **Re-verifying the branch immediately before the commit** (Step 4), which
-   catches drift rather than preventing it. In a shared worktree that check is
-   the guarantee — not the `&&`.
+   catches drift that already happened rather than preventing what happens next.
+   In a shared worktree this is the best available check — not a guarantee, and
+   not a substitute for (1).
 
 ## Step 0 — baseline, before you touch anything
 

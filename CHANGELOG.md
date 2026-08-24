@@ -128,6 +128,30 @@ contracts are dispatched as subagents rather than invoked, so they are not linke
   contradicting the prose that calls the branch and staged-path assertions the
   guarantee. The example now performs both assertions before committing.
 
+### Fixed in review (kstack#1, Codex round 4)
+- `core/careful` still classified by string shape, so `rm -rf /tmp/../*` — which
+  the shell expands over exactly the entries `rm -rf /*` does — reached the
+  overridable ask tier. Targets are now **lexically canonicalized** (`.` and `..`
+  resolved textually, never via the filesystem) before classification, which is
+  what finally ends a gap that recurred in three consecutive rounds.
+- `core/land` called its pre-commit assertions a guarantee. They are not:
+  `test` and `git commit` are separate processes, so the check is
+  time-of-check-to-time-of-use. The skill now requires an isolated worktree for
+  anything that commits, and where a shared worktree is unavoidable it says the
+  assertions narrow but cannot close the race — and that the report must say so.
+- `delivery-retro`'s executable pre-flight still set `warn-fetch-failed` and
+  proceeded, contradicting the round-3 rule that a failed fetch must stop. The
+  branch and the skip list now match the rule.
+- `validate_explanation.py` matched only single-line import spellings, so a
+  multiline `import {\n x \n} from "https://…"` and
+  `import(/* webpackIgnore */ "https://…")` still passed. Scripts are now
+  comment-stripped and whitespace-collapsed before the offline scan — while a
+  comment merely *containing* `https://` still passes.
+- `review-comments` exposed `pageInfo` on `reviews` but gave it no cursor, so
+  every iteration refetched the same first 100 summaries; and the copy-paste REST
+  commands still omitted `--paginate` the prose required.
+- `roles/triage` Step 0 reported `--limit 200` as if it were the backlog count.
+
 ### Deliberately not ported
 gstack's `autoplan` and `ship` auto-decide pipelines. The gate agents exist to
 decline; a pipeline that answers their questions for them removes the constraint
