@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 — 2026-08-24
+
+Added `dispatch-implementation`: an approved issue gets one isolated branch and
+worktree, then an automatic unstarted-to-started Linear transition with mandatory
+read-back before a plan-only executor can launch. The transition is deliberately
+bounded to an invocation carrying an exact issue identifier; completion and merging
+remain outside the dispatcher.
+
 ## 0.1.0 — 2026-08-21
 
 First release. Twenty skills and four role contracts, extracted from the OGUR

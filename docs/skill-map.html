@@ -252,7 +252,7 @@ footer code { font-family: "IBM Plex Mono", monospace; color: var(--ink-soft); }
 <div class="wrap">
 
 <header class="mast">
-  <div class="eyebrow">kstack · v0.1.0 · 20 skills</div>
+  <div class="eyebrow">kstack · v0.2.0 · 20 skills + 4 roles</div>
   <h1>What do I run, and what does it need?</h1>
   <p class="dek">One agent harness across every project. Skills are grouped by <strong>when</strong> in the work you reach for them, and colored by <strong>what they depend on</strong> — because that is what decides whether a skill works in a fresh repo or needs a key in <code>.agents/stack.yml</code> first.</p>
 </header>
@@ -353,6 +353,7 @@ const SKILLS = [
   { n:"qa", t:"roles", p:1, e:"tool", does:"Acceptance criteria that are runnable checks, plus the false-positive definition that stops a demo being mistaken for evidence.", says:["what would prove this works?"] },
   { n:"/linear-feature-intake", t:"linear", p:1, e:null, does:"Turns a scope verdict into the right tracker records and nothing else. Searches for duplicates first; performs no scope assessment of its own.", says:["file this","turn this into tickets"] },
 
+  { n:"/dispatch-implementation", t:"linear", p:2, e:"prompt", does:"Starts one approved issue in one isolated branch and worktree. Only after that evidence exists, automatically moves the Linear issue to the contract's started status and reads it back before launching a plan-only executor.", says:["start this ticket","tackle ISSUE-123","dispatch this issue"] },
   { n:"/investigate", t:"core", p:2, e:"hook", does:"Root-cause debugging under one rule: no fix before the cause is found. Three failed attempts stops the run. Every fix ships a test that failed before and passes after.", says:["why is this broken?","it worked yesterday","wtf"] },
   { n:"/careful", t:"core", p:2, e:"hook", does:"Pre-checks every shell command. Recursive deletes rooted at / or $HOME and force-pushes to the default branch are denied outright; the rest of the destructive set asks first.", says:["be careful","we're touching prod"] },
   { n:"/freeze", t:"core", p:2, e:"hook", does:"Locks edits to one directory for the session. Anything outside is blocked, not warned — including a symlink inside the boundary that points out of it.", says:["only edit this folder","lock the scope"] },
@@ -418,7 +419,7 @@ const LADDER = [
   { k:"scope_doc", d:"what's in and out right now", v:[["roles","/spec"],["roles","/triage"],["roles","product-manager"],["roles","tech-lead"],["roles","designer"],["roles","qa"]] },
   { k:"identities.reviewer · identities.bot", d:"who publishes, who replies", v:[["gh","/review-claude-pr"],["gh","/review-comments"],["gh","/pr-loop"]] },
   { k:"issue_prefix", d:"your tracker's key format", v:[["gh","/session-titles"],["gh","/delivery-retro"]] },
-  { k:"workspace_contract", d:"your tracker's own rules", v:[["linear","/next"],["linear","/linear-steward"],["linear","/linear-feature-intake"],["linear","/linear-release-audit"]] },
+  { k:"workspace_contract", d:"your tracker's own rules", v:[["linear","/next"],["linear","/dispatch-implementation"],["linear","/linear-steward"],["linear","/linear-feature-intake"],["linear","/linear-release-audit"]] },
 ];
 document.getElementById("ladder").innerHTML = LADDER.map(r => `
   <div class="rung">

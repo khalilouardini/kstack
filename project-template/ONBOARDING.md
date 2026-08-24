@@ -45,7 +45,7 @@ skills that need it and leaves the rest working.
 | `scope_doc` | the four role contracts, `/spec`, `/triage`, and `/next` gating. Without it they ask for the path and still refuse to invent a verdict. |
 | `identities.reviewer` + `identities.bot` | `/review-claude-pr`, `/review-comments`, `/pr-loop`. All three refuse without both, naming the key. |
 | `review_gate.skill_path` + `review_gate.scope` | stack review skills defer to your project's own review gate on the paths it claims. |
-| `workspace_contract` | `/linear-steward`, `/linear-feature-intake`, `/linear-release-audit` may write structure. Without it they run read-only. |
+| `workspace_contract` | `/dispatch-implementation`, `/linear-steward`, `/linear-feature-intake`, `/linear-release-audit` need the tracker's status and mutation rules. Without it they refuse writes. |
 | `issue_prefix` | `/session-titles` labels by issue key, and `/next` resolves issue references. |
 | `protected_branches` | `/triage` stops proposing CLOSE on branches that carry unextracted work. |
 | `role_appendix_dir` | roles answer with your traps, factories, and component inventory instead of asking for them. |
@@ -161,6 +161,7 @@ Decide, before code exists:
 - a decision already made, needing a record → `/linear-feature-intake`
 
 Build:
+- "start this ticket" / "tackle ISSUE-123" / "dispatch this issue" → `/dispatch-implementation`
 - "why is this broken" / a stack trace / "it worked yesterday" → `/investigate`
 - touching production or anything shared and destructive → `/careful`
 - "only edit this folder" → `/freeze`; clear it with `/unfreeze`
