@@ -173,8 +173,38 @@ if [ "$_IS_SIMPLE" -eq 1 ]; then
   fi
   # Force-push to the repo's default branch (the shared history everyone pulls).
   # Force is carried by -f/--force OR by git's plus-refspec syntax (+main,
+
+# Is this a `git push`, allowing for git's GLOBAL options in between?
+# `git -C /repo push -f origin main` is an ordinary invocation that force-pushes
+# the default branch, and matching the literal string "git push" let it through
+# BOTH tiers -- it was allowed outright, not even asked. Global options may take
+# a value (`-C <path>`, `-c k=v`, `--git-dir=<p>`), so skip options and their
+# arguments until the first non-option word: that word is the subcommand.
+_kstack_git_subcommand_is_push() {
+  set -f
+  # shellcheck disable=SC2086
+  set -- $1
+  set +f
+  [ "${1:-}" = git ] || [ "${1:-}" = sudo ] || return 1
+  [ "${1:-}" = sudo ] && shift
+  [ "${1:-}" = git ] || return 1
+  shift
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -C|-c|--git-dir|--work-tree|--namespace|--exec-path|--config-env)
+        shift 2 || return 1 ;;          # option WITH a separate value
+      --git-dir=*|--work-tree=*|--namespace=*|--exec-path=*|--config-env=*|-[a-zA-Z]*|--*)
+        shift ;;                        # option with an inline value, or a flag
+      *)
+        [ "$1" = push ] && return 0
+        return 1 ;;                     # first non-option word is the subcommand
+    esac
+  done
+  return 1
+}
+
   # +HEAD:main) which needs no flag at all. --force-with-lease never matches.
-  if printf '%s' "$CMD" | grep -qE '^[[:space:]]*git[[:space:]]+push([[:space:]]|$)' 2>/dev/null; then
+  if _kstack_git_subcommand_is_push "$CMD"; then
     _HAS_FORCE=0
     if printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(-f|--force)($|[[:space:]])' 2>/dev/null; then
       _HAS_FORCE=1
@@ -278,7 +308,7 @@ if [ -z "$WARN" ] && printf '%s' "$CMD_LOWER" | grep -qE '\btruncate\b' 2>/dev/n
 fi
 
 # git push --force / git push -f / plus-refspec force (git push origin +ref)
-if [ -z "$WARN" ] && printf '%s' "$CMD" | grep -qE 'git\s+push\s' 2>/dev/null \
+if [ -z "$WARN" ] && _kstack_git_subcommand_is_push "$CMD" \
   && printf '%s' "$CMD" | grep -qE '(-f\b|--force|(^|[[:space:]])\+[^[:space:]])' 2>/dev/null; then
   WARN="Destructive: git force-push rewrites remote history. Other contributors may lose work."
 fi

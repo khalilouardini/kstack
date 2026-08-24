@@ -152,6 +152,27 @@ contracts are dispatched as subagents rather than invoked, so they are not linke
   commands still omitted `--paginate` the prose required.
 - `roles/triage` Step 0 reported `--limit 200` as if it were the backlog count.
 
+### Fixed in review (kstack#1, Codex round 5)
+- `core/careful` matched the literal string `git push`, so
+  `git -C /repo push -f origin main` — an ordinary invocation — was **allowed
+  outright**, not even asked. Both tiers now locate the subcommand *after* git's
+  global options, handling `-C`, `-c`, `--git-dir=`, `--no-pager` and `sudo`.
+- `validate_explanation.py`'s comment stripper (added in round 4) removed
+  comment-like text inside string literals, so
+  `const a="/*"; fetch("https://x"); const b="*/";` had its real `fetch` erased
+  and the page passed. Replaced with a string-aware scan: only true comments are
+  removed, string contents are preserved verbatim.
+- `delivery-retro` consumed `$DEFAULT_BRANCH` six times and never assigned it,
+  so the documented preflight ran `git fetch origin ""`, took the new
+  round-4 block path, and aborted every retro in a repo with an origin.
+
+### Known and deliberately not fixed
+- `validate_explanation.py` accepts **local** asset references (`./app.js`,
+  bare filenames) in a page the skill promises is self-contained. Real, but a
+  new check rather than a regression, and one that risks rejecting legitimate
+  same-document references — left for a future change rather than added under
+  review pressure. Tracked in kstack#1 round 5, finding 4.
+
 ### Deliberately not ported
 gstack's `autoplan` and `ship` auto-decide pipelines. The gate agents exist to
 decline; a pipeline that answers their questions for them removes the constraint

@@ -54,12 +54,48 @@ def _normalize_js(src: str) -> str:
     Never use this for anything the reader sees -- it destroys formatting. Its
     single job is to make whitespace- and comment-based spellings of the same
     network call converge before NETWORK_CALL runs.
+
+    Scans character by character tracking string state, because regex
+    substitution cannot tell a comment from comment-like text inside a string.
+    `const a="/*"; fetch("https://x"); const b="*/";` is valid code whose fetch
+    a naive block-comment regex deletes -- the page then PASSES the offline gate
+    while fetching at load time. Erasing real calls is the dangerous direction,
+    so string contents are preserved verbatim and only true comments removed.
     """
-    # Line comments first would eat the `//` inside `https://`, so remove block
-    # comments, then only line comments that are not part of a URL scheme.
-    src = BLOCK_COMMENT.sub(" ", src)
-    src = re.sub(r"(?<![:a-zA-Z])//[^\n]*", " ", src)
-    return re.sub(r"\s+", " ", src)
+    out = []
+    i, n = 0, len(src)
+    quote = None  # currently open string delimiter, or None
+    while i < n:
+        c = src[i]
+        if quote:
+            out.append(c)
+            if c == "\\" and i + 1 < n:      # escape: copy the pair intact
+                out.append(src[i + 1])
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+            i += 1
+            continue
+        if c in "\"'`":
+            quote = c
+            out.append(c)
+            i += 1
+            continue
+        if c == "/" and i + 1 < n:
+            if src[i + 1] == "*":
+                end = src.find("*/", i + 2)
+                i = n if end == -1 else end + 2
+                out.append(" ")
+                continue
+            if src[i + 1] == "/":
+                end = src.find("\n", i)
+                i = n if end == -1 else end
+                out.append(" ")
+                continue
+        out.append(c)
+        i += 1
+    return re.sub(r"\s+", " ", "".join(out))
 
 
 NETWORK_CALL = re.compile(

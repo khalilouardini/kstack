@@ -86,6 +86,21 @@ if [ -z "$_GUARD_VERDICT" ]; then
   fi
 fi
 
+# Pre-check B2: resolve the default branch. Every check below consumes
+# $DEFAULT_BRANCH, and nothing had assigned it -- so `git fetch origin ""`
+# failed, pre-check C set block-fetch-failed, and the documented workflow
+# aborted every retro in a repo that has an origin. Resolve it before first use.
+if [ -z "$_GUARD_VERDICT" ]; then
+  DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null || true)
+  if [ -z "$DEFAULT_BRANCH" ]; then
+    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|^refs/remotes/origin/||' || true)
+  fi
+  if [ -z "$DEFAULT_BRANCH" ]; then
+    echo "RETRO_GUARD: cannot resolve the default branch — STOP. Every freshness check below depends on it."
+    _GUARD_VERDICT="block-no-default-branch"
+  fi
+fi
+
 # Pre-check C: fetch the default branch. A failed fetch STOPS the run.
 # Without a successful fetch the local remote-tracking ref may be arbitrarily
 # behind, so "the newest commit is old" cannot be distinguished from "my copy
@@ -131,8 +146,8 @@ current date cannot be established reliably, stop and ask rather than proceed.
 
 The two skip paths (`skip-no-remote`, `skip-detached`) proceed to §1, and the
 report must carry the reason as a disclosure line ("no remote to verify against,
-window not freshness-verified") rather than silently misreporting. **`block-fetch-failed`
-is not a skip path — it stops the run**, because unlike the other two it leaves a
+window not freshness-verified") rather than silently misreporting. **`block-fetch-failed` and
+`block-no-default-branch` are not skip paths — they stop the run**, because unlike the other two it leaves a
 ref that *looks* usable while being arbitrarily stale.
 
 ### Guard 2 — same-window-only comparison
