@@ -30,7 +30,13 @@ from html.parser import HTMLParser
 
 REQUIRED_SECTION_IDS = ("the-change", "why", "how-it-works", "quiz")
 
-ASSET_URL_ATTRS = {"src", "href", "srcset", "data", "poster"}
+ASSET_URL_ATTRS = {"src", "href", "srcset", "imagesrcset", "data", "poster"}
+# srcset/imagesrcset hold a COMMA-SEPARATED candidate list, each entry a URL
+# optionally followed by a descriptor ("a.png 1x, https://cdn/b.png 2x").
+# Testing the whole attribute with an anchored regex only inspects the first
+# candidate, so every later one is unchecked — a remote CDN in position two
+# passed the offline gate. Split these before validating.
+SRCSET_ATTRS = {"srcset", "imagesrcset"}
 LOCAL_URL = re.compile(r"^(#|/|\.{1,2}/|[A-Za-z0-9_\-.]+$|data:|blob:)")
 REMOTE_URL = re.compile(r"^(?:[a-zA-Z][a-zA-Z0-9+.-]*:)?//|^https?:", re.I)
 BOX_DRAWING = re.compile("[─-▟■-◿⬀-⯿]")
@@ -115,9 +121,21 @@ class Page(HTMLParser):
             # Outbound <a href> links are references, not dependencies — allowed.
         else:
             for attr in ASSET_URL_ATTRS & a.keys():
-                url = a[attr].strip()
-                if url and REMOTE_URL.match(url) and not LOCAL_URL.match(url):
-                    self.remote_assets.append(f"<{tag} {attr}={url[:60]}>")
+                raw = a[attr] or ""
+                if attr in SRCSET_ATTRS:
+                    # Each candidate is "<url> [descriptor]"; the URL is the
+                    # first whitespace-delimited token of each comma-separated
+                    # entry. Validate every one, not just the first.
+                    candidates = [
+                        part.strip().split()[0]
+                        for part in raw.split(",")
+                        if part.strip()
+                    ]
+                else:
+                    candidates = [raw.strip()]
+                for url in candidates:
+                    if url and REMOTE_URL.match(url) and not LOCAL_URL.match(url):
+                        self.remote_assets.append(f"<{tag} {attr}={url[:60]}>")
 
         if tag == "title":
             self._capture = "title"

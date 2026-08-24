@@ -135,8 +135,14 @@ so a version mismatch between
 ```
 
 is the single observable signal that the generated copy is stale and must be
-regenerated. `bin/check-stack` compares them; without a version bump the
-comparison is vacuous and a stale pointer looks identical to a fresh one.
+regenerated. `bin/check-stack` compares them — it reads every pointer carrying
+the generated-by marker under `${CODEX_HOME:-~/.codex}/skills/` and fails on a
+version that differs from canonical, or on a pointer with no version at all.
+Without a version bump the comparison is vacuous and a stale pointer looks
+identical to a fresh one.
+
+An absent pointer tree is not a failure: it means Codex is not installed on this
+machine, which is a supported state, not drift.
 
 On `claude` the symlink makes staleness structurally impossible, which is
 exactly why the version field is easy to forget to bump — the host you develop

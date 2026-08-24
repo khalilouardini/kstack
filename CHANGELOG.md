@@ -53,6 +53,30 @@ contracts are dispatched as subagents rather than invoked, so they are not linke
   system with a symlinked ancestor (macOS `/tmp` → `/private/tmp`) creating a
   file in a new subdirectory *inside* the boundary was wrongly denied.
 
+### Fixed in review (kstack#1, Codex round 1)
+- `bin/install --host codex` refused nothing when the destination skill
+  directory was a **symlink**: `mkdir -p` accepted it and the pointer was
+  written outside `CODEX_HOME` entirely. Reproduced, then blocked — the
+  installer now refuses a symlinked `$dir`/`$file` and verifies the resolved
+  path stays under the destination.
+- `validate_explanation.py` tested `srcset` **once, anchored**, so only the
+  first candidate was checked. `local.png 1x, https://cdn/x.png 2x` passed the
+  offline gate with a live CDN dependency. Each comma-separated candidate is now
+  validated, and `imagesrcset` is covered too.
+- `hosts/HOSTS.md` called `version` the pointer drift detector, but
+  `bin/install` never emitted `version` into a pointer and `bin/check-stack`
+  never looked at the pointer tree — the promised mechanism did not exist. Both
+  halves are now implemented; the check caught all 20 installed pointers on its
+  first run.
+- `core/land` claimed a chained `&&` sequence was atomic against a sibling
+  session switching branches. It is not: each command is a separate process. The
+  claim is corrected to what chaining actually buys (shell state within one tool
+  call), with per-session worktrees named as the only real isolation.
+- `session-titles` rewrote the Codex session index from a snapshot, which loses
+  any line Codex appended in between — atomic rename prevents a torn file, not a
+  stale one. Now requires a quiescent writer plus a compare-and-swap on
+  size/mtime before the rename.
+
 ### Deliberately not ported
 gstack's `autoplan` and `ship` auto-decide pipelines. The gate agents exist to
 decline; a pipeline that answers their questions for them removes the constraint

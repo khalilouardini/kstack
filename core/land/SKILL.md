@@ -51,13 +51,29 @@ splits git work into two kinds of call, and the split is load-bearing:
   the next step. Never chain a safety check into the command it is supposed to
   guard — chaining it means you never read it.
 - **A dependent write sequence is one chained `&&` call.** Branch-then-stage-
-  then-commit must not be split across calls, because a sibling session can
-  switch the branch between them and your commit lands somewhere else.
+  then-commit must not be split across tool calls, because each call starts a
+  fresh shell: the branch you created in one call is not the branch you are on
+  in the next.
 
 ```bash
-# one call — the sequence is atomic against a sibling switching branches
+# one call — the branch created here is the branch staged and committed here
 git checkout -b feat/session-expiry && git add src/session.py tests/test_session.py && git commit -m "fix: redirect on expired session cookie"
 ```
+
+**Chaining narrows the window; it does not close it.** Each command in that
+chain is a separate `git` process, so a sibling session sharing the worktree can
+run `git checkout` after `git checkout -b` exits and before `git commit` starts,
+and the commit lands on the sibling's branch. One shell call is not one atomic
+operation, and no arrangement of `&&` makes it one.
+
+Two things actually protect you, in order:
+
+1. **A per-session worktree.** `git worktree add` gives this session its own
+   checkout and its own `HEAD`, so no sibling can move the branch under it.
+   This is the only real isolation; prefer it for any multi-commit task.
+2. **Re-verifying the branch immediately before the commit** (Step 4), which
+   catches the drift rather than preventing it. In a shared worktree that check
+   is the guarantee — not the `&&`.
 
 ## Step 0 — baseline, before you touch anything
 

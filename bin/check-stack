@@ -9,6 +9,7 @@ Stdlib only; paths resolve against this file's repo, so run it from anywhere.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -211,6 +212,51 @@ def do_list() -> int:
     return 0
 
 
+def check_codex_pointers(r: "Report") -> int:
+    """Compare installed Codex pointers against canonical frontmatter.
+
+    hosts/HOSTS.md calls `version` the drift detector: the Codex pointer carries
+    a COPY of the frontmatter, so a version mismatch is the one observable
+    signal that the generated copy is stale. That claim needs something to
+    actually compare -- without this, a canonical version bump produced no
+    mismatch anywhere and stale pointers stayed silent.
+
+    Absent pointer tree is not a failure: Codex simply is not installed here.
+    """
+    root = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "skills"
+    if not root.is_dir():
+        return 0
+    checked = 0
+    for canon in targets():
+        if canon.name != "SKILL.md":
+            continue
+        name = canon.parent.name
+        pointer = root / name / "SKILL.md"
+        if not pointer.is_file():
+            continue
+        text = pointer.read_text(encoding="utf-8", errors="replace")
+        if "kstack pointer" not in text:
+            continue  # not ours to judge
+        checked += 1
+        cfm = frontmatter(canon.read_text(encoding="utf-8", errors="replace"))
+        pfm = frontmatter(text)
+        if cfm is None:
+            continue  # canonical frontmatter problems are reported by check_doc
+        want = cfm[0].get("version")
+        got = pfm[0].get("version") if pfm else None
+        where = f"{pointer}"
+        if got is None:
+            r.fail(where, "pointer-drift", f"no version in pointer; canonical is {want}")
+        elif got != want:
+            r.fail(
+                where,
+                "pointer-drift",
+                f"version {got} but canonical {name} is {want} — "
+                f"regenerate with bin/install --host codex",
+            )
+    return checked
+
+
 def main(argv: list[str]) -> int:
     if "--list" in argv:
         return do_list()
@@ -219,12 +265,14 @@ def main(argv: list[str]) -> int:
     for path in docs:
         check_doc(path, r)
     scripts = check_scripts(r)
+    pointers = check_codex_pointers(r)
 
     for where, check, msg in r.warns:
         print(f"WARN  {where}  [{check}] {msg}")
     for where, check, msg in r.fails:
         print(f"FAIL  {where}  [{check}] {msg}")
-    print(f"\nchecked {len(docs)} docs, {len(scripts)} scripts in {REPO}")
+    ptr = f", {pointers} codex pointers" if pointers else ""
+    print(f"\nchecked {len(docs)} docs, {len(scripts)} scripts{ptr} in {REPO}")
     print(f"-> {len(r.fails)} failure(s), {len(r.warns)} warning(s)")
     return 1 if r.fails else 0
 

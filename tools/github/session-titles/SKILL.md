@@ -166,14 +166,29 @@ running and appending to this file concurrently:
 2. Read the file, and for each line whose `id` is in the confirmed rename set,
    replace only the `thread_name` value — leave `id` and `updated_at` untouched,
    and leave every non-matching line byte-for-byte as-is.
-3. Write the full result to a temp file in the same directory
+3. **Require the writer to be quiescent, and prove it did not move.** Codex
+   appends to this file while it runs, and an atomic rename does not prevent a
+   lost update: if Codex appends between the read in step 2 and the rename, the
+   replacement is built from a stale snapshot and that new session's line is
+   silently deleted. Rename protects against a *torn* file, never against a
+   *stale* one. So:
+   - Refuse to write while any Codex session is running. Check first; if one is,
+     stop and report which — do not rewrite the index anyway.
+   - Record the file's size and mtime (or a hash) at the moment of the step-2
+     read, and re-check them immediately before the rename. Any difference means
+     it changed under you: discard the rewrite, re-read, and start over. This is
+     a compare-and-swap, and without it steps 1–3 can destroy a live session
+     record whose only copy was that line.
+   - Prefer a supported or coordinated write path the moment one exists; the
+     whole-file replacement is the fallback, not the design.
+4. Write the full result to a temp file in the same directory
    (`~/.codex/.session_index.jsonl.tmp`) and `os.replace`/`mv` it over the
    original — an atomic rename, not an in-place edit, so a crash mid-write can't
    leave a half-written index. **`mkstemp`-style temp files land with `0600`
    permissions instead of the original's mode — `chmod` the temp file to match
    the original's mode before the rename**, or the atomic write silently
    tightens permissions on a file this skill does not own.
-4. This is a best-effort, undocumented mechanism against another running
+5. This is a best-effort, undocumented mechanism against another running
    application's private state file, not a supported API. State that plainly in
    the report back rather than presenting it as equivalent in reliability to the
    Claude Code path. If a future Codex version changes the file format or adds a
