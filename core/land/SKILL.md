@@ -32,9 +32,10 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   the same list for the same reason.)
 - **`issue_prefix`** — when set, an issue key may appear in the branch name and
   PR title. Optional; absent means plain branch names.
-- **`identities.maintainer`** — the human account that pushes the branch and
-  opens the PR. Missing or null → **refuse**, naming `identities.maintainer`.
-  Resolve its token for forge API calls; never switch global `gh` identity.
+- **`identities.implementer`** — the implementation-agent account that opens
+  the PR (Claude by default). Missing or null → **refuse**, naming
+  `identities.implementer`. Resolve its token for forge API calls; never switch
+  global `gh` identity.
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
@@ -261,24 +262,13 @@ let the human decide. Do not silently accept it.
 git push -u origin <your-branch>
 ```
 
-Immediately before pushing, verify that the active login is the configured
-maintainer when the repository's Git credential helper depends on `gh`:
-
-```bash
-test "$(gh api user --jq .login)" = "<identities.maintainer>"
-```
-
-If it differs, stop and report the mismatch. Do not switch it: another session
-may be using the shared global account. SSH remotes authenticate independently,
-but the maintainer still owns the branch and PR.
-
 Then open the PR:
 
 ```bash
-MAINTAINER="<identities.maintainer>"
-MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
-test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
-GH_TOKEN="$MAINTAINER_TOKEN" gh pr create --base <default-branch> --title "<type>: <what changed>" --body "<body>"
+IMPLEMENTER="<identities.implementer>"
+IMPLEMENTER_TOKEN=$(gh auth token --hostname github.com --user "$IMPLEMENTER")
+test "$(GH_TOKEN="$IMPLEMENTER_TOKEN" gh api user --jq .login)" = "$IMPLEMENTER"
+GH_TOKEN="$IMPLEMENTER_TOKEN" gh pr create --base <default-branch> --title "<type>: <what changed>" --body "<body>"
 ```
 
 Body: what changed and why, the gate results as evidence (`<gates.lint>` clean,
@@ -299,10 +289,10 @@ one.
 
 `gh` auth is **global mutable state**, shared by every shell and every concurrent
 session on the machine. Never call `gh auth switch` from this skill. Bind PR API
-calls to the verified maintainer token with `GH_TOKEN`, which is process-local
-and safe for parallel sessions. The separate active-login assertion before a
-Git push protects installations whose Git credential helper follows `gh`; a
-mismatch blocks the push instead of mutating global state.
+calls to the verified implementer token with `GH_TOKEN`, which is process-local
+and safe for parallel sessions. Git transport authentication is separate from
+PR authorship: SSH keys and HTTPS credential helpers may identify the pusher,
+while the token-bound `gh pr create` determines the visible PR author.
 
 ## Safety invariants
 
@@ -329,8 +319,7 @@ other destructive git commands prompt. That covers one failure mode of invariant
 7. **Never rewrite a commit you did not author** — check `git patch-id --stable`
    first, and leave origin-duplicated commits for the rebase to drop.
 8. **Never switch global `gh` identity.** Bind forge API calls to the verified
-   maintainer token; stop on an active-login mismatch before a credential-helper
-   push.
+   implementer token; leave Git transport authentication independent.
 
 ## What this skill is NOT for
 

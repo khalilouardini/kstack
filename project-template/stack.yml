@@ -64,13 +64,13 @@ review_gate:
   skill_path: null               # e.g. .claude/skills/review-engine/SKILL.md
   scope: null                    # glob of diff paths that trigger it, e.g. "src/engine/**"
 
-# GitHub logins. No defaults, ever — the human owns delivery, Codex publishes
-# findings, and the implementation bot posts fixes and replies. Swapping them is
-# not recoverable by a retry. A skill refuses when a role it needs is null.
+# GitHub logins. No defaults, ever — the human governs and merges, the reviewer
+# publishes findings (Codex by default), and the implementer opens PRs, fixes,
+# and replies (Claude by default). A skill refuses when a role it needs is null.
 identities:
-  maintainer: null               # human account that pushes, opens PRs, and merges
-  codex: null                    # Codex machine account that publishes reviews
-  responder: null                # implementation bot that posts fixes and replies
+  maintainer: null               # human account that governs and merges
+  reviewer: null                 # review-agent account; Codex by default
+  implementer: null              # implementation-agent account; Claude by default
 
 # Branch-name globs triage may never propose CLOSE for. Branches carrying hand
 # edits nobody has extracted yet belong here — they read as stale and are not.

@@ -57,9 +57,9 @@ review_gate:
   skill_path: <path|null>       # project "prove the bug" review skill (e.g. review-engine)
   scope: <glob|null>            # diff paths that trigger it
 identities:
-  maintainer: <gh-login|null>   # human owner: pushes, opens PRs, merges
-  codex: <gh-login|null>        # Codex machine account: publishes reviews
-  responder: <gh-login|null>    # implementation bot: fixes and replies
+  maintainer: <gh-login|null>   # human owner: governs and merges
+  reviewer: <gh-login|null>     # review agent; Codex by default
+  implementer: <gh-login|null>  # implementation agent: opens PRs, fixes, replies
 protected_branches: []          # fnmatch globs (`demo/*`) matched against the
                                 # branch name; triage may never propose CLOSE for one
 role_appendix_dir: <path|null>  # per-role project appendices (traps, factories, gates)

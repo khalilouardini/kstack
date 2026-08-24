@@ -71,12 +71,13 @@ half-day estimate, refuses to estimate what it cannot name),
 | Skill | Half of the loop |
 |---|---|
 | [`/review-claude-pr`](tools/github/review-claude-pr/SKILL.md) | Produces the review — P0–P3 findings as a comment review, marked with the head SHA |
-| [`/review-comments`](tools/github/review-comments/SKILL.md) | Answers existing comments — fixes the code, replies as the responder, summary comment last |
+| [`/review-comments`](tools/github/review-comments/SKILL.md) | Answers existing comments — fixes the code, replies as the implementer, summary comment last |
 | [`/pr-loop`](tools/github/pr-loop/SKILL.md) | Runs both halves unattended, bounded rounds, repeat-finding detector |
 
-Codex and the responder post under separate machine identities, while the human
-maintainer remains the only delivery and merge identity. That three-way split is
-why no single skill does both halves or merges on its own.
+The reviewer (Codex by default) and implementer (Claude by default) use separate
+machine identities, while the human maintainer retains governance and merge
+authority. That three-way split is why no single skill does both halves or
+merges on its own.
 
 ### Land and operate
 

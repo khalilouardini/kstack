@@ -288,15 +288,15 @@ footer code { font-family: "IBM Plex Mono", monospace; color: var(--ink-soft); }
 
 <section class="section">
   <h2>Which review do I run?</h2>
-  <p class="sub">Four skills touch a pull request. The split is deliberate: the human maintainer owns delivery, Codex publishes reviews, and the responder posts fixes and replies.</p>
+  <p class="sub">Four skills touch a pull request. The split is deliberate: the human maintainer governs and merges, the reviewer (Codex by default) publishes findings, and the implementer (Claude by default) opens PRs, fixes, and replies.</p>
   <div class="scroll">
     <table>
       <caption>Review cluster — who is reviewing × what stage</caption>
       <thead><tr><th scope="col">Who</th><th scope="col">Produce the review</th><th scope="col">Answer existing comments</th><th scope="col">Drive rounds unattended</th></tr></thead>
       <tbody>
         <tr><th scope="row">Me, by hand</th><td>the project's own gate, when the diff is inside <code>review_gate.scope</code></td><td class="na">—</td><td class="na">—</td></tr>
-        <tr><th scope="row">Codex machine account</th><td><code>/review-claude-pr</code> — P0–P3 as a comment review</td><td class="na">—</td><td class="na">—</td></tr>
-        <tr><th scope="row">Implementation responder</th><td class="na">—</td><td><code>/review-comments</code> — fix, then reply</td><td class="na">—</td></tr>
+        <tr><th scope="row">Reviewer (Codex default)</th><td><code>/review-claude-pr</code> — P0–P3 as a comment review</td><td class="na">—</td><td class="na">—</td></tr>
+        <tr><th scope="row">Implementer (Claude default)</th><td class="na">—</td><td><code>/review-comments</code> — fix, then reply</td><td class="na">—</td></tr>
         <tr><th scope="row">Nobody watching</th><td class="na">—</td><td class="na">—</td><td><code>/pr-loop</code> — runs both halves, bounded rounds</td></tr>
       </tbody>
     </table>
@@ -361,7 +361,7 @@ const SKILLS = [
   { n:"/explain-diff-html", t:"core", p:2, e:null, does:"Builds a self-contained interactive page teaching a change — background, mechanism, diagrams, and a five-question quiz. A bundled validator hard-gates the output.", says:["explain this diff","teach the team what changed"] },
 
   { n:"/review-claude-pr", t:"gh", p:3, e:null, does:"The reviewer half: a defect-first pass posted as a P0–P3 comment review, marked with the head SHA so a round is never paid for twice.", says:["review PR #N","give me a defect review"] },
-  { n:"/review-comments", t:"gh", p:3, e:null, does:"The responder half: finds genuinely unanswered threads across all three feedback surfaces, fixes the code, replies as the bot, and posts the summary comment last.", says:["answer the review comments","address the feedback"] },
+  { n:"/review-comments", t:"gh", p:3, e:null, does:"The implementer half: finds genuinely unanswered threads across all three feedback surfaces, fixes the code, replies as the implementation agent, and posts the summary comment last.", says:["answer the review comments","address the feedback"] },
   { n:"/pr-loop", t:"gh", p:3, e:null, does:"Runs both halves unattended until clean, blocked, or out of rounds. Bounded by a round cap and a repeat-finding detector that persists across invocations.", says:["drive the review until it's clean"] },
 
   { n:"/land", t:"core", p:4, e:null, does:"Dedicated branch, gates green, atomic commits, PR opened — with the concurrent-session guards: re-verify the branch and the staged set before every commit. Stops at the PR.", says:["land this","commit and push","open a PR"] },
@@ -417,7 +417,7 @@ const LADDER = [
   { k:"(nothing)", d:"a fresh repo, no config", v:[["core","/stack"],["core","/investigate"],["core","/careful"],["core","/freeze"],["core","/unfreeze"],["core","/explain-diff-html"]] },
   { k:"gates.lint · gates.test", d:"your authoritative commands", v:[["core","/land"],["core","/health"]] },
   { k:"scope_doc", d:"what's in and out right now", v:[["roles","/spec"],["roles","/triage"],["roles","product-manager"],["roles","tech-lead"],["roles","designer"],["roles","qa"]] },
-  { k:"identities.maintainer · identities.codex · identities.responder", d:"who delivers, reviews, and replies", v:[["gh","/review-claude-pr"],["gh","/review-comments"],["gh","/pr-loop"]] },
+  { k:"identities.maintainer · identities.reviewer · identities.implementer", d:"who governs, reviews, and implements", v:[["gh","/review-claude-pr"],["gh","/review-comments"],["gh","/pr-loop"]] },
   { k:"issue_prefix", d:"your tracker's key format", v:[["gh","/session-titles"],["gh","/delivery-retro"]] },
   { k:"workspace_contract", d:"your tracker's own rules", v:[["linear","/next"],["linear","/dispatch-implementation"],["linear","/linear-steward"],["linear","/linear-feature-intake"],["linear","/linear-release-audit"]] },
 ];

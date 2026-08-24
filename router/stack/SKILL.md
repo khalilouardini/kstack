@@ -121,8 +121,8 @@ Two axes: **who reviews** and **what stage of the review**.
 | Who reviews | Produce the review | Answer existing comments | Drive rounds to a stop condition |
 |---|---|---|---|
 | **Me, now, by hand** | the project's own review gate (`review_gate.skill_path`), when the diff is inside `review_gate.scope` | — | — |
-| **The Codex side, posted to GitHub** | `/review-claude-pr` — P0–P3 findings as a COMMENT review from `identities.codex` | — | — |
-| **The implementation side** | — | `/review-comments` — fix, then reply as `identities.responder` | — |
+| **The reviewer (Codex by default)** | `/review-claude-pr` — P0–P3 findings as a COMMENT review from `identities.reviewer` | — | — |
+| **The implementer (Claude by default)** | — | `/review-comments` — fix, then reply as `identities.implementer` | — |
 | **Nobody watching — both halves** | — | — | `/pr-loop` — each round runs the reviewer, then `/review-comments`, then re-checks the exit gates |
 
 The one-line decision:
@@ -135,7 +135,7 @@ The one-line decision:
 
 `/pr-loop` **calls** `/review-comments`; do not run both. `/review-claude-pr`
 never fixes or resolves, and `/review-comments` never initiates a review — the
-split is deliberate, because the reviewer and the responder post under different
+split is deliberate, because the reviewer and the implementer post under different
 identities.
 
 ## Disambiguation — the decide cluster

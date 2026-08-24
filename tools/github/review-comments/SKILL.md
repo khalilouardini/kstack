@@ -1,16 +1,16 @@
 ---
 name: review-comments
 version: 0.2.0
-description: Find unanswered PR feedback, make the warranted code fixes, and reply under the configured responder identity using a per-command token that never switches global gh state. Use when asked to "answer the review comments", "reply to the review", "address the PR feedback", or "/review-comments [PR#]". (kstack)
+description: Find unanswered PR feedback, make the warranted code fixes, and reply under the configured implementer identity using a per-command token that never switches global gh state. Use when asked to "answer the review comments", "reply to the review", "address the PR feedback", or "/review-comments [PR#]". (kstack)
 ---
 
-# review-comments — answer a PR's open review comments as the responder
+# review-comments — answer a PR's open review comments as the implementer
 
 ## When to invoke
 
 An open PR carries review feedback — inline threads, review summaries, or
 conversation comments — that needs answering, and the fix-plus-reply should land
-under the project's responder identity. Invoke as `/review-comments [PR#]` (defaults
+under the project's implementer identity. Invoke as `/review-comments [PR#]` (defaults
 to the current branch's PR). Not for initiating reviews, resolving threads, or
 changing PR state — see "What this skill is NOT for".
 
@@ -19,18 +19,21 @@ changing PR state — see "What this skill is NOT for".
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before doing anything else:
 
-- **`identities.maintainer`** — the human maintainer's gh login, which owns the
-  branch push. Missing or null → **refuse**, naming `identities.maintainer`.
-- **`identities.codex`** — the Codex reviewer login. It is optional for this
-  responder-only skill, but when configured it is excluded from the generic
-  `[bot]` noise filter so GitHub App-backed Codex reviews remain actionable.
-- **`identities.responder`** — the dedicated implementation-bot login that
-  authors every reply. Call it `$RESPONDER` below. **Null → there is no responder identity for this
+- **`identities.maintainer`** — the human maintainer's gh login and fallback
+  reply identity. Missing or null → **refuse**, naming `identities.maintainer`.
+- **`identities.reviewer`** — the review-agent login, normally Codex. It is
+  optional for this implementer-only skill, but when configured it is excluded
+  from the generic `[bot]` noise filter so GitHub App-backed Codex reviews
+  remain actionable.
+- **`identities.implementer`** — the implementation-agent login that authors
+  implementation PRs and every reply. Call it `$IMPLEMENTER` below. **Null →
+  there is no implementer identity for this
   project**: post replies as the human account and say so plainly in the report
-  ("replies posted as `<maintainer>`; no responder identity configured —
-  `identities.responder: null`"). Use the maintainer's token in that case.
-  Note the degradation: the "last comment by the responder ⇒ answered"
-  predicate below keys on `$RESPONDER`, and with `$RESPONDER` absent it must key on the human login —
+  ("replies posted as `<maintainer>`; no implementer identity configured —
+  `identities.implementer: null`"). Use the maintainer's token in that case.
+  Note the degradation: the "last comment by the implementer ⇒ answered"
+  predicate below keys on `$IMPLEMENTER`, and with `$IMPLEMENTER` absent it
+  must key on the human login —
   which cannot distinguish the reviewer's own follow-up from a prior reply.
   Expect false "answered" skips and say so in the report.
 - **`gates.lint`, `gates.test`** — the pre-push gate is
@@ -43,12 +46,12 @@ Missing `.agents/stack.yml` altogether → refuse and name the file.
 ## What this skill does
 
 The consuming repo declares distinct GitHub roles in `.agents/stack.yml`. This
-skill uses the human maintainer (`identities.maintainer`) for the branch push
-and the implementation bot (`identities.responder`) for replies. If
-`identities.codex` is configured, it is recognized as the expected reviewer.
+skill uses the implementation agent (`identities.implementer`) for PR authorship
+and replies. If `identities.reviewer` is configured, it is recognized as the
+expected reviewer.
 The skill walks a PR's open feedback, addresses each item — **making the code
 fix when one is warranted, not just replying** — and posts every reply under
-the responder identity.
+the implementer identity.
 
 Two things make this skill safe rather than reckless. First, **no code edit,
 push, or post happens without your explicit approval** — everything up to the
@@ -57,7 +60,7 @@ the intended account's token through `GH_TOKEN`; the skill never calls
 `gh auth switch`, so concurrent sessions cannot change which account publishes
 a reply.
 
-If a non-null `$RESPONDER` credential cannot be resolved, stop immediately and
+If a non-null `$IMPLEMENTER` credential cannot be resolved, stop immediately and
 tell the user — never post review answers from the wrong identity.
 
 ## What to scope
@@ -70,20 +73,20 @@ tell the user — never post review answers from the wrong identity.
 2. **Resolve and verify the credentials** without changing global auth state:
    ```bash
    MAINTAINER="<identities.maintainer>"
-   CODEX="<identities.codex>"           # may be null
-   RESPONDER="<identities.responder>"   # null degrades to MAINTAINER as documented above
+   REVIEWER="<identities.reviewer>"       # may be null
+   IMPLEMENTER="<identities.implementer>" # null degrades to MAINTAINER as documented above
    MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
    test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
    OWNER_REPO=$(GH_TOKEN="$MAINTAINER_TOKEN" gh repo view --json nameWithOwner --jq .nameWithOwner)
    OWNER=${OWNER_REPO%/*}; REPO=${OWNER_REPO#*/}
    ```
-3. **Resolve the responder token.** When `$RESPONDER` is non-null:
+3. **Resolve the implementer token.** When `$IMPLEMENTER` is non-null:
    ```bash
-   RESPONDER_TOKEN=$(gh auth token --hostname github.com --user "$RESPONDER")
-   test "$(GH_TOKEN="$RESPONDER_TOKEN" gh api user --jq .login)" = "$RESPONDER"
+   IMPLEMENTER_TOKEN=$(gh auth token --hostname github.com --user "$IMPLEMENTER")
+   test "$(GH_TOKEN="$IMPLEMENTER_TOKEN" gh api user --jq .login)" = "$IMPLEMENTER"
    ```
-   If it cannot be resolved, stop. When the configured responder is null, set
-   `RESPONDER="$MAINTAINER"` and `RESPONDER_TOKEN="$MAINTAINER_TOKEN"`, and
+   If it cannot be resolved, stop. When the configured implementer is null, set
+   `IMPLEMENTER="$MAINTAINER"` and `IMPLEMENTER_TOKEN="$MAINTAINER_TOKEN"`, and
    report the documented degradation.
 
 ## How to find the unanswered comments
@@ -132,16 +135,16 @@ GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate "repos/$OWNER/$REPO/issues/$PR/co
 
 Now filter to what is **genuinely unanswered** — this is the whole "pending/new" judgement:
 
-- **A review thread is unanswered** ⇔ `isResolved == false` **and** the *last* comment is **not** authored by `$RESPONDER` **and** its comments are **not** part of a `PENDING` review (`comments.nodes[].pullRequestReview.state != "PENDING"`). A `PENDING` review is the author's own *unsubmitted draft* — those comments are invisible to everyone else and the reply endpoint will reject them, so they must be skipped exactly like a `PENDING` summary. Sanity check: a published inline comment also appears in the REST `pulls/{pr}/comments` list; a pending one does not. (If the responder already replied last, the thread is answered — skip it.)
+- **A review thread is unanswered** ⇔ `isResolved == false` **and** the *last* comment is **not** authored by `$IMPLEMENTER` **and** its comments are **not** part of a `PENDING` review (`comments.nodes[].pullRequestReview.state != "PENDING"`). A `PENDING` review is the author's own *unsubmitted draft* — those comments are invisible to everyone else and the reply endpoint will reject them, so they must be skipped exactly like a `PENDING` summary. Sanity check: a published inline comment also appears in the REST `pulls/{pr}/comments` list; a pending one does not. (If the implementer already replied last, the thread is answered — skip it.)
 - **A review summary is to-address** ⇔ it is **submitted** with a non-empty body **and** no later reply addresses it. **Skip `state: PENDING`** (unsubmitted draft) and empty-body summaries. If a *human* (not the bot) has already posted a top-level comment after `submittedAt` that addresses it (e.g. "addressed in `<commit>`"), **annotate the draft as already handled by a human** and drop it at the gate rather than have the bot re-answer.
 - **A conversation comment is unanswered** ⇔ authored by an actionable
-  reviewer (including `$CODEX`) **and** no later responder comment addresses it.
-- **Skip noise:** the responder's own comments, and automation accounts — e.g. `cloudflare-workers-and-pages[bot]` and any login ending in `[bot]` — except the configured `$CODEX` login, whose review is actionable even if it is a GitHub App account.
+  reviewer (including `$REVIEWER`) **and** no later implementer comment addresses it.
+- **Skip noise:** the implementer's own comments, and automation accounts — e.g. `cloudflare-workers-and-pages[bot]` and any login ending in `[bot]` — except the configured `$REVIEWER` login, whose review is actionable even if it is a GitHub App account.
 - **Flag, don't skip, outdated threads:** if `isOutdated == true` the code the comment anchored to has since moved. Still address it, but note in your reply that the anchor is outdated.
 
-This "last comment by the responder ⇒ answered" rule is also what makes the
+This "last comment by the implementer ⇒ answered" rule is also what makes the
 skill **idempotent**: re-running on the same PR will not re-answer a thread the
-responder already replied to.
+implementer already replied to.
 
 ## How to answer each item (reply + fix)
 
@@ -183,7 +186,7 @@ Commit/push under the user's normal branch discipline. **Commits use the user's 
 
 **Re-fetch the comment `databaseId`s immediately before posting.** Reviews can be re-attributed or re-submitted mid-session, which invalidates ids captured earlier — a reply against a dead id fails or lands on the wrong thread.
 
-Post with the responder's token on each command. This does not mutate the
+Post with the implementer's token on each command. This does not mutate the
 machine-wide active `gh` account, so parallel sessions remain independent.
 **Ordering rule: inline thread replies first, the conversation-level summary
 comment last — always post the summary, and always post it last.** Pushing a
@@ -196,15 +199,15 @@ answered.
 
 ```bash
 # Re-verify immediately before the first outward API call.
-test "$(GH_TOKEN="$RESPONDER_TOKEN" gh api user --jq .login)" = "$RESPONDER"
+test "$(GH_TOKEN="$IMPLEMENTER_TOKEN" gh api user --jq .login)" = "$IMPLEMENTER"
 
 # inline thread reply — reply to a databaseId in the thread:
-GH_TOKEN="$RESPONDER_TOKEN" gh api \
+GH_TOKEN="$IMPLEMENTER_TOKEN" gh api \
   "repos/$OWNER/$REPO/pulls/$PR/comments/$COMMENT_ID/replies" -f body="$REPLY_BODY"
 
 # LAST: the conversation-level summary comment (also the reply surface for
 # review summaries, which can't be thread-replied):
-GH_TOKEN="$RESPONDER_TOKEN" gh pr comment "$PR" --body "$SUMMARY_BODY"
+GH_TOKEN="$IMPLEMENTER_TOKEN" gh pr comment "$PR" --body "$SUMMARY_BODY"
 ```
 **Do not resolve threads** — leave them open so the human reviewer decides whether each is settled.
 
@@ -212,7 +215,7 @@ GH_TOKEN="$RESPONDER_TOKEN" gh pr comment "$PR" --body "$SUMMARY_BODY"
 
 The token-bound calls above do not alter global `gh` state. After posting,
 re-scan with `GH_TOKEN="$MAINTAINER_TOKEN"` and confirm every response author is
-the literal configured `$RESPONDER`. Treat a mismatched author as a failed
+the literal configured `$IMPLEMENTER`. Treat a mismatched author as a failed
 delivery and report it; do not try to repair identity by switching global auth.
 
 After posting, **re-scan the PR you just pushed** — confirm the summary comment
@@ -226,9 +229,9 @@ When done, report:
 - What was posted, with the comment URLs the API returned, grouped by surface — the conversation-level summary named explicitly as the last post.
 - What code changed (files + commit ref) and whether `<gates.lint>`/`<gates.test>` passed.
 - What was skipped and why (PENDING reviews, `[bot]` noise, already-answered threads).
-- Explicit confirmation that every posted reply was authored by `$RESPONDER`
+- Explicit confirmation that every posted reply was authored by `$IMPLEMENTER`
   and that no global `gh auth switch` occurred.
-- If `identities.responder` was null: state that replies went out as the human account.
+- If `identities.implementer` was null: state that replies went out as the human account.
 
 ## Safety invariants — non-negotiable
 
@@ -238,9 +241,9 @@ after the fact. Treat them as hard rules anyway.
 
 1. **Never switch global `gh` identity.** Bind every API call to the intended account with `GH_TOKEN`; verify the token actor immediately before posting.
 2. **Edits, pushes, and posts happen only after explicit approval.** Reading and drafting are always safe.
-3. **Idempotent.** The "last comment by the responder ⇒ answered" rule prevents reposting on a re-run.
+3. **Idempotent.** The "last comment by the implementer ⇒ answered" rule prevents reposting on a re-run.
 4. **Skip `PENDING` reviews and `[bot]` noise.** Never answer an unsubmitted draft review.
-5. **Stop early if `$RESPONDER_TOKEN` cannot be resolved and verified.** Never post from the wrong identity. (`identities.responder: null` in stack.yml is the one sanctioned degradation — human-account replies, declared in the report.)
+5. **Stop early if `$IMPLEMENTER_TOKEN` cannot be resolved and verified.** Never post from the wrong identity. (`identities.implementer: null` in stack.yml is the one sanctioned degradation — human-account replies, declared in the report.)
 6. **The conversation-level summary comment is always posted, and always posted last.** Pushing a fix flips inline threads to outdated and hides inline replies; the summary is the durable visible record.
 
 ## What this skill is NOT for

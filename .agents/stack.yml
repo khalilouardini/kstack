@@ -33,8 +33,8 @@ review_gate:
 
 identities:
   maintainer: khalilouardini
-  codex: ogur-codex-bot
-  responder: ogur-claude-bot
+  reviewer: ogur-codex-bot
+  implementer: ogur-claude-bot
 
 protected_branches:
   - main

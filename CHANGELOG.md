@@ -3,8 +3,9 @@
 ## 0.3.0 — 2026-08-24
 
 Replaced the ambiguous two-account review configuration with three explicit
-GitHub roles: `identities.maintainer`, `identities.codex`, and
-`identities.responder`. Review API calls now use verified per-command `GH_TOKEN`
+GitHub roles: `identities.maintainer`, `identities.reviewer`, and
+`identities.implementer`. Codex is the default reviewer and Claude the default
+implementer. Review API calls now use verified per-command `GH_TOKEN`
 credentials instead of `gh auth switch`, so concurrent Codex and Claude
 sessions cannot change which account publishes another session's review or
 reply. This is a schema-breaking change from `stack: 1` to `stack: 2`.
