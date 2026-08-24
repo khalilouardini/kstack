@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+Added a GitHub-rendered visual guide for the router, workflow phases,
+capability tiers, and the decision and review clusters. The README now links to
+this guide first while retaining the filterable HTML map as a local interactive
+view.
+
 ## 0.3.0 — 2026-08-24
 
 Replaced the ambiguous two-account review configuration with three explicit
