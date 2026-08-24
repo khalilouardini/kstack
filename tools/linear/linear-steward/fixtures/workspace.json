@@ -1,0 +1,176 @@
+{
+  "_comment": "Frozen synthetic workspace slice for the linear-steward dry run. Identifiers are FIX-* so the fixture never drifts with live Linear state. Shapes match the Linear MCP list_* responses. 'as_of' is the clock the skill must assume; staleness is measured against it, not against today.",
+  "as_of": "2026-08-10T00:00:00Z",
+  "team": { "id": "team-fixture", "name": "Ogur", "key": "OGUR" },
+  "statuses": [
+    { "id": "st-backlog", "name": "Backlog", "type": "backlog" },
+    { "id": "st-todo", "name": "Todo", "type": "unstarted" },
+    { "id": "st-progress", "name": "In Progress", "type": "started" },
+    { "id": "st-review", "name": "In Review", "type": "started" },
+    { "id": "st-done", "name": "Done", "type": "completed" },
+    { "id": "st-canceled", "name": "Canceled", "type": "canceled" },
+    { "id": "st-duplicate", "name": "Duplicate", "type": "duplicate" }
+  ],
+  "labels": [
+    { "id": "lb-tech", "name": "Tech" },
+    { "id": "lb-commercial", "name": "Commercial" },
+    { "id": "lb-infra", "name": "infra" },
+    { "id": "lb-eval", "name": "eval" }
+  ],
+  "projects": [
+    { "id": "pr-mvp1", "name": "Road to MVP-1 — Aug 13 authenticated reports", "status": "In Progress", "startDate": "2026-08-01", "targetDate": "2026-08-31" },
+    { "id": "pr-hosting", "name": "Deploy & Hosting", "status": "Canceled", "startDate": "2026-08-06", "targetDate": "2026-09-30" },
+    { "id": "pr-gtm", "name": "GTM & Customer Discovery", "status": "In Progress", "startDate": "2026-06-04", "targetDate": "2026-09-30" }
+  ],
+  "issues": [
+    {
+      "_scenario": "1 — stale started status with no implementation evidence",
+      "id": "FIX-01",
+      "title": "Deploy warm production app with persistent storage and backups",
+      "status": "In Progress",
+      "statusType": "started",
+      "project": "Road to MVP-1 — Aug 13 authenticated reports",
+      "labels": ["infra", "Tech"],
+      "dueDate": "2026-08-02",
+      "updatedAt": "2026-07-27T09:00:00Z",
+      "gitBranchName": null,
+      "description": "Stand up the production instance so the client link resolves."
+    },
+    {
+      "_scenario": "2 — merged PR, issue still Todo (implementation issue, not a gate)",
+      "id": "FIX-02",
+      "title": "Make the API packageable outside the repository root",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "project": "Road to MVP-1 — Aug 13 authenticated reports",
+      "labels": ["infra", "Tech"],
+      "dueDate": "2026-08-09",
+      "updatedAt": "2026-08-01T12:00:00Z",
+      "gitBranchName": "fix/api-packaging",
+      "description": "Routers import inside create_app() and pyproject ships only the ogur package, so a wheel-based image fails at app import."
+    },
+    {
+      "_scenario": "2b — merged PR maps to a RELEASE GATE issue; must NOT be marked Done",
+      "id": "FIX-03",
+      "title": "MVP-1 Gate C — Make every client-reachable surface auditable",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "project": "Road to MVP-1 — Aug 13 authenticated reports",
+      "labels": ["Tech"],
+      "dueDate": "2026-08-11",
+      "updatedAt": "2026-08-08T15:28:47Z",
+      "gitBranchName": "feat/audit-surfaces",
+      "isReleaseGate": true,
+      "description": "Every route a client can reach either carries provenance or is gated off. Acceptance: an inventory naming each client-reachable route and its verdict."
+    },
+    {
+      "_scenario": "3 — one issue relevant to both MVP-1 and Deploy & Hosting",
+      "id": "FIX-04",
+      "title": "Serve the built React app and both frozen packs from one container",
+      "status": "In Progress",
+      "statusType": "started",
+      "project": null,
+      "labels": ["Tech"],
+      "dueDate": "2026-08-10",
+      "updatedAt": "2026-08-09T22:18:55Z",
+      "gitBranchName": "feat/single-container",
+      "description": "One same-origin deployment serving the frontend and both frozen report packs. Blocks the MVP-1 gate; hosting is the means."
+    },
+    {
+      "_scenario": "4 — broad issue superseded by a concrete release-gate issue",
+      "id": "FIX-05",
+      "title": "Scope web app deployment",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "project": "Deploy & Hosting",
+      "labels": ["infra", "Tech"],
+      "dueDate": "2026-06-13",
+      "updatedAt": "2026-06-13T10:00:00Z",
+      "description": "Figure out how we deploy the app."
+    },
+    {
+      "_scenario": "4b — the concrete issue that supersedes FIX-05",
+      "id": "FIX-06",
+      "title": "MVP-1 Gate B — Deploy one same-origin app serving both frozen reports",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "project": "Road to MVP-1 — Aug 13 authenticated reports",
+      "labels": ["infra", "Tech"],
+      "dueDate": "2026-08-11",
+      "updatedAt": "2026-08-09T16:59:04Z",
+      "isReleaseGate": true,
+      "description": "Acceptance: the client URL serves the frontend and both packs from one origin, verified from a machine that has never seen the repo."
+    },
+    {
+      "_scenario": "5 — commercial issue whose real-world state cannot be inferred",
+      "id": "FIX-07",
+      "title": "Validate the initial ICP and lead list",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "project": "GTM & Customer Discovery",
+      "labels": ["Commercial"],
+      "dueDate": "2026-06-11",
+      "updatedAt": "2026-06-11T10:00:00Z",
+      "description": "Confirm the ideal customer profile against real conversations."
+    },
+    {
+      "_scenario": "6a — duplicate pair, richer half",
+      "id": "FIX-08",
+      "title": "Enforce per-user report authorization and LLM spend ceiling",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "project": "Road to MVP-1 — Aug 13 authenticated reports",
+      "labels": ["Tech"],
+      "dueDate": "2026-08-10",
+      "updatedAt": "2026-08-09T22:05:19Z",
+      "gitBranchName": "feat/report-authz",
+      "description": "A named user may read only the packs assigned to them. Unauthorized access returns 403. A per-user LLM spend ceiling rejects over-budget requests. Acceptance: the smoke script asserts 403 for a cross-tenant read."
+    },
+    {
+      "_scenario": "6b — duplicate pair, thinner half; restates 6a",
+      "id": "FIX-09",
+      "title": "Report authorization per user",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "project": "Road to MVP-1 — Aug 13 authenticated reports",
+      "labels": ["Tech"],
+      "dueDate": null,
+      "updatedAt": "2026-08-05T11:00:00Z",
+      "description": "Users should only see their own reports."
+    },
+    {
+      "_scenario": "7 — vague issue: no statable Done condition",
+      "id": "FIX-10",
+      "title": "Pressure test the platform",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "project": null,
+      "labels": ["eval", "Tech"],
+      "dueDate": "2026-06-18",
+      "updatedAt": "2026-06-18T10:00:00Z",
+      "description": ""
+    },
+    {
+      "_scenario": "control — completed work that must be left untouched",
+      "id": "FIX-11",
+      "title": "Decision recorded — conversational Ask is outside MVP-1 and MVP-2",
+      "status": "Done",
+      "statusType": "completed",
+      "project": null,
+      "labels": ["Tech"],
+      "dueDate": null,
+      "updatedAt": "2026-08-09T16:58:42Z",
+      "description": "Verdict: OUT. Scope contract §4. Reversal condition: a named tester asks for it twice in one week."
+    }
+  ],
+  "relations": [],
+  "github": {
+    "merged": [
+      { "number": 219, "title": "fix(api): make the API importable from an installed wheel", "headRefName": "fix/api-packaging", "mergedAt": "2026-08-08T18:20:00Z" },
+      { "number": 221, "title": "feat(api): add provenance to every client-reachable route", "headRefName": "feat/audit-surfaces", "mergedAt": "2026-08-09T11:05:00Z" }
+    ],
+    "open": [
+      { "number": 224, "title": "feat(deploy): single-container app + packs", "headRefName": "feat/single-container", "isDraft": false, "reviewDecision": "REVIEW_REQUIRED" }
+    ]
+  }
+}

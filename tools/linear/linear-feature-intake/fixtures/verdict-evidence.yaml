@@ -1,0 +1,8 @@
+# Fixture — disposition EVIDENCE. Expected: exactly one blocked customer-research issue.
+proposal: "Let a client export the served report to PowerPoint."
+verdict: NEEDS-EVIDENCE
+milestone: null
+scope_citation: "§1 exit criterion — \"a named client opens an authenticated link and reads an auditable report\""
+user_evidence: null
+reversal_condition: "A named tester states they cannot circulate the report internally without a deck."
+disposition: EVIDENCE

@@ -1,0 +1,8 @@
+# Fixture — disposition STOP. Expected: zero execution tickets.
+proposal: "Add a conversational Ask panel that answers arbitrary questions over the served report."
+verdict: OUT
+milestone: null
+scope_citation: "§4 row \"Conversational Ask\" — \"the report is the product; a chat surface is a second product with its own quality bar\""
+user_evidence: null
+reversal_condition: "Two named testers ask for free-form questioning of the same report within one week."
+disposition: STOP

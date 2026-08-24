@@ -1,0 +1,142 @@
+{
+  "_comment": "Frozen release-project slice for the linear-release-audit dry run. Contains, by construction: a falsely-complete gate, a gate with no linked implementation, a date incoherence, a dependency scheduled after its dependent, and a milestone whose progress contradicts its description.",
+  "as_of": "2026-08-10T00:00:00Z",
+  "project": {
+    "id": "pr-mvp1",
+    "name": "Road to MVP-1 — Aug 13 authenticated reports",
+    "status": "In Progress",
+    "startDate": "2026-08-01",
+    "targetDate": "2026-08-31"
+  },
+  "milestones": [
+    {
+      "id": "ms-mvp1",
+      "name": "MVP-1 release gate",
+      "targetDate": "2026-08-13",
+      "progress": "40%",
+      "description": "Named client login → correct report aligned with the presented artifact → all reachable claims auditable → attributable feedback persists → unauthorized access rejected."
+    },
+    {
+      "_note": "progress contradicts the description — the §5 trap",
+      "id": "ms-recall",
+      "name": "Deal recall → 12/12",
+      "targetDate": "2026-08-06",
+      "progress": "100%",
+      "description": "⚠️ This milestone shows 100% because its issues are closed, NOT because 12/12 was reached. The actual result is 10/12 deals. The last 2 were not recovered and may not be publicly reachable."
+    }
+  ],
+  "release_criteria": [
+    { "gate": "A", "text": "A named client user authenticates and is authorized to exactly the reports assigned to them." },
+    { "gate": "B", "text": "One same-origin deployment serves the built frontend and both frozen report packs." },
+    { "gate": "C", "text": "Every client-reachable surface is auditable: an inventory naming each route and its provenance verdict." },
+    { "gate": "D", "text": "Report feedback persists, attributed to the authenticated user, and survives a restart." },
+    { "gate": "E", "text": "The served reports match the client-presented versions claim for claim." }
+  ],
+  "issues": [
+    {
+      "_scenario": "falsely complete — implementation merged, acceptance artifact never executed",
+      "id": "FIX-31",
+      "gate": "C",
+      "title": "MVP-1 Gate C — Make every client-reachable surface auditable",
+      "status": "Done",
+      "statusType": "completed",
+      "projectMilestone": "MVP-1 release gate",
+      "labels": ["Tech"],
+      "dueDate": "2026-08-11",
+      "gitBranchName": "feat/audit-surfaces",
+      "acceptance": "An inventory naming each client-reachable route and its provenance verdict.",
+      "acceptance_artifact": null
+    },
+    {
+      "_scenario": "genuinely complete",
+      "id": "FIX-32",
+      "gate": "E",
+      "title": "MVP-1 Gate E — Align served reports with the client-presented versions",
+      "status": "Done",
+      "statusType": "completed",
+      "projectMilestone": "MVP-1 release gate",
+      "labels": ["Tech"],
+      "dueDate": "2026-08-09",
+      "gitBranchName": "fix/polygon-deck-alignment",
+      "acceptance": "A claim-by-claim diff of served vs presented, with zero unexplained rows.",
+      "acceptance_artifact": "archived_data/pack_gates/mvp1_gate_e_diff_20260809.md"
+    },
+    {
+      "_scenario": "active — open PR, review required",
+      "id": "FIX-33",
+      "gate": "B",
+      "title": "MVP-1 Gate B — Deploy one same-origin app serving both frozen reports",
+      "status": "In Review",
+      "statusType": "started",
+      "projectMilestone": "MVP-1 release gate",
+      "labels": ["infra", "Tech"],
+      "dueDate": "2026-08-11",
+      "gitBranchName": "feat/single-container",
+      "acceptance": "The client URL serves the frontend and both packs from one origin, verified from a machine that has never seen the repo.",
+      "acceptance_artifact": null
+    },
+    {
+      "_scenario": "no linked implementation — no branch, no PR, no commit",
+      "id": "FIX-34",
+      "gate": "D",
+      "title": "MVP-1 Gate D — Capture durable attributable report feedback",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "projectMilestone": "MVP-1 release gate",
+      "labels": ["Tech"],
+      "dueDate": "2026-08-11",
+      "gitBranchName": null,
+      "acceptance": "Feedback survives a container restart and carries the authenticated user id.",
+      "acceptance_artifact": null
+    },
+    {
+      "_scenario": "blocked, and its blocker is scheduled AFTER it — date incoherence",
+      "id": "FIX-35",
+      "gate": "A",
+      "title": "MVP-1 Gate A — Authenticate named client users and authorize report access",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "projectMilestone": "MVP-1 release gate",
+      "labels": ["Tech"],
+      "dueDate": "2026-08-10",
+      "gitBranchName": null,
+      "acceptance": "A cross-tenant read returns 403 in the deployed smoke run.",
+      "acceptance_artifact": null,
+      "blockedBy": ["FIX-36"]
+    },
+    {
+      "_scenario": "the blocker, due after its dependent, and due after the gate date",
+      "id": "FIX-36",
+      "title": "Choose minimal auth/session mechanism and add named identity model",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "projectMilestone": "MVP-1 release gate",
+      "labels": ["Tech"],
+      "dueDate": "2026-08-16",
+      "gitBranchName": null,
+      "blocks": ["FIX-35"]
+    },
+    {
+      "_scenario": "commercial — real-world state not establishable from the workspace",
+      "id": "FIX-37",
+      "title": "Confirm the named client can reach the link from their own network",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "projectMilestone": "MVP-1 release gate",
+      "labels": ["Commercial"],
+      "dueDate": "2026-08-13",
+      "gitBranchName": null
+    },
+    {
+      "_scenario": "stretch — must never be counted against the gate",
+      "id": "FIX-38",
+      "title": "STRETCH — Generate full-text-enriched report variants",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "projectMilestone": null,
+      "labels": ["MVP-1 stretch", "Tech"],
+      "dueDate": null,
+      "gitBranchName": null
+    }
+  ]
+}

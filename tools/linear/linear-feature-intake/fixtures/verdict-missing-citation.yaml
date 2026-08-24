@@ -1,0 +1,8 @@
+# Fixture — malformed: no scope_citation. Expected: hard stop, zero writes.
+proposal: "Add a per-landscape alert threshold."
+verdict: IN-MVP-1
+milestone: "MVP-1 release gate"
+scope_citation: null
+user_evidence: null
+reversal_condition: null
+disposition: SPEC

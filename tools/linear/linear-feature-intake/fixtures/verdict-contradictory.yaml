@@ -1,0 +1,8 @@
+# Fixture — malformed: verdict OUT paired with disposition SPEC. Expected: hard stop, zero writes.
+proposal: "Add a knowledge-graph visualization of the landscape."
+verdict: OUT
+milestone: null
+scope_citation: "§4 row \"Graph visualization\" — \"the knowledge graph is infrastructure, never UI\""
+user_evidence: null
+reversal_condition: "Never before 2026-08-31."
+disposition: SPEC

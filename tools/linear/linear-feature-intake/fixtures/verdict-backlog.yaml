@@ -1,0 +1,8 @@
+# Fixture — disposition BACKLOG (future milestone). Expected: one Backlog issue, no children, no /spec.
+proposal: "Rebuild the GNS561 corpus from a committed generator command instead of an expired result cache."
+verdict: IN-MVP-2
+milestone: "MVP-2 release gate"
+scope_citation: "§3.5 Gate C — \"every deterministic input has a generator command or is deleted\""
+user_evidence: null
+reversal_condition: "MVP-1 slips past 2026-08-13 for a reason this work would have prevented."
+disposition: BACKLOG

@@ -1,0 +1,71 @@
+{
+  "_comment": "Frozen issue slice for the linear-feature-intake dry run. Serves as the result set for the §2 search across all seven verdict fixtures. Nothing here matches verdict-spec-persist.yaml's proposal — that absence is deliberate, so the §2 search cannot stop that run and the SPEC branch is exercised on its own merits. FIX-21 is a deliberate near-duplicate of verdict-spec.yaml's proposal; FIX-24 is a deliberate near-duplicate of verdict-stop.yaml's proposal, already recorded as a decision.",
+  "as_of": "2026-08-10T00:00:00Z",
+  "active_milestone": "MVP-1 release gate",
+  "projects": [
+    { "id": "pr-mvp1", "name": "Road to MVP-1 — Aug 13 authenticated reports" },
+    { "id": "pr-mvp2", "name": "Road to MVP-2 — Aug 31 reproducible reports" },
+    { "id": "pr-gtm", "name": "GTM & Customer Discovery" }
+  ],
+  "issues": [
+    {
+      "_note": "near-duplicate of verdict-spec.yaml — must stop that run before /spec",
+      "id": "FIX-21",
+      "title": "Enforce per-user report authorization and LLM spend ceiling",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "project": "Road to MVP-1 — Aug 13 authenticated reports",
+      "labels": ["Tech"],
+      "parentId": "FIX-20",
+      "description": "A named user may read only the packs assigned to them. Unauthorized access returns 403. Acceptance: the smoke script asserts 403 for a cross-tenant read."
+    },
+    {
+      "id": "FIX-20",
+      "title": "MVP-1 Gate A — Authenticate named client users and authorize report access",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "project": "Road to MVP-1 — Aug 13 authenticated reports",
+      "labels": ["Tech"],
+      "description": "Named login, session, and per-user report authorization."
+    },
+    {
+      "_note": "overlapping, not equivalent — shares the auth component only",
+      "id": "FIX-22",
+      "title": "Choose minimal auth/session mechanism and add named identity model",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "project": "Road to MVP-1 — Aug 13 authenticated reports",
+      "labels": ["Tech"],
+      "parentId": "FIX-20",
+      "description": "Pick the session mechanism and model named client identity."
+    },
+    {
+      "id": "FIX-23",
+      "title": "Recruit post-MVP-1 report testers",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "project": "GTM & Customer Discovery",
+      "labels": ["Commercial"],
+      "description": "Find analysts willing to read a served report and answer questions about it."
+    },
+    {
+      "_note": "existing decision record matching verdict-stop.yaml",
+      "id": "FIX-24",
+      "title": "Decision recorded — conversational Ask is outside MVP-1 and MVP-2",
+      "status": "Done",
+      "statusType": "completed",
+      "project": null,
+      "labels": ["Tech"],
+      "description": "Verdict: OUT. §4 row \"Conversational Ask\". Reversal condition: two named testers ask for free-form questioning of the same report within one week."
+    },
+    {
+      "id": "FIX-25",
+      "title": "Define the time-locked reproducibility benchmark",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "project": "Road to MVP-2 — Aug 31 reproducible reports",
+      "labels": ["eval", "Tech"],
+      "description": "A re-run at a frozen cutoff is semantically similar to the frozen baseline."
+    }
+  ]
+}
