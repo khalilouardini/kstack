@@ -1,0 +1,9 @@
+# Fixture — disposition SPEC, but existing-issues.json holds a near-duplicate.
+# Expected: the §2 search stops the run BEFORE /spec is invoked.
+proposal: "Reject a request for a report the authenticated user is not assigned to."
+verdict: IN-MVP-1
+milestone: "MVP-1 release gate"
+scope_citation: "§1 exit criterion — \"unauthorized access is rejected\""
+user_evidence: "Genfit call 2026-08-04 — asked who else can see the link."
+reversal_condition: null
+disposition: SPEC

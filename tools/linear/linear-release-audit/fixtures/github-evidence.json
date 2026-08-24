@@ -1,0 +1,46 @@
+{
+  "_comment": "Frozen GitHub evidence for the linear-release-audit dry run. Stands in for `gh pr list` and `gh run list`. Linkage to Linear is by headRefName ↔ gitBranchName.",
+  "as_of": "2026-08-10T00:00:00Z",
+  "merged": [
+    {
+      "number": 221,
+      "title": "feat(api): add provenance to every client-reachable route",
+      "headRefName": "feat/audit-surfaces",
+      "mergedAt": "2026-08-09T11:05:00Z",
+      "body": "Adds provenance metadata to each route handler. Does not produce the route inventory."
+    },
+    {
+      "number": 222,
+      "title": "fix(explore): align the served packs with the presented decks",
+      "headRefName": "fix/polygon-deck-alignment",
+      "mergedAt": "2026-08-09T20:40:00Z",
+      "body": "Claim-by-claim reconciliation. Gate artifact committed at archived_data/pack_gates/mvp1_gate_e_diff_20260809.md."
+    }
+  ],
+  "open": [
+    {
+      "number": 224,
+      "title": "feat(deploy): single-container app + packs",
+      "headRefName": "feat/single-container",
+      "isDraft": false,
+      "reviewDecision": "CHANGES_REQUESTED",
+      "statusCheckRollup": "SUCCESS",
+      "unresolvedThreads": [
+        {
+          "id": "thr-1",
+          "path": "Dockerfile",
+          "line": 24,
+          "severity": "blocking",
+          "body": "The pack directory is copied from the build context, so a rebuild without the untracked packs ships an empty app. Bake the packs or fail the build."
+        }
+      ]
+    }
+  ],
+  "ci": {
+    "branch": "main",
+    "runs": [
+      { "workflowName": "tests", "conclusion": "success", "headSha": "b2c0486", "createdAt": "2026-08-09T21:10:00Z" },
+      { "workflowName": "tests", "conclusion": "success", "headSha": "a749551", "createdAt": "2026-08-09T18:02:00Z" }
+    ]
+  }
+}

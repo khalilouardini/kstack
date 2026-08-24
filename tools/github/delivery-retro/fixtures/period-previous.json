@@ -1,0 +1,116 @@
+{
+  "_comment": "Frozen previous window for the github-delivery-retro dry run. FEWER merged PRs than the current window, MORE delivery. Stands in for `gh pr list`, `gh run list`, the review APIs, and the Linear completion query.",
+  "_window_note": "Half-open UTC `[from, to)`. Ends at 2026-07-27T00:00:00Z, exactly where the current window begins \u2014 adjacent and disjoint.",
+  "window": {
+    "from": "2026-07-20T00:00:00Z",
+    "to": "2026-07-27T00:00:00Z",
+    "days": 7
+  },
+  "_active_milestone_note": "Scope in force during THIS window \u2014 caller-supplied, per SKILL.md \u00a71 step 2. The window predates `mvp-scope.md`, so step 1 finds nothing.",
+  "active_milestone": "MVP-1 release gate",
+  "merged_prs": [
+    {
+      "number": 199,
+      "title": "feat(explore): GNS561 seed pack \u2014 frozen run artifacts as one contract",
+      "headRefName": "feat/gns561-seed-pack",
+      "createdAt": "2026-07-21T09:00:00Z",
+      "mergedAt": "2026-07-22T16:00:00Z",
+      "first_commit_at": "2026-07-20T18:00:00Z",
+      "first_review_at": "2026-07-21T14:00:00Z",
+      "approved_at": "2026-07-22T11:00:00Z",
+      "review_rounds": 2,
+      "ci_at_merge": "success",
+      "serves_milestone": "MVP-1 release gate",
+      "serves_gate_issue": "OGUR-63",
+      "blocking_findings": 3,
+      "nonblocking_findings": 4,
+      "ci_checks": [
+        {
+          "name": "lint + tests",
+          "conclusion": "success",
+          "completedAt": "2026-07-22T15:45:00Z"
+        }
+      ]
+    },
+    {
+      "number": 201,
+      "title": "feat(api): Explore report + figures endpoints for the GNS561 landscape",
+      "headRefName": "feat/gns561-report-api",
+      "createdAt": "2026-07-22T10:00:00Z",
+      "mergedAt": "2026-07-23T15:00:00Z",
+      "first_commit_at": "2026-07-21T20:00:00Z",
+      "first_review_at": "2026-07-22T15:00:00Z",
+      "approved_at": "2026-07-23T12:00:00Z",
+      "review_rounds": 1,
+      "ci_at_merge": "success",
+      "serves_milestone": "MVP-1 release gate",
+      "serves_gate_issue": "OGUR-63",
+      "blocking_findings": 1,
+      "nonblocking_findings": 2,
+      "ci_checks": [
+        {
+          "name": "lint + tests",
+          "conclusion": "success",
+          "completedAt": "2026-07-23T14:45:00Z"
+        }
+      ]
+    },
+    {
+      "number": 206,
+      "title": "fix(seed): make the GNS561 pack generators portable and non-destructive",
+      "headRefName": "fix/gns561-pack-generators",
+      "createdAt": "2026-07-24T09:00:00Z",
+      "mergedAt": "2026-07-25T11:00:00Z",
+      "first_commit_at": "2026-07-23T19:00:00Z",
+      "first_review_at": "2026-07-24T13:00:00Z",
+      "approved_at": "2026-07-25T09:00:00Z",
+      "review_rounds": 1,
+      "ci_at_merge": "success",
+      "serves_milestone": "MVP-1 release gate",
+      "serves_gate_issue": "OGUR-63",
+      "blocking_findings": 2,
+      "nonblocking_findings": 1,
+      "ci_checks": [
+        {
+          "name": "lint + tests",
+          "conclusion": "success",
+          "completedAt": "2026-07-25T10:45:00Z"
+        }
+      ]
+    }
+  ],
+  "opened_in_window": 3,
+  "open_at_end": {
+    "count": 24,
+    "median_age_days": 21,
+    "max_age_days": 96,
+    "older_than_30_days": 9
+  },
+  "_worktrees_note": "Deliberately absent. `git worktree list` is a current snapshot with no history, so a live gather cannot recover the previous window's count. The expected report must print `unavailable` here; an implementation that emits a number has fabricated it.",
+  "linear_completed_in_window": [
+    {
+      "id": "OGUR-36",
+      "title": "GNS561 / Genfit Explore landscape \u2014 end to end (seed pack \u2192 API \u2192 frontend)",
+      "projectMilestone": "MVP-1 release gate",
+      "is_release_gate": true,
+      "acceptance_artifact": "archived_data/gns561_pack/gate_report_20260725.md"
+    }
+  ],
+  "user_visible_capabilities": [
+    "A client can open the GNS561 landscape report and its figures from a served endpoint."
+  ],
+  "_ci_note": "`runs`/`success` are default-branch workflow health only. The CI-green-at-merge metric (\u00a74) uses the per-PR `ci_at_merge` fields: 3 of 3 merges green. Dividing 21/22 here is the failure this fixture catches.",
+  "ci": {
+    "runs": 22,
+    "success": 21,
+    "failure": 1
+  },
+  "reverts_or_corrective_prs": [],
+  "reviews_performed": 4,
+  "findings_that_changed_code": 6,
+  "findings_acknowledged_only": 4,
+  "_resolution_note": "No resolution DURATION field \u2014 see the current-window fixture. Counts only.",
+  "review_threads_opened": 10,
+  "review_threads_resolved": 10,
+  "_ci_at_merge_note": "All three merges have a check completed BEFORE mergedAt \u2014 genuinely green at merge, 3/3, no merged_before_checks."
+}

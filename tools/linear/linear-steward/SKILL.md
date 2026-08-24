@@ -340,9 +340,10 @@ Two invariants:
 
 ## Fixture dry run
 
-This skill ships no fixtures. When the consuming project provides a frozen,
-redacted workspace slice (`fixtures/workspace.json`) plus the ledger those inputs
-must produce (`fixtures/expected-ledger.md`), run the skill against it — no
+This skill ships fixtures: a frozen, redacted workspace slice
+(`fixtures/workspace.json`) plus the ledger those inputs must produce
+(`fixtures/expected-ledger.md`). Its identifiers are synthetic (`FIX-*`)
+precisely so the fixture never drifts with live tracker state. Run against it — no
 tracker calls, read the JSON as the Phase 1 inventory — and diff your ledger
 against the expected one. A row that appears in yours and not in the expected file
 is a false positive and must be explained before the skill is used with `apply` on

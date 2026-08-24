@@ -1,0 +1,15 @@
+# Fixture — disposition SPEC, invoked persistence-only with --spec spec-persist.md.
+#
+# This proposal is deliberately ABSENT from existing-issues.json, so the §2
+# duplicate search does NOT stop the run. It reaches the SPEC branch on its own
+# merits, which is the point: it is the only fixture where nothing else prevents
+# /spec from being invoked, so it is the only one that can catch the recursion.
+#
+# Expected: /spec runs ZERO times; the issue bodies come from spec-persist.md.
+proposal: "Snapshot the feedback volume daily so client feedback survives a host loss."
+verdict: IN-MVP-1
+milestone: "MVP-1 release gate"
+scope_citation: "§8 — \"Snapshot the volume daily — client feedback is the only unregenerable data in the system.\""
+user_evidence: null
+reversal_condition: "A managed volume with provider-side backups removes the need for our own snapshot."
+disposition: SPEC
