@@ -1,0 +1,43 @@
+# kstack's own stack.yml — the stack configures itself with the same file it
+# asks every other repo for. If a key here is null, the skills that need it
+# refuse or ask; that is the intended behaviour, not an omission to fix later.
+
+stack: 1
+project: kstack
+
+# No scope contract: kstack is not milestone-driven, so the roles pipeline
+# (/spec, /triage, /next) correctly refuses here. CONVENTIONS.md is a conventions
+# document, not a scope contract, and naming it here would be a false citation.
+scope_doc: null
+
+workspace_contract: null         # no tracker
+issue_prefix: null               # PR numbers only
+
+# One gate. bin/check-stack is both the linter and the test suite: it validates
+# frontmatter, the description budget, dir/name agreement, referenced-path
+# existence, forbidden coupling tokens, and `bash -n` over every bin/ script.
+# Both keys point at it deliberately -- naming a `test` command that does not
+# exist would be worse than running the one that does twice.
+gates:
+  lint: python3 bin/check-stack
+  test: python3 bin/check-stack
+  test_full: null
+  typecheck: null
+  build: null
+
+# kstack has no project-local "prove the bug" review skill; review rounds use
+# the generic reviewer only.
+review_gate:
+  skill_path: null
+  scope: null
+
+identities:
+  reviewer: khalilouardini
+  bot: ogur-claude-bot           # the only bot account available; named for its
+                                 # origin repo, reused here
+
+protected_branches:
+  - main
+
+role_appendix_dir: null
+spec_output_dir: null
