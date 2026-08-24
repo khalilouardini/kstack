@@ -5,8 +5,10 @@ role contracts, each defined once, pointed at by every host and every repo that
 uses them.
 
 **Start here:** [`router/stack/SKILL.md`](router/stack/SKILL.md) routes any
-request to the right skill. [Skill map (visual)](docs/skill-map.html) shows the
-same thing as a filterable board.
+request to the right skill. The [visual guide](docs/skill-map.md) explains the
+router, workflow phases, capability tiers, and the decision and review clusters
+with diagrams that render directly on GitHub. The
+[interactive map](docs/skill-map.html) adds filtering when opened locally.
 
 ```bash
 git clone <this repo> ~/projects/kstack
@@ -116,7 +118,7 @@ tools/linear/       needs a Linear workspace
 hosts/HOSTS.md      what differs between Claude Code and Codex
 project-template/   stack.yml + onboarding for a consuming repo
 bin/                install, check-stack
-docs/               skill map, migration guides
+docs/               GitHub-rendered visual guide, interactive map, migration guides
 ```
 
 [`CONVENTIONS.md`](CONVENTIONS.md) is the contract every file here follows.
