@@ -96,12 +96,21 @@ result was silent: a release gate sitting *outside* the active cycle, or an issu
 blocked by another ticket, lost to an apparently-unblocked cycle item and nothing
 in the output revealed the omission.
 
-Read **open issues across the team**, not just the active cycle, and paginate:
+Read **open issues across the team**, not just the active cycle, and paginate.
+
+**Resolve the team first, and filter on it.** A state-only filter returns every
+team's open issues in a multi-team workspace, so an unrelated team's P1 can win
+the ranking and be handed back as your next ticket — the output looks identical
+either way. Take the team from the workspace contract (`workspace_contract` in
+`.agents/stack.yml`), or from `issue_prefix` resolved against `teams`. If the
+consuming team cannot be identified from either, **refuse this fallback** rather
+than ranking a workspace-wide result; say which key would have resolved it.
 
 ```bash
+# TEAM_KEY resolved above — never run this query unscoped
 curl -s https://api.linear.app/graphql \
   -H "Authorization: $LINEAR_API_KEY" -H "Content-Type: application/json" \
-  -d '{"query":"query($after:String){ issues(first:100, after:$after, filter:{state:{type:{nin:[\"completed\",\"canceled\"]}}}) { pageInfo { hasNextPage endCursor } nodes { identifier title priority estimate dueDate state { name type } assignee { name } cycle { name endsAt isActive } project { id name } projectMilestone { name targetDate } labels { nodes { name } } relations { nodes { type relatedIssue { identifier state { type } } } } inverseRelations { nodes { type issue { identifier state { type } } } } } } }","variables":{"after":null}}'
+  -d '{"query":"query($after:String,$team:String!){ issues(first:100, after:$after, filter:{team:{key:{eq:$team}}, state:{type:{nin:[\"completed\",\"canceled\"]}}}) { pageInfo { hasNextPage endCursor } nodes { identifier title priority estimate dueDate state { name type } assignee { name } cycle { name endsAt isActive } project { id name } projectMilestone { name targetDate } labels { nodes { name } } relations { nodes { type relatedIssue { identifier state { type } } } } inverseRelations { nodes { type issue { identifier state { type } } } } } } }","variables":{"after":null,"team":"'"$TEAM_KEY"'"}}'
 ```
 
 Follow `pageInfo.hasNextPage` / `endCursor` until exhausted. `relations` gives

@@ -112,7 +112,19 @@ if [ "$_IS_SIMPLE" -eq 1 ]; then
         # is the most common suffix on agent-generated commands), backgrounding.
         sudo|rm|-*|--|[0-9]'>'*|'>'*|'<'*|'&') continue ;;
         '/'|'~'|'~/'|'$HOME'|'$HOME/'|'${HOME}'|'${HOME}/'|'/*'|'//') _ROOT_TARGETS=1 ;;
-        *) _SAFE_TARGETS=1 ;;
+        *)
+          # The shell spellings above are not the only way to name the home
+          # tree, and they are not the common one: an agent that resolves paths
+          # emits the ABSOLUTE path, so `rm -rf /Users/me` reached the
+          # overridable ask tier while `rm -rf $HOME` was hard-denied -- the
+          # same deletion, decided by spelling. Compare against the resolved
+          # $HOME too, with and without a trailing slash.
+          if [ -n "${HOME:-}" ] && { [ "$_TOK" = "$HOME" ] || [ "$_TOK" = "$HOME/" ] || [ "$_TOK" = "$HOME/*" ]; }; then
+            _ROOT_TARGETS=1
+          else
+            _SAFE_TARGETS=1
+          fi
+          ;;
       esac
     done
     set +f
@@ -156,6 +168,11 @@ if [ "$_IS_SIMPLE" -eq 1 ]; then
           case "$_TOK" in git|push|sudo|-*) continue ;; esac
           _REF="${_TOK#+}"          # +main -> main
           _REF="${_REF##*:}"        # HEAD:main / src:main -> main
+          # A fully-qualified destination names the SAME branch: without this,
+          # `HEAD:refs/heads/main` fell through to the overridable ask tier while
+          # `HEAD:main` was denied, making a hard stop depend on ref spelling
+          # rather than on where the push actually lands.
+          _REF="${_REF#refs/heads/}"
           if [ "$_REF" = "$_DEFAULT_BRANCH" ]; then
             _TARGETS_DEFAULT=1
             break

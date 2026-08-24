@@ -172,8 +172,13 @@ running and appending to this file concurrently:
    replacement is built from a stale snapshot and that new session's line is
    silently deleted. Rename protects against a *torn* file, never against a
    *stale* one. So:
-   - Refuse to write while any Codex session is running. Check first; if one is,
-     stop and report which — do not rewrite the index anyway.
+   - **Exclude the invoking process, then refuse for the rest.** This skill's
+     documented Codex path runs it *from* `codex exec`, so a Codex session is
+     necessarily running whenever `--apply` executes there; requiring none at
+     all would make the feature unusable on the host it was written for.
+     Identify your own session id and ignore it. If any *other* Codex session is
+     live, stop and report which — do not rewrite the index anyway, because its
+     appends are the ones that get lost.
    - Record the file's size and mtime (or a hash) at the moment of the step-2
      read, and re-check them immediately before the rename. Any difference means
      it changed under you: discard the rewrite, re-read, and start over. This is

@@ -77,6 +77,30 @@ contracts are dispatched as subagents rather than invoked, so they are not linke
   stale one. Now requires a quiescent writer plus a compare-and-swap on
   size/mtime before the rename.
 
+### Fixed in review (kstack#1, Codex round 2)
+- `core/careful` hard-denied `rm -rf $HOME` but only **asked** on
+  `rm -rf /Users/me` — the same deletion, decided by spelling, and the resolved
+  absolute path is what an agent actually emits. The HIGH tier now compares
+  against the resolved `$HOME`. Same class of gap on force-push:
+  `HEAD:refs/heads/main` fell to the ask tier while `HEAD:main` was denied;
+  `refs/heads/` is now normalized before the comparison.
+- `bin/install --host codex --uninstall` `rm -rf`'d the whole skill directory
+  after checking only `SKILL.md`, destroying any sidecar file a user had put
+  there — verified by losing a `user-notes.txt`. It now removes the generated
+  pointer and `rmdir`s only if that left the directory empty.
+- `bin/check-stack` walked canonical skills only, so a removed or renamed skill
+  left its Codex pointer installed and never inspected. Added `pointer-orphan`,
+  which walks the installed tree too.
+- `tools/linear/next`'s GraphQL fallback filtered on state alone, returning
+  every team's open issues in a multi-team workspace. It now resolves the
+  consuming team and refuses the fallback when it cannot.
+- Two round-1 fixes overshot and were corrected: `core/land` claimed git branch
+  state does not survive between shells (it does — `HEAD` is in `.git`; only
+  env and `cd` are lost, and chaining is a concurrency mitigation, unnecessary
+  in an isolated worktree), and `session-titles` required *no* Codex session to
+  be running, which made the feature unusable from `codex exec` — its own
+  documented host. It now excludes the invoking session and refuses on others.
+
 ### Deliberately not ported
 gstack's `autoplan` and `ship` auto-decide pipelines. The gate agents exist to
 decline; a pipeline that answers their questions for them removes the constraint

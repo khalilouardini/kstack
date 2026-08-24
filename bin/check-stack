@@ -227,10 +227,12 @@ def check_codex_pointers(r: "Report") -> int:
     if not root.is_dir():
         return 0
     checked = 0
+    canonical_names = set()
     for canon in targets():
         if canon.name != "SKILL.md":
             continue
         name = canon.parent.name
+        canonical_names.add(name)
         pointer = root / name / "SKILL.md"
         if not pointer.is_file():
             continue
@@ -253,6 +255,26 @@ def check_codex_pointers(r: "Report") -> int:
                 "pointer-drift",
                 f"version {got} but canonical {name} is {want} — "
                 f"regenerate with bin/install --host codex",
+            )
+
+    # Walking targets() alone can only ever see names that still exist
+    # canonically, so a removed or renamed skill leaves its pointer installed
+    # and unvisited -- Codex keeps advertising a skill whose canonical file is
+    # gone, while this gate exits 0. Walk the installed tree too.
+    for pdir in sorted(p for p in root.iterdir() if p.is_dir()):
+        pointer = pdir / "SKILL.md"
+        if not pointer.is_file():
+            continue
+        text = pointer.read_text(encoding="utf-8", errors="replace")
+        if "kstack pointer" not in text:
+            continue
+        if pdir.name not in canonical_names:
+            checked += 1
+            r.fail(
+                f"{pointer}",
+                "pointer-orphan",
+                f"no canonical skill named {pdir.name} — it was removed or "
+                f"renamed; delete the pointer or reinstall",
             )
     return checked
 

@@ -173,7 +173,19 @@ uninstall_one() { # uninstall_one SRC NAME
   else
     local file="$DEST/$name/SKILL.md"
     if [ -f "$file" ] && grep -q "kstack pointer" "$file" && grep -qF "$REPO/" "$file"; then
-      run rm -rf "$DEST/$name"; row removed "$name" "$DEST/$name"
+      # Remove the generated pointer, then the directory ONLY if that left it
+      # empty. `rm -rf` on the directory after checking just SKILL.md destroys
+      # any sidecar a user or another tool put there -- verified by losing a
+      # `user-notes.txt` on uninstall -- and contradicts this script's contract
+      # of removing only what it owns. `rmdir` fails harmlessly when anything
+      # else remains, which is the outcome we want.
+      run rm -f "$file"
+      run rmdir "$DEST/$name" 2>/dev/null || true
+      if [ "$DRY" -eq 0 ] && [ -d "$DEST/$name" ]; then
+        row removed "$name" "pointer removed; directory kept (other files present)"
+      else
+        row removed "$name" "$DEST/$name"
+      fi
     elif [ -e "$file" ]; then
       row skipped "$name" "not a pointer generated from this repo — left alone"
     else
