@@ -1,3 +1,5 @@
+<img src="docs/gojo.svg" alt="Pixel-art Gojo" width="130" align="right">
+
 # kstack
 
 A personal agent harness that travels across projects. Twenty installable skills and four
