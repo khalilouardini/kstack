@@ -1,7 +1,7 @@
 ---
 name: pr-loop
-version: 0.1.0
-description: Drive an unattended reviewer↔responder loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED: each round runs the Codex reviewer via `codex exec`, answers findings with review-comments (fix + reply as the bot), then re-checks the exit gates. Bounded by a round cap, a repeat-finding ledger that survives invocations, and a head-SHA marker so no round is paid twice. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge]". (kstack)
+version: 0.2.0
+description: Drive an unattended reviewer↔responder loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED: each round runs Codex under the configured reviewer account, answers findings under the configured responder account, then re-checks the exit gates. Bounded by a round cap, a durable repeat-finding ledger, and a head-SHA marker. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge]". (kstack)
 ---
 
 # pr-loop — run the review ping-pong to a stop condition
@@ -20,12 +20,14 @@ approving — see "What this skill is NOT for".
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before preflight:
 
-- **`identities.reviewer`** — the human maintainer's gh login. This is the
-  loop's `$ORIG`, the account the reviewer posts under, and the only account
-  that ever merges. Missing or null → **refuse**, naming `identities.reviewer`.
-- **`identities.bot`** — the responder identity that authors every reply.
-  Missing or null → **refuse**, naming `identities.bot`. Both identities are
-  required *here*, unlike `review-comments`, which degrades to human-account
+- **`identities.maintainer`** — the human maintainer's gh login. This account
+  owns the implementation branch and is the only account that ever merges.
+  Missing or null → **refuse**, naming `identities.maintainer`.
+- **`identities.codex`** — the Codex reviewer login that publishes every review.
+  Missing or null → **refuse**, naming `identities.codex`.
+- **`identities.responder`** — the implementation-bot login that authors every
+  reply. Missing or null → **refuse**, naming `identities.responder`. All three
+  identities are required *here*, unlike `review-comments`, which degrades to human-account
   replies when no bot is configured. This loop is unattended: posting under the
   maintainer's own account with nobody watching is not a degradation the loop
   gets to choose on its own.
@@ -49,9 +51,9 @@ This skill is the **driver** for two review skills that already exist and are
 not changed here:
 
 - **the reviewer** — kstack [`tools/github/review-claude-pr`](../review-claude-pr/SKILL.md),
-  run by Codex, posts a `COMMENT` review as `identities.reviewer`.
+  run by Codex, posts a `COMMENT` review as `identities.codex`.
 - **the responder** — kstack [`review-comments`](../review-comments/SKILL.md),
-  run by you, fixes the code and replies as `identities.bot`.
+  run by the implementation agent, fixes the code and replies as `identities.responder`.
 
 Neither one decides when to stop. This one does. It is **unattended by design**:
 it posts, pushes, and replies without asking. It never merges unless `--merge`
@@ -67,15 +69,20 @@ PR=<number>
 MAX_ROUNDS=5; N=0                                        # --max-rounds overrides MAX_ROUNDS
                                                          # N counts rounds in THIS invocation only —
                                                          # see "Resuming after ROUNDS_EXHAUSTED"
-REVIEWER="<identities.reviewer>"                         # from .agents/stack.yml
-BOT="<identities.bot>"                                   # from .agents/stack.yml
+MAINTAINER="<identities.maintainer>"                    # from .agents/stack.yml
+CODEX="<identities.codex>"                              # from .agents/stack.yml
+RESPONDER="<identities.responder>"                      # from .agents/stack.yml
 
 codex --version                                          # the loop is not runnable without it
-gh auth status                                           # must list BOTH $REVIEWER and $BOT
-ORIG=$(gh api user --jq .login); test "$ORIG" = "$REVIEWER"
+MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
+CODEX_TOKEN=$(gh auth token --hostname github.com --user "$CODEX")
+RESPONDER_TOKEN=$(gh auth token --hostname github.com --user "$RESPONDER")
+test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
+test "$(GH_TOKEN="$CODEX_TOKEN" gh api user --jq .login)" = "$CODEX"
+test "$(GH_TOKEN="$RESPONDER_TOKEN" gh api user --jq .login)" = "$RESPONDER"
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
-OWNER_REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+OWNER_REPO=$(GH_TOKEN="$MAINTAINER_TOKEN" gh repo view --json nameWithOwner --jq .nameWithOwner)
 OWNER=${OWNER_REPO%/*}; REPO=${OWNER_REPO#*/}
 SCRATCH=$(mktemp -d)                                     # session scratch, never inside $REPO_ROOT
 trap 'rm -rf "$SCRATCH"' EXIT
@@ -90,7 +97,7 @@ touch "$LEDGER"
 # the reviewer contract this loop delegates to, resolved through the host's installed
 # skill path (bin/install symlinks stack skills there). If your host installs skills
 # somewhere else, assert that path instead — but assert one.
-test -r "$HOME/.claude/skills/review-claude-pr/SKILL.md"
+test -r "$HOME/.codex/skills/review-claude-pr/SKILL.md"
 
 # the project review gate, ONLY when review_gate.skill_path is non-null — tracked,
 # because an untracked copy is not a dependency
@@ -99,12 +106,12 @@ git -C "$REPO_ROOT" ls-files --error-unmatch "<review_gate.skill_path>" >/dev/nu
 # baseline of files already untracked here, so the pre-push guard can tell them
 # from anything THIS loop leaves uncommitted
 git status --porcelain --untracked-files=all | sort > "$SCRATCH/untracked-baseline.txt"
-gh pr view "$PR" --json number,state,isDraft,headRefName,headRefOid,mergeable,author
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json number,state,isDraft,headRefName,headRefOid,mergeable,author
 
 # authorship scope — see below
-AUTHOR=$(gh pr view "$PR" --json author --jq .author.login)
-COMMIT_AUTHORS=$(gh pr view "$PR" --json commits --jq '[.commits[].authors[].login] | unique | join(",")')
-CLAUDE_COMMITS=$(gh pr view "$PR" --json commits \
+AUTHOR=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json author --jq .author.login)
+COMMIT_AUTHORS=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json commits --jq '[.commits[].authors[].login] | unique | join(",")')
+CLAUDE_COMMITS=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json commits \
   --jq '[.commits[] | select(([.authors[].login] | index("claude"))
         or (.messageBody | split("\n") | any(test("^Co-Authored-By: Claude\\b.*<[^>]+>\\s*$"; "i"))))] | length')
 ```
@@ -119,14 +126,14 @@ for a reason that looks like a Codex failure but is a missing dependency.
 
 ### Authorship scope — enforced here, not assumed
 
-`review-claude-pr` is scoped to PRs attributable to `$BOT`, but it has an
+`review-claude-pr` is scoped to PRs attributable to `$RESPONDER`, but it has an
 explicit-request exception, and this loop *always* passes an exact PR number —
 which trips that exception every time. Without a check here, `/pr-loop` silently
 extends the reviewer to any PR, including a maintainer's own.
 
 Stop unless one of these holds, each machine-checked in preflight:
 
-- `$AUTHOR` or one of `$COMMIT_AUTHORS` is `$BOT` — a PR the bot has already
+- `$AUTHOR` or one of `$COMMIT_AUTHORS` is `$RESPONDER` — a PR the responder has already
   touched in earlier rounds; or
 - `$CLAUDE_COMMITS` is non-zero — a head commit is authored by the `claude`
   login or carries a `Co-Authored-By: Claude` **trailer line**: a whole line
@@ -134,7 +141,7 @@ Stop unless one of these holds, each machine-checked in preflight:
   mention of the phrase mid-sentence does not count — the match is anchored per
   line, so a human-only commit that merely discusses the trailer format stays at
   `0`. This is the **first-draft case**: the agent pushes the initial PR
-  directly under `$REVIEWER`, and `$BOT` only appears once review rounds start,
+  directly under `$MAINTAINER`, and `$RESPONDER` only appears once review rounds start,
   so requiring the bot identity up front would lock the loop out of every
   round-1 review.
 
@@ -155,8 +162,8 @@ default branch or an unrelated branch would apply fixes to the wrong branch and
 leave PR 123 untouched. Bind explicitly:
 
 ```bash
-HEAD_REF=$(gh pr view "$PR" --json headRefName --jq .headRefName)
-HEAD_OID=$(gh pr view "$PR" --json headRefOid  --jq .headRefOid)
+HEAD_REF=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefName --jq .headRefName)
+HEAD_OID=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid  --jq .headRefOid)
 
 test "$(git rev-parse --abbrev-ref HEAD)" = "$HEAD_REF"   # right branch
 test "$(git rev-parse HEAD)" = "$HEAD_OID"                # not behind or ahead of the PR head
@@ -240,7 +247,7 @@ paths.
 The reviewer invocation, verified against `codex-cli 0.147.0`:
 
 ```bash
-codex exec -C "$REPO_ROOT" -s danger-full-access -o "$SCRATCH/codex-round-$N.txt" \
+GH_TOKEN="$CODEX_TOKEN" codex exec -C "$REPO_ROOT" -s danger-full-access -o "$SCRATCH/codex-round-$N.txt" \
   "Use \$review-claude-pr to review PR #$PR and post the findings."
 ```
 
@@ -267,8 +274,8 @@ for the reviewer's marker:
 
 ```bash
 N=$((N+1)); test "$N" -le "$MAX_ROUNDS"   # false ⇒ stop the loop, verdict ROUNDS_EXHAUSTED
-HEAD=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
-gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews" --jq '.[].body' \
+HEAD=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .headRefOid)
+GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews" --jq '.[].body' \
   | grep -c "codex-review head:$HEAD"
 ```
 
@@ -299,9 +306,9 @@ Read tool and follow it top to bottom, **skipping the section "The confirm gate
 — draft, do not post"**; if it is unreadable, say so and stop. That skipped
 section is the **one documented override**: it assumes an interactive run, and
 this loop has none, so post directly. Every other invariant in that skill still
-holds — its thread-selection rules, its fix-don't-just-reply rule, its identity
-subshell, its `<gates.lint> && <gates.test>` gate, restoring `$ORIG` and
-verifying it in a **later, separate call**, never resolving threads, and posting
+holds — its thread-selection rules, its fix-don't-just-reply rule, its
+per-command responder token, its `<gates.lint> && <gates.test>` gate, never
+switching global `gh` identity, never resolving threads, and posting
 the conversation-level summary comment **last**.
 
 If `<gates.lint>` or `<gates.test>` fails after your fixes, you get **one**
@@ -437,15 +444,15 @@ total-across-invocations budget, by design — the human deciding to run it agai
 Merge only when **all** hold, checked in this order:
 
 ```bash
-gh pr checks "$PR"                                  # every required check green
-gh pr view "$PR" --json mergeable --jq .mergeable   # MERGEABLE, not CONFLICTING
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr checks "$PR"                                  # every required check green
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json mergeable --jq .mergeable   # MERGEABLE, not CONFLICTING
 ```
 
 plus verdict `CLEAN`, plus no unresolved thread carrying a `P0`–`P2` finding.
-Merge as `$ORIG` (`identities.reviewer`), never as the bot:
+Merge as `$MAINTAINER` (`identities.maintainer`), never as Codex or the responder:
 
 ```bash
-gh pr merge "$PR" --squash --delete-branch
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr merge "$PR" --squash --delete-branch
 ```
 
 If any condition fails, do not merge and say which one blocked it. Without
@@ -474,9 +481,8 @@ outward step. Treat them as hard rules anyway.
    because `N` resets and `ROUNDS_EXHAUSTED` does not persist. A repeat guard
    living only in `$SCRATCH` would be erased by the `trap` before the rerun that
    needs it.
-4. **`$ORIG` is restored and verified** after every bot-identity block, per
-   `review-comments` — including its later, separate verification call, because
-   `gh` auth state is global mutable state and a same-shell check proves nothing.
+4. **Global `gh` identity is never switched.** Every GitHub API call receives
+   the intended role's verified token through `GH_TOKEN`.
 5. **No merge without `--merge` and green checks.** Codex posting
    `No findings.` is not a merge authorization; CI is.
 6. **Every fix lands on the PR's own branch**, verified by the binding block
@@ -493,12 +499,12 @@ outward step. Treat them as hard rules anyway.
    untracked paths.
 8. **Authorship is checked in preflight**, not inherited from the reviewer
    skill, whose explicit-number exception this loop would otherwise trip on
-   every run. First-draft PRs pushed under `identities.reviewer` qualify only
+   every run. First-draft PRs pushed under `identities.maintainer` qualify only
    through commit-level evidence (`claude` author login or
    `Co-Authored-By: Claude` trailer), never through the loop's impression of the
    PR.
-9. **Both identities are required.** No bot identity configured → refuse. An
-   unattended loop does not silently reassign the bot's replies to the
+9. **All three identities are required.** No maintainer, Codex, or responder
+   identity configured → refuse. An unattended loop does not silently reassign replies to the
    maintainer's account.
 
 ## What this skill is NOT for

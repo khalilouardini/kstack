@@ -2,7 +2,7 @@
 # asks every other repo for. If a key here is null, the skills that need it
 # refuse or ask; that is the intended behaviour, not an omission to fix later.
 
-stack: 1
+stack: 2
 project: kstack
 
 # No scope contract: kstack is not milestone-driven, so the roles pipeline
@@ -32,9 +32,9 @@ review_gate:
   scope: null
 
 identities:
-  reviewer: khalilouardini
-  bot: ogur-claude-bot           # the only bot account available; named for its
-                                 # origin repo, reused here
+  maintainer: khalilouardini
+  codex: ogur-codex-bot
+  responder: ogur-claude-bot
 
 protected_branches:
   - main

@@ -228,6 +228,24 @@ def check_codex_pointers(r: "Report") -> int:
         return 0
     checked = 0
     canonical_names = set()
+
+    def points_here(text: str) -> bool:
+        """True when this generated pointer names the checkout being checked.
+
+        A machine may have several worktrees of kstack. Installed pointers name
+        one canonical checkout, so comparing their versions against a different
+        worktree's feature branch creates false drift failures.
+        """
+        match = re.search(r"^Read `(.+)/SKILL\.md` with your file-reading tool", text, re.MULTILINE)
+        if match is None:
+            return False
+        source = Path(match.group(1))
+        try:
+            source.relative_to(REPO)
+        except ValueError:
+            return False
+        return True
+
     for canon in targets():
         if canon.name != "SKILL.md":
             continue
@@ -239,6 +257,8 @@ def check_codex_pointers(r: "Report") -> int:
         text = pointer.read_text(encoding="utf-8", errors="replace")
         if "kstack pointer" not in text:
             continue  # not ours to judge
+        if not points_here(text):
+            continue  # generated from another kstack checkout/worktree
         checked += 1
         cfm = frontmatter(canon.read_text(encoding="utf-8", errors="replace"))
         pfm = frontmatter(text)
@@ -267,6 +287,8 @@ def check_codex_pointers(r: "Report") -> int:
             continue
         text = pointer.read_text(encoding="utf-8", errors="replace")
         if "kstack pointer" not in text:
+            continue
+        if not points_here(text):
             continue
         if pdir.name not in canonical_names:
             checked += 1

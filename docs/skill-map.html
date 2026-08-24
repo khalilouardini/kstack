@@ -288,15 +288,15 @@ footer code { font-family: "IBM Plex Mono", monospace; color: var(--ink-soft); }
 
 <section class="section">
   <h2>Which review do I run?</h2>
-  <p class="sub">Four skills touch a pull request. The split is deliberate: the reviewer and the responder post under different GitHub identities, so no single skill does both halves.</p>
+  <p class="sub">Four skills touch a pull request. The split is deliberate: the human maintainer owns delivery, Codex publishes reviews, and the responder posts fixes and replies.</p>
   <div class="scroll">
     <table>
       <caption>Review cluster — who is reviewing × what stage</caption>
       <thead><tr><th scope="col">Who</th><th scope="col">Produce the review</th><th scope="col">Answer existing comments</th><th scope="col">Drive rounds unattended</th></tr></thead>
       <tbody>
         <tr><th scope="row">Me, by hand</th><td>the project's own gate, when the diff is inside <code>review_gate.scope</code></td><td class="na">—</td><td class="na">—</td></tr>
-        <tr><th scope="row">The Codex side</th><td><code>/review-claude-pr</code> — P0–P3 as a comment review</td><td class="na">—</td><td class="na">—</td></tr>
-        <tr><th scope="row">Me, as the bot</th><td class="na">—</td><td><code>/review-comments</code> — fix, then reply</td><td class="na">—</td></tr>
+        <tr><th scope="row">Codex machine account</th><td><code>/review-claude-pr</code> — P0–P3 as a comment review</td><td class="na">—</td><td class="na">—</td></tr>
+        <tr><th scope="row">Implementation responder</th><td class="na">—</td><td><code>/review-comments</code> — fix, then reply</td><td class="na">—</td></tr>
         <tr><th scope="row">Nobody watching</th><td class="na">—</td><td class="na">—</td><td><code>/pr-loop</code> — runs both halves, bounded rounds</td></tr>
       </tbody>
     </table>
@@ -417,7 +417,7 @@ const LADDER = [
   { k:"(nothing)", d:"a fresh repo, no config", v:[["core","/stack"],["core","/investigate"],["core","/careful"],["core","/freeze"],["core","/unfreeze"],["core","/explain-diff-html"]] },
   { k:"gates.lint · gates.test", d:"your authoritative commands", v:[["core","/land"],["core","/health"]] },
   { k:"scope_doc", d:"what's in and out right now", v:[["roles","/spec"],["roles","/triage"],["roles","product-manager"],["roles","tech-lead"],["roles","designer"],["roles","qa"]] },
-  { k:"identities.reviewer · identities.bot", d:"who publishes, who replies", v:[["gh","/review-claude-pr"],["gh","/review-comments"],["gh","/pr-loop"]] },
+  { k:"identities.maintainer · identities.codex · identities.responder", d:"who delivers, reviews, and replies", v:[["gh","/review-claude-pr"],["gh","/review-comments"],["gh","/pr-loop"]] },
   { k:"issue_prefix", d:"your tracker's key format", v:[["gh","/session-titles"],["gh","/delivery-retro"]] },
   { k:"workspace_contract", d:"your tracker's own rules", v:[["linear","/next"],["linear","/dispatch-implementation"],["linear","/linear-steward"],["linear","/linear-feature-intake"],["linear","/linear-release-audit"]] },
 ];

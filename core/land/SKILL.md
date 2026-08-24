@@ -1,6 +1,6 @@
 ---
 name: land
-version: 0.1.0
+version: 0.2.0
 description: Land an agent session's work safely — dedicated branch, concurrent-session guards re-run before every commit, the repo's own lint and test gates from .agents/stack.yml, atomic commits, then one PR. Stops at the PR; merging is a human decision. Use when asked to "land this", "commit and push", "open a PR", "ship it", or "/land". (kstack)
 ---
 
@@ -32,10 +32,9 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   the same list for the same reason.)
 - **`issue_prefix`** — when set, an issue key may appear in the branch name and
   PR title. Optional; absent means plain branch names.
-- **`identities.reviewer`** — needed **only if** the session switched `gh`
-  identity at any point (see "gh identity"). If a switch happened and this key is
-  null → **refuse**, naming `identities.reviewer`; there is nothing to restore
-  to. With no switch, this skill does not need the key.
+- **`identities.maintainer`** — the human account that pushes the branch and
+  opens the PR. Missing or null → **refuse**, naming `identities.maintainer`.
+  Resolve its token for forge API calls; never switch global `gh` identity.
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
@@ -262,10 +261,24 @@ let the human decide. Do not silently accept it.
 git push -u origin <your-branch>
 ```
 
+Immediately before pushing, verify that the active login is the configured
+maintainer when the repository's Git credential helper depends on `gh`:
+
+```bash
+test "$(gh api user --jq .login)" = "<identities.maintainer>"
+```
+
+If it differs, stop and report the mismatch. Do not switch it: another session
+may be using the shared global account. SSH remotes authenticate independently,
+but the maintainer still owns the branch and PR.
+
 Then open the PR:
 
 ```bash
-gh pr create --base <default-branch> --title "<type>: <what changed>" --body "<body>"
+MAINTAINER="<identities.maintainer>"
+MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
+test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr create --base <default-branch> --title "<type>: <what changed>" --body "<body>"
 ```
 
 Body: what changed and why, the gate results as evidence (`<gates.lint>` clean,
@@ -285,21 +298,11 @@ one.
 ### gh identity
 
 `gh` auth is **global mutable state**, shared by every shell and every concurrent
-session on the machine. A sibling session switching identity changes yours.
-
-After **any** `gh auth switch`, verify the active login in a **later, separate
-tool call** — a check in the same invocation as the switch proves nothing about
-the state after that invocation returns:
-
-```bash
-gh api user --jq .login
-```
-
-Compare against `identities.reviewer` (or, when that key is null and no switch
-happened, against the login you recorded at Step 0 — shell variables do not
-survive between calls, so compare against the literal value in the transcript).
-Drifted → re-assert it explicitly with `gh auth switch --user <login>` and report
-the mismatch. Never push or open a PR while the active identity is unverified.
+session on the machine. Never call `gh auth switch` from this skill. Bind PR API
+calls to the verified maintainer token with `GH_TOKEN`, which is process-local
+and safe for parallel sessions. The separate active-login assertion before a
+Git push protects installations whose Git credential helper follows `gh`; a
+mismatch blocks the push instead of mutating global state.
 
 ## Safety invariants
 
@@ -325,7 +328,9 @@ other destructive git commands prompt. That covers one failure mode of invariant
 6. **Never merge.** Open the PR and stop.
 7. **Never rewrite a commit you did not author** — check `git patch-id --stable`
    first, and leave origin-duplicated commits for the rebase to drop.
-8. **Verify `gh` identity in a later, separate call** after any switch.
+8. **Never switch global `gh` identity.** Bind forge API calls to the verified
+   maintainer token; stop on an active-login mismatch before a credential-helper
+   push.
 
 ## What this skill is NOT for
 

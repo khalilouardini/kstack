@@ -17,7 +17,7 @@ version and the OGUR version can run side by side until you delete the OGUR copy
 | `.claude/skills/spec/` | `roles/spec/` | Output paths → `spec_output_dir`; intake handoff conditional on `workspace_contract` |
 | `.claude/skills/triage/` | `roles/triage/` | Protected demo branches → `protected_branches` |
 | `.claude/skills/explain-diff-html/` | `core/explain-diff-html/` | Nothing — it was already repo-agnostic |
-| `.claude/skills/review-comments/` | `tools/github/review-comments/` | Identities → `identities.reviewer` / `identities.bot`; gate → `gates.lint`/`gates.test` |
+| `.claude/skills/review-comments/` | `tools/github/review-comments/` | Identities → `identities.maintainer` / `identities.codex` / `identities.responder`; gate → `gates.lint`/`gates.test` |
 | `.claude/skills/pr-loop/` | `tools/github/pr-loop/` | Same, plus ledger dir renamed, engine gate → `review_gate.skill_path` |
 | `.agents/skills/review-claude-pr/` | `tools/github/review-claude-pr/` | Identities parameterized |
 | `.agents/skills/github-delivery-retro/` | `tools/github/delivery-retro/` | Scope doc parameterized; gained the stale-base pre-flight |
@@ -37,13 +37,18 @@ twin (a project gate, correctly project-local).
 
 Rule of thumb: **a skill that names your product's nouns stays home.**
 
+Schema 2 replaces the old `identities.reviewer` / `identities.bot` pair. Map
+the former reviewer to `identities.maintainer`, configure the dedicated Codex
+account as `identities.codex`, and map the former bot to
+`identities.responder`.
+
 ## Steps
 
 1. Install the stack: `bin/install` (and `bin/install --host codex`).
 2. Write `.agents/stack.yml` in the OGUR repo:
 
 ```yaml
-stack: 1
+stack: 2
 project: ogur
 scope_doc: docs/product/mvp-scope.md
 workspace_contract: docs/product/linear-workspace-contract.md
@@ -56,8 +61,9 @@ review_gate:
   skill_path: .claude/skills/review-engine/SKILL.md
   scope: ogur/engine/**
 identities:
-  reviewer: khalilouardini
-  bot: ogur-claude-bot
+  maintainer: khalilouardini
+  codex: ogur-codex-bot
+  responder: ogur-claude-bot
 protected_branches:
   - demo/*
 role_appendix_dir: .agents/appendices

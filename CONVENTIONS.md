@@ -42,7 +42,7 @@ General skills never hardcode a project. Anything project-specific is read from
 `.agents/stack.yml` in the consuming repo:
 
 ```yaml
-stack: 1                        # config schema version
+stack: 2                        # config schema version
 project: <slug>
 scope_doc: <path|null>          # scope/priority contract — roles, spec, triage, next
 workspace_contract: <path|null> # Linear workspace rules — tools/linear
@@ -57,8 +57,9 @@ review_gate:
   skill_path: <path|null>       # project "prove the bug" review skill (e.g. review-engine)
   scope: <glob|null>            # diff paths that trigger it
 identities:
-  reviewer: <gh-login|null>     # the human account
-  bot: <gh-login|null>          # bot identity for review replies
+  maintainer: <gh-login|null>   # human owner: pushes, opens PRs, merges
+  codex: <gh-login|null>        # Codex machine account: publishes reviews
+  responder: <gh-login|null>    # implementation bot: fixes and replies
 protected_branches: []          # fnmatch globs (`demo/*`) matched against the
                                 # branch name; triage may never propose CLOSE for one
 role_appendix_dir: <path|null>  # per-role project appendices (traps, factories, gates)
