@@ -1,7 +1,7 @@
 ---
 name: triage
-version: 0.1.0
-description: Score every open PR, unmerged branch, and worktree against the consuming repo's scope doc and propose MERGE / REBASE+MERGE / CLOSE / PARK for each, with every verdict citing a scope-doc line. Read-only — writes one dated proposal file and never closes, merges, deletes, or pushes. Use when asked to "triage the backlog", "clean up the open PRs", "which branches can we delete?", or "/triage [prs|branches|worktrees|all]". (kstack)
+version: 0.2.0
+description: Score every open PR, unmerged branch, and worktree against the consuming repo's scope doc and propose MERGE / REBASE+MERGE / CLOSE / PARK for each, with every verdict citing a scope-doc line. Read-only — writes one dated proposal file and never closes, merges, deletes, or pushes. Use when asked to "triage the backlog", "clean up the open PRs", "which branches can we delete?", or "/triage [prs|branches|worktrees|all] [--label <name>]". (kstack)
 ---
 
 # triage — score the backlog against the scope contract
@@ -10,10 +10,33 @@ description: Score every open PR, unmerged branch, and worktree against the cons
 
 The repo has accumulated more open work than anyone can hold in their head —
 open PRs, unmerged branches, stale worktrees — and someone needs a defensible
-disposition for each one. Invoke as `/triage [prs|branches|worktrees|all]`
-(default `prs`). This skill produces **a proposal**; it never executes it. Not
-for deciding whether a *new* idea is in scope (that is the `spec` pipeline), and
-not for picking what to work on next.
+disposition for each one. Invoke as
+`/triage [prs|branches|worktrees|all] [--label <name>]` (default `prs`). This
+skill produces **a proposal**; it never executes it. Not for deciding whether a
+*new* idea is in scope (that is the `spec` pipeline), and not for picking what
+to work on next.
+
+### `--label` — scoring a subset
+
+`--label <name>` narrows the PR pass to PRs carrying that label; repeat the flag
+to require several (`gh` ANDs them). Use it when the backlog is already
+partitioned by a milestone label and only one partition is being decided.
+
+Two consequences, both of which the proposal must carry rather than absorb
+silently:
+
+- **The completeness promise weakens.** Unfiltered, this skill promises a
+  disposition for *every* open PR. Filtered, it promises one for every PR in the
+  filter, and the proposal must say so in its header along with how many were
+  excluded (Step 5). A filtered proposal that does not name its filter is
+  indistinguishable from a full one a month later, and will be read as one.
+- **It filters PRs only.** Branches and worktrees carry no labels. Under
+  `branches`, `worktrees`, or `all`, the flag applies to the PR pass and to
+  nothing else — say that in the proposal rather than letting an unfiltered
+  branch table sit under a filtered header.
+
+This is a filter on *which* work is scored, never on *how* it is scored. Every
+verdict still cites a scope-doc line.
 
 ## Configuration — read `.agents/stack.yml` first
 
@@ -69,7 +92,9 @@ git branch --no-merged "$DEFAULT_BRANCH" | wc -l   # unmerged local branches
 git worktree list | wc -l                          # worktrees
 ```
 
-Report the counts you measured, dated.
+Report the counts you measured, dated. Measure the **whole** backlog here even
+when `--label` was passed — the unfiltered total is what the excluded count in
+the proposal header is computed against.
 
 > **Worked example (OGUR).** On 2026-08-04, when this procedure was first
 > written, that was 27 open PRs (oldest untouched since April), 80 unmerged
@@ -106,17 +131,28 @@ Do not read every diff. Get the facts first, in one call:
 # nothing about the rest. A repo with 101+ open PRs would produce a proposal
 # that claims to cover every open PR while omitting the remainder from every
 # bucket and every total. Ask for more than could exist, then assert.
-gh pr list --state open --limit 1000 \
+# LABEL_ARGS is empty unless --label was passed; one `--label <name>` per flag.
+LABEL_ARGS=()   # e.g. LABEL_ARGS=(--label MVP2)
+gh pr list --state open --limit 1000 "${LABEL_ARGS[@]}" \
   --json number,title,isDraft,headRefName,updatedAt,additions,deletions,mergeable,statusCheckRollup \
   > /tmp/triage-prs.json
-TOTAL=$(gh pr list --state open --limit 1000 --json number --jq 'length')
-echo "open PRs fetched: $TOTAL"
+SCORED=$(python3 -c 'import json;print(len(json.load(open("/tmp/triage-prs.json"))))')
+echo "open PRs fetched: $SCORED (filter: ${LABEL_ARGS[*]:-none})"
 ```
 
-If `TOTAL` equals the limit you passed, assume the list was truncated: raise the
+If `SCORED` equals the limit you passed, assume the list was truncated: raise the
 limit and re-run, or **fail closed and disclose the cap** in the proposal. Never
 report bucket totals over a subset while promising a disposition for every open
 PR.
+
+Assert against the **filtered** count, not the whole-backlog total from Step 0 —
+a filter that returns 1000 rows is as truncated as an unfiltered one, and the
+Step 0 number would not reveal it.
+
+If `--label` was passed, record `SCORED` and the Step 0 total now; both go in the
+proposal header. `SCORED` of zero is a result, not a failure: write the proposal
+with an empty disposition set and say which label matched nothing, because the
+likeliest cause is a misspelled label rather than an empty partition.
 
 Then bucket mechanically, before any judgement:
 
@@ -183,6 +219,12 @@ edits, it needs adding to the list before this proposal is executed."
 
 Only when asked for `branches`, `worktrees`, or `all`.
 
+`--label` does not reach this step — refs carry no labels. If it was passed
+alongside `branches`, `worktrees`, or `all`, the branch and worktree tables cover
+**everything**, while the PR tables above them cover only the filter. Label both
+in the proposal; a reader who assumes one header governs the whole file will
+otherwise read an unfiltered deletion candidate as an in-milestone one.
+
 ```bash
 git branch --no-merged "$DEFAULT_BRANCH" --format='%(refname:short) %(committerdate:short)'
 git worktree list
@@ -213,6 +255,7 @@ gave when `spec_output_dir` was absent):
 # Triage — <date>
 
 **Scored against:** `<scope_doc>` (as of <date>)
+**Filter:** <none | label=<name> — <scored> of <total> open PRs scored, <n> excluded>
 **Measured:** <n> open PRs · <n> unmerged branches · <n> worktrees
 **Totals:** <n> MERGE · <n> REBASE+MERGE · <n> CLOSE · <n> PARK
 
@@ -242,12 +285,18 @@ gave when `spec_output_dir` was absent):
 
 ## Recommended sequence
 <The order to actually do this in, and why. Merge order matters when PRs touch
-the same files — name the collisions.>
+the same files — name the collisions. Under a filter, say that collisions were
+computed within the scored set only: an excluded PR touching the same files will
+not appear here.>
 ```
 
-Then print to the user: the measured counts, the totals, the recommended first
-three actions, and anything you were genuinely unsure about. **Ask before
-executing any of it.**
+Write the `**Filter:**` line on every proposal, including unfiltered ones — as
+`none`. An absent line reads as "unfiltered" to a reader who does not know the
+flag exists, which is exactly the reading a filtered proposal must not permit.
+
+Then print to the user: the measured counts, the filter and how many PRs it
+excluded, the totals, the recommended first three actions, and anything you were
+genuinely unsure about. **Ask before executing any of it.**
 
 ## Calibration note
 
@@ -264,3 +313,6 @@ that condemns it.
 - Choosing the next task to start — that is the forward-looking complement;
   `triage` audits what was left unfinished, backwards.
 - Deleting worktrees or pruning branches, even ones it labels safe.
+- Filtering a tracker. `--label` is a `gh` label on a PR, nothing more. This
+  skill never reads Linear; narrowing issues to a milestone or project is `next`
+  and `linear-steward`, which take that argument themselves.
