@@ -138,6 +138,13 @@ can drift from the approved plan.
 The implementation session owns code and tests, not tracker truth beyond evidence it
 has actually produced.
 
+- If it opens an implementation PR, its description must contain a closing Linear
+  statement for the dispatched issue, for example `Fixes ISSUE-123`. A bare issue
+  key, `Refs ISSUE-123`, or a GitHub/Linear attachment is not enough: those forms
+  can display the PR without linking it as the change that completes the issue, so
+  the team's existing merge → Done automation has nothing to transition. This is
+  required before requesting review; when one PR implements multiple issues, add
+  one closing statement for each.
 - If it opens a PR and the workspace contract defines a review status for that
   evidence, apply that transition with the same resolve → ledger → write → read-back
   discipline.

@@ -134,6 +134,17 @@ Confirm the PR author is `$IMPLEMENTER`. If it is not, inspect the PR commits fo
 that author. If neither the PR nor its commits are attributable to `$IMPLEMENTER`,
 stop unless the user explicitly requested that exact PR despite its author.
 
+Before reviewing the code, inspect the PR title and description for the consuming
+project's configured `issue_prefix`. If the PR is presented as implementing an
+issue (by its title, branch, description, or the issue context that resolved this
+review), its description must include a closing statement for every implemented
+issue, for example `Fixes ISSUE-123`. `Refs ISSUE-123`, `Related to ISSUE-123`, and a
+bare issue key are not substitutes: they can attach the PR without giving Linear's
+merge → Done automation a linked issue to complete. Report a missing closing
+statement as a P2 finding before code findings. Do not edit the description;
+reviewers remain review-only. A PR that deliberately does not implement an issue
+does not need a fabricated closing statement.
+
 Use a hidden idempotency marker tied to the reviewed head SHA:
 
 ```text
