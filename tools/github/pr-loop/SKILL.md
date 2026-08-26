@@ -420,6 +420,12 @@ Report one of these, always with the round count and what it cost:
 Design pushback ("this approach is wrong") is **always** `BLOCKED`, never
 something you concede to in an unattended round. That call is the user's.
 
+When a `BLOCKED` disagreement needs an arbiter, one option worth naming in the
+report is a human-run `/code-review ultra` (Claude Code's multi-agent cloud
+review) on the PR — it is independent of both loop participants. Name it only:
+it is user-triggered and billed, and this skill must never attempt to launch
+it.
+
 Every verdict report also carries the review-model routing as one line — model,
 effort, changed-line count, and the source of each half — for example:
 *"review model: gpt-5.6-terra / high (stack.yml; 812 changed lines > escalate_above_lines 400)"*.

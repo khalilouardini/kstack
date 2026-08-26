@@ -256,6 +256,16 @@ If a gate is red for a reason your change did not cause — a pre-existing failu
 on the base — say so with the evidence (the same failure on the base commit), and
 let the human decide. Do not silently accept it.
 
+### Optional pre-PR self-review
+
+With both gates green, a built-in `/code-review` pass over the branch diff is a
+cheap way to catch defects before the PR exists — before the reviewer identity
+spends a round on them in `pr-loop`. It is optional and session-local: findings
+stay in the session, nothing is posted. Skip it when the user asked for speed.
+Never use its `--comment` flag from this skill — that posts as the human
+account, and PR commentary belongs to the review cluster's configured
+identities.
+
 ## Step 8 — push and open the PR
 
 ```bash
