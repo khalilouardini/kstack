@@ -80,6 +80,14 @@ adapter, or read `roles/<role>.md` and follow it in-session.
 - The diff falls inside the paths the project's own review gate claims
   (`review_gate.scope` in `.agents/stack.yml`) → run that gate first, at
   `review_gate.skill_path`
+- "review my diff", "review this branch before I push", "self-review my
+  uncommitted changes", "check my work before opening the PR" → invoke the
+  host's built-in `/code-review` (Claude Code). It reviews in-session, on the
+  session's own model and account, and touches no `identities.*` key — the
+  inner-loop self-check, not a substitute for `/review-claude-pr`
+- "deep audit this PR", "exhaustive review", "multi-agent review" → tell the
+  user to run `/code-review ultra` themselves. It is user-triggered and
+  billed; no skill can launch it
 
 ### Land
 
@@ -121,12 +129,15 @@ Two axes: **who reviews** and **what stage of the review**.
 | Who reviews | Produce the review | Answer existing comments | Drive rounds to a stop condition |
 |---|---|---|---|
 | **Me, now, by hand** | the project's own review gate (`review_gate.skill_path`), when the diff is inside `review_gate.scope` | — | — |
+| **The session itself, pre-PR** | built-in `/code-review` on the working or branch diff — same-model self-check, in-session findings only, no `identities.*` involvement | — | — |
 | **The reviewer (Codex by default)** | `/review-claude-pr` — P0–P3 findings as a COMMENT review from `identities.reviewer` | — | — |
 | **The implementer (Claude by default)** | — | `/review-comments` — fix, then reply as `identities.implementer` | — |
 | **Nobody watching — both halves** | — | — | `/pr-loop` — each round runs the reviewer, then `/review-comments`, then re-checks the exit gates |
 
 The one-line decision:
 
+- Nothing is published yet and you want a cheap self-check → built-in
+  `/code-review`. It posts nothing and touches no identity.
 - Comments already exist and need answers → `/review-comments`.
 - No review exists yet and one should be published → `/review-claude-pr`.
 - Both halves, repeatedly, with nobody in the seat → `/pr-loop`.
@@ -137,6 +148,13 @@ The one-line decision:
 never fixes or resolves, and `/review-comments` never initiates a review — the
 split is deliberate, because the reviewer and the implementer post under different
 identities.
+
+The built-in `/code-review` is never a substitute for the reviewer round: it
+runs on the implementer's model family (no cross-model independence), its
+`--comment` flag posts as the human account (breaking the identity contract),
+and its `ultra` level cannot be launched by a skill at all — it is
+user-triggered and billed. Its place is before the PR exists, or as a
+human-run arbiter after `/pr-loop` exits `BLOCKED`.
 
 ## Disambiguation — the decide cluster
 
