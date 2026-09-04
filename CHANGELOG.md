@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+Vendored `follow-builders` (zarazhangrui/follow-builders @ 6df06d7) under a new
+`tools/external/` tier for third-party skills. Frontmatter gained `version`,
+`upstream`, and the `(kstack)` suffix so `bin/check-stack` covers it; the body is
+upstream's verbatim. Feed JSON and the feed-generation workflow are not vendored
+because `scripts/prepare-digest.js` fetches them from upstream `main`.
+
 Added a GitHub-rendered visual guide for the router, workflow phases,
 capability tiers, and the decision and review clusters. The README now links to
 this guide first while retaining the filterable HTML map as a local interactive
