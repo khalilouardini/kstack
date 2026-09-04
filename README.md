@@ -93,6 +93,7 @@ merges on its own.
 | [`/session-titles`](tools/github/session-titles/SKILL.md) | Retitles open agent sessions with their issue key and PR |
 | [`/linear-steward`](tools/linear/linear-steward/SKILL.md) | Tracker structural health; mutates only on explicit apply |
 | [`/linear-release-audit`](tools/linear/linear-release-audit/SKILL.md) | Audits a release against its gates using tracker + GitHub evidence |
+| [`/follow-builders`](tools/external/follow-builders/SKILL.md) | Vendored from [zarazhangrui/follow-builders](https://github.com/zarazhangrui/follow-builders): AI-builders digest, in-chat / Telegram / email. Needs `node`; `npm ci` in its `scripts/` once |
 
 ## What this stack refuses
 
@@ -117,6 +118,7 @@ core/               git + filesystem only
 roles/              gate contracts + the spec and triage pipelines
 tools/github/       needs gh
 tools/linear/       needs a Linear workspace
+tools/external/     vendored third-party skills (follow-builders: needs node)
 hosts/HOSTS.md      what differs between Claude Code and Codex
 project-template/   stack.yml + onboarding for a consuming repo
 bin/                install, check-stack

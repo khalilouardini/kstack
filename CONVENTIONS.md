@@ -12,6 +12,7 @@ roles/<role>.md   — gate-agent contracts (product-manager, tech-lead, designer
 roles/<skill>/    — role-pipeline skills (spec, triage)
 tools/github/<skill>/   — skills that need gh / a GitHub repo
 tools/linear/<skill>/   — skills that need a Linear workspace
+tools/external/<skill>/ — vendored third-party skills; frontmatter names the upstream commit
 hosts/            — host adapter notes + Codex pointer generation
 project-template/ — what a consuming project provides (stack.yml + onboarding)
 bin/              — install, check-stack
