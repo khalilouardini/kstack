@@ -69,6 +69,7 @@ half-day estimate, refuses to estimate what it cannot name),
 | [`/careful`](core/careful/SKILL.md) | Pre-checks every shell command. Recursive deletes rooted at `/` or `$HOME` and force-pushes to the default branch are denied; the rest asks | **hook** (Claude Code) |
 | [`/freeze`](core/freeze/SKILL.md) · [`/unfreeze`](core/unfreeze/SKILL.md) | Locks edits to one directory; a symlink inside the boundary pointing out of it is still blocked | **hook** (Claude Code) |
 | [`/explain-diff-html`](core/explain-diff-html/SKILL.md) | Self-contained interactive page teaching a change, validator-gated | bundled validator |
+| [`/summarize-change`](core/summarize-change/SKILL.md) | Briefs a change in the session: verdict, decision, behavioral change map, blast radius, what it does not do | prompt-level |
 
 ### Review
 

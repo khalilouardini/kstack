@@ -68,6 +68,8 @@ adapter, or read `roles/<role>.md` and follow it in-session.
   `/unfreeze`
 - "explain this change", "walk me through this diff", "make a page explaining
   this PR", "teach the team what changed" → invoke `/explain-diff-html`
+- "summarize this PR", "what did we do here", "brief me on this branch",
+  "high-level summary of this change" → invoke `/summarize-change`
 
 ### Review
 
@@ -137,6 +139,21 @@ The one-line decision:
 never fixes or resolves, and `/review-comments` never initiates a review — the
 split is deliberate, because the reviewer and the implementer post under different
 identities.
+
+## Disambiguation — explaining work that already exists
+
+One axis: **who consumes the explanation, and how far from you they are.**
+
+| Unit of work | Consumer | Route to |
+|---|---|---|
+| One change | you or a colleague, in this conversation | `/summarize-change` — six-part briefing in chat, nothing written |
+| One change | someone studying it later without you | `/explain-diff-html` — offline page, diagrams, quiz, validator-gated |
+| A period, many PRs | whoever asks whether the time was well spent | `/delivery-retro` — outcomes vs the previous equal period |
+
+None of the three forms a merge verdict; that is the review cluster above.
+`/summarize-change` is the cheap default — reach past it to
+`/explain-diff-html` only when the explanation has to survive without you in
+the room, since the page costs an investigation deep enough to support its quiz.
 
 ## Disambiguation — the decide cluster
 

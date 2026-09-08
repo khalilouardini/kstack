@@ -10,6 +10,15 @@ and excluded counts, the truncation assertion moves to the filtered count, and
 the branch/worktree tables state that no label reached them. `--label` is a
 GitHub PR label only; `triage` still never reads a tracker.
 
+New `core/summarize-change`: briefs one change in the session as six fixed parts
+— verdict, decision, behavioral change map with `file:line`, blast radius with
+observed gate exit codes, what the change does not do, next action. It refuses
+file-by-file narration and changed-line counts, and forms no merge verdict. It
+is the chat-altitude sibling of `explain-diff-html`, which keeps the deeper
+investigation its quiz requires; the router gained an explaining-work
+disambiguation table covering both plus `delivery-retro`. Enforcement is
+prompt-level — chat text has no artifact to validate.
+
 Added a GitHub-rendered visual guide for the router, workflow phases,
 capability tiers, and the decision and review clusters. The README now links to
 this guide first while retaining the filterable HTML map as a local interactive
