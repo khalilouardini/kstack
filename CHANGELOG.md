@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+`triage` takes an optional `--label <name>` (repeatable) that narrows the PR
+pass to one label partition, for backlogs already split by a milestone label.
+Filtering weakens the skill's completeness promise, so the proposal now carries
+a mandatory `**Filter:**` header line — `none` when unfiltered — plus the scored
+and excluded counts, the truncation assertion moves to the filtered count, and
+the branch/worktree tables state that no label reached them. `--label` is a
+GitHub PR label only; `triage` still never reads a tracker.
+
 Added a GitHub-rendered visual guide for the router, workflow phases,
 capability tiers, and the decision and review clusters. The README now links to
 this guide first while retaining the filterable HTML map as a local interactive
