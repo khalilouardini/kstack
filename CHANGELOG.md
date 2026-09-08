@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+Vendored `follow-builders` (zarazhangrui/follow-builders @ 6df06d7) under a new
+`tools/external/` tier for third-party skills. Frontmatter gained `version`,
+`upstream`, and the `(kstack)` suffix so `bin/check-stack` covers it; the body is
+upstream's verbatim. Feed JSON and the feed-generation workflow are not vendored
+because `scripts/prepare-digest.js` fetches them from upstream `main`.
+
 `triage` takes an optional `--label <name>` (repeatable) that narrows the PR
 pass to one label partition, for backlogs already split by a milestone label.
 Filtering weakens the skill's completeness promise, so the proposal now carries
