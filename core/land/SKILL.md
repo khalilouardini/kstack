@@ -274,7 +274,13 @@ GH_TOKEN="$IMPLEMENTER_TOKEN" gh pr create --base <default-branch> --title "<typ
 Body: what changed and why, the gate results as evidence (`<gates.lint>` clean,
 `<gates.test>` N passed), and anything a reviewer should look at first. A merged
 PR is not gate evidence and neither is a green PR page — the evidence is the gate
-output you ran.
+output you ran. When the branch or task implements an issue whose key uses this
+project's configured `issue_prefix`, include a closing statement in the PR
+description: `Fixes <ISSUE-KEY>`. Do not use `Refs`, `Related to`, or a bare issue
+key for this purpose: they may show the issue alongside the PR but do not make the
+PR a completion link, leaving the team's merge → Done automation with nothing to
+complete. For a PR implementing multiple issues, include a closing statement for
+each. If no issue is being implemented, do not invent one.
 
 **Do not merge it.** Not with `gh pr merge`, not with auto-merge, not "since it's
 green". Merging is a human decision, and it is the only decision this skill
