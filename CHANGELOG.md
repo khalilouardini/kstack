@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+`pr-loop`'s reviewer command now ends in `< /dev/null`. `codex exec` reads extra
+prompt text from stdin whenever stdin is not a TTY, so a round launched from a
+background shell with an open pipe hung on `Reading additional input from
+stdin...` without calling the model (4h42m observed on `codex-cli 0.147.0`).
+
 Vendored `follow-builders` (zarazhangrui/follow-builders @ 6df06d7) under a new
 `tools/external/` tier for third-party skills. Frontmatter gained `version`,
 `upstream`, and the `(kstack)` suffix so `bin/check-stack` covers it; the body is

@@ -273,7 +273,7 @@ The reviewer invocation, verified against `codex-cli 0.147.0`:
 ```bash
 GH_TOKEN="$REVIEWER_TOKEN" codex exec -C "$REPO_ROOT" -s danger-full-access -o "$SCRATCH/codex-round-$N.txt" \
   -m "$MODEL" -c model_reasoning_effort="$EFFORT" \
-  "Use \$review-claude-pr to review PR #$PR and post the findings."
+  "Use \$review-claude-pr to review PR #$PR and post the findings." < /dev/null
 ```
 
 - `-m` and `-c model_reasoning_effort` are required, and both come from the
@@ -288,6 +288,11 @@ GH_TOKEN="$REVIEWER_TOKEN" codex exec -C "$REPO_ROOT" -s danger-full-access -o "
   "make no repository edits" boundary load-bearing. Do not weaken it.
 - `-o <file>` captures the agent's final message, which is what you parse in
   step 3 — do not scrape stdout.
+- `< /dev/null` is required: `codex exec` reads extra prompt text from stdin
+  whenever stdin is not a TTY, so an unattended run with an open pipe on stdin
+  prints `Reading additional input from stdin...` and hangs forever with no
+  review posted (observed 2026-09-21 on `codex-cli 0.147.0`: blocked 4h42m
+  without calling the model).
 - Write the capture file to the session scratchpad, never into the repo.
 
 If a future `codex` version rejects these flags, re-check `codex exec --help`
