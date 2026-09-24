@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+`pr-loop` now uses `gpt-6-sol`/high for routine independent reviews and
+offers `gpt-6-luna`/high as the documented economy override. Optional
+first-review risk triggers route to `gpt-6-astra`/high; later heads return to
+Sol unless Astra is explicitly pinned. Raw line/file thresholds are disabled
+by default, so archived data and fixtures no longer trigger Astra merely by
+inflating PR size. Project-specific path globs can opt into escalation.
+
 `pr-loop`'s reviewer command now ends in `< /dev/null`. `codex exec` reads extra
 prompt text from stdin whenever stdin is not a TTY, so a round launched from a
 background shell with an open pipe hung on `Reading additional input from

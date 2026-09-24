@@ -32,11 +32,18 @@ review_gate:
   scope: null
 
 # Model + effort for pr-loop's `codex exec` reviewer rounds (CONVENTIONS.md §2).
-# Effort escalates by diff size; the tier does not — cross-tier is `--model`.
+# Sol/high is normal. Astra/high is a first-review exception for high-risk paths;
+# use --model gpt-6-luna for an economy pass.
 review_model:
-  slug: gpt-5.6-terra
-  effort: medium
-  escalate_above_lines: 400
+  slug: gpt-6-sol
+  effort: high
+  escalated_slug: gpt-6-astra
+  escalate_above_lines: null
+  escalate_above_files: null
+  escalate_paths:
+    - ".github/workflows/**"
+    - "bin/**"
+    - "tools/github/**"
   escalated_effort: high
 
 identities:
