@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+`pr-loop` now uses `gpt-6-sol`/high for routine independent reviews and
+offers `gpt-6-luna`/high as the documented economy override. Optional
+first-review risk triggers route to `gpt-6-astra`/high; later heads return to
+Sol unless Astra is explicitly pinned. Raw line/file thresholds are disabled
+by default, so archived data and fixtures no longer trigger Astra merely by
+inflating PR size. Project-specific path globs can opt into escalation.
+
 `session-titles` 0.2.0 takes a Claude session's PR from the `prNumber` that
 `list_sessions` reports, and no longer resolves a PR from the branch of a shared
 main checkout, where every session reads whatever is checked out now; Claude rows
