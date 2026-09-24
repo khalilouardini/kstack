@@ -1,6 +1,6 @@
 ---
 name: session-titles
-version: 0.1.0
+version: 0.2.0
 description: Sweep open agent sessions (Claude Code and Codex), resolve the GitHub PR and issue key each one is working on, and prefix each session title so the session list is scannable at a glance. Dry-run by default; nothing is renamed until --apply. Use when asked to "label my sessions", "what is each session working on?", "retitle the agent sessions", or "/session-titles [--apply] [--include-archived]". (kstack)
 ---
 
@@ -40,8 +40,9 @@ Claude Code and Codex sessions live in two systems with no shared API:
 | | Claude Code (this app) | Codex CLI |
 |---|---|---|
 | Enumerate sessions | `mcp__ccd_session_mgmt__list_sessions` | `~/.codex/session_index.jsonl` (one JSON object per line: `id`, `thread_name`, `updated_at`) |
+| Session → PR | `prNumber` / `prState` on each `list_sessions` row (the app's own per-session binding) | none — resolve from branch (§2) |
 | Session → cwd/branch | `mcp__ccd_session_mgmt__get_session` (worktree/branch fields) | `session_meta.payload.cwd` in the first line of `~/.codex/sessions/<Y>/<M>/<D>/rollout-*-<id>.jsonl` matching the session id |
-| Rename | `mcp__ccd_session_mgmt__set_session_title` (supported call) | **No CLI verb exists** (`codex --help`, `codex archive/resume --help` checked on `codex-cli 0.147.0` — only `archive`/`delete`/`unarchive`/`fork`, nothing for title). The title lives in the `thread_name` field of `session_index.jsonl`, which must be edited directly. |
+| Rename | `mcp__ccd_session_mgmt__set_session_title` (supported call) | **No CLI verb exists** (`codex --help`, `codex archive/resume --help` checked on `codex-cli 0.147.0` and again on `0.156.1` — only `archive`/`delete`/`unarchive`/`fork`, nothing for title). The title lives in the `thread_name` field of `session_index.jsonl`, which must be edited directly. |
 
 Because of the last row, this skill has two execution paths that converge on the
 same resolve-PR/resolve-issue-key logic (§2) but diverge on how they enumerate
@@ -78,6 +79,31 @@ name embedded in the cwd path — do not silently drop it, since a stale worktre
 is exactly the case where the title is most likely wrong and most useful to fix.
 
 ## 2. Resolve PR number and issue key (shared logic, either harness)
+
+**Claude Code: take `prNumber` from the `list_sessions` row first.** The app
+binds a PR to each session and reports it there, including for sessions whose
+cwd is the repo's main checkout, where the branch lookup below cannot tell
+sessions apart. Fetch that PR's title/body for the issue-key step with
+`gh pr view <prNumber> --json number,title,body,headRefName` run from the
+session's cwd. Fall back to the branch lookup only when `prNumber` is absent.
+
+**Shared checkout: the branch does not identify the session.** When `$DIR` is the
+repo's main checkout (not a path listed as a separate worktree by
+`git worktree list`), every session opened there reads the same
+`branch --show-current` — whatever is checked out *now*, not what the session
+worked on. In that case:
+- Codex, and Claude rows with no `prNumber`: skip the branch lookup; resolve
+  only from the session's current title (issue-key rule 3 below).
+- Claude rows whose `prNumber` equals the PR of the checkout's current branch and
+  that carry no `branch` field: the app may have derived it the same way. List
+  them in a separate **ambiguous** section of the dry-run with the PR title next
+  to the session title, and leave them out of the rename set unless the user
+  includes them.
+
+> **Worked example (OGUR, 2026-09-24).** Two unrelated sessions in
+> `ogur-landing-page` both reported `prNumber: 8` because that checkout was on
+> PR#8's branch; three Codex sessions in the `kstack` main checkout would all
+> have resolved to the PR of its current feature branch.
 
 For a session with resolved cwd `$DIR`:
 
@@ -142,8 +168,21 @@ Before building it, check whether `{original}` (the session's current title)
 session is a no-op — exclude it from the diff entirely so re-running the sweep
 doesn't pile up duplicate prefixes. If the title carries a *different* stale
 prefix (wrong PR number after a rebase onto a new branch, for instance), strip
-only a leading `<PREFIX>-\d+ / ` and/or `PR#\d+ / ` combination before
-re-prefixing — never touch text after the first non-prefix token.
+only a leading prefix before re-prefixing — never touch text after the first
+non-prefix token. A leading prefix is any of these, case-insensitive, matched
+at the start of the title only:
+
+```
+^(<PREFIX>-\d+\s*/\s*)?PR\s*#\s*\d+\s*[/:]\s*
+^<PREFIX>-\d+\s*[/:]\s*
+```
+
+The `:` separator and the optional whitespace cover hand-typed forms
+(`PR#367: …`, `<PREFIX>-124/PR#359 : …`). Stripping only the skill's own
+`X / ` form would stack a second prefix in front of the human's. A title
+whose hand-typed prefix carries the same keys as the new one still changes
+(format only); mark such rows `format only` in the dry-run so the user can
+drop them.
 
 ## 3a. Apply — Claude Code sessions
 
@@ -154,6 +193,19 @@ mcp__ccd_session_mgmt__set_session_title(session_id, new_title)
 One call per session in the confirmed rename set. Report any call that errors
 (e.g. the session was closed between dry-run and apply) rather than treating it
 as fatal to the whole sweep.
+
+**Verify each write.** After every `set_session_title`, call
+`mcp__ccd_session_mgmt__get_session(session_id)` and compare its `title` with
+`new_title`. Count a session as renamed only when they match; report a mismatch
+per session with both strings. A successful call is not proof the title stuck —
+an earlier run reported no errors and left the sidebar unchanged, and this check
+is what separates a declined or reverted write from a UI that has not refreshed.
+
+The tool's own description says a title the user set by hand needs their
+approval in the app before it is replaced, and that unattended sessions decline.
+On 2026-09-24 (Claude desktop, `claude-opus-5-5`) seven renames, five over
+hand-typed titles, returned without a prompt; do not rely on either behaviour —
+the `get_session` check covers both.
 
 ## 3b. Apply — Codex sessions
 
