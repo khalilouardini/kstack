@@ -69,26 +69,27 @@ review_gate:
 # review agent runs on, not the account it posts under — that is
 # `identities.reviewer`, below.
 #
-# Unset → the reviewer round inherits whatever `~/.codex/config.toml` sets,
-# which on a workstation tuned for interactive work is the frontier model at
-# high effort, paid once per round up to `--max-rounds` times. That is the cost
-# this block exists to stop.
+# The loop always pins a model and effort. A missing block uses the documented
+# Sol/high defaults rather than inheriting the host's interactive settings.
 #
-# `escalate_above_lines` routes by diff size: PRs at or below it review at
-# `effort`, PRs above it at `escalated_effort`. Size is `additions + deletions`
-# from `gh pr view --json additions,deletions`, and it raises EFFORT, not the
-# model tier — effort is the cheaper axis, and a bigger diff needs more
-# thinking over the same reading, not a different reader. Cross-tier
-# escalation stays a deliberate per-invocation `--model` flag.
+# Normal lane: Sol/high. Use --model gpt-6-luna --effort high for a lower-cost
+# pass. Astra/high is reserved for the first review of a PR when a configured
+# risk trigger fires, or for an explicit --model gpt-6-astra invocation.
+# Follow-up heads use Sol/high even if the same risk path remains in the PR.
+# Raw changed-line/file counts include generated data and fixtures, so both
+# size triggers are disabled by default. Add project-specific high-risk paths
+# or opt into a size threshold deliberately.
 #
 # null on any key → pr-loop uses the documented default shown here and says so
-# in its report. This block never refuses: an unset review model produces a
-# review, just an overpriced one, so a refusal would cost more than a default.
+# in its report. This block never refuses: an unset review model can use a
+# pinned default rather than inheriting an unknown host setting.
 review_model:
-  slug: gpt-5.6-terra            # any model slug `codex exec -m` accepts
-  effort: medium                 # low | medium | high | xhigh | max
-  escalate_above_lines: 400      # changed lines above which `escalated_effort` applies.
-                                 # null → no size routing; `effort` is used for every PR.
+  slug: gpt-6-sol                # normal independent-review lane
+  effort: high                   # low | medium | high | xhigh | max
+  escalated_slug: gpt-6-astra    # first review only, when a risk trigger fires
+  escalate_above_lines: null    # optional; raw additions + deletions
+  escalate_above_files: null    # optional; changed-file count
+  escalate_paths: []            # project-specific fnmatch globs; [] disables
   escalated_effort: high
 
 # GitHub logins. No defaults, ever — the human governs and merges, the reviewer

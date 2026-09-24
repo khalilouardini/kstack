@@ -1,7 +1,7 @@
 ---
 name: pr-loop
-version: 0.3.1
-description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED: each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, repeat-finding ledger, head-SHA marker, and pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
+version: 0.4.0
+description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED; each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, repeat-finding ledger, head-SHA marker, and pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
 ---
 
 # pr-loop — run the review ping-pong to a stop condition
@@ -45,14 +45,19 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   only."* Do not substitute a guessed skill.
 
 - **`review_model.slug`, `review_model.effort`,
-  `review_model.escalate_above_lines`, `review_model.escalated_effort`** —
+  `review_model.escalated_slug`, `review_model.escalate_above_lines`,
+  `review_model.escalate_above_files`, `review_model.escalate_paths`, and
+  `review_model.escalated_effort`** —
   which model runs the reviewer round and at what reasoning effort. This is the
   model the review agent runs on, not the account it posts under
   (`identities.reviewer`). **The one block that defaults instead of refusing**
-  (CONVENTIONS.md §2): missing or null → `gpt-5.6-terra` at `medium`,
-  escalating to `high` above 400 changed lines. The default is never silent —
-  the preflight resolution and the final report both state the resolved pair
-  and where each half came from.
+  (CONVENTIONS.md §2): missing or null → `gpt-6-sol` at `high`. On the first
+  review of a PR, configured risk triggers select `gpt-6-astra` at `high`;
+  the raw-size triggers default to disabled, and `escalate_paths` defaults to
+  empty. Subsequent heads use the base lane. Use `--model gpt-6-luna
+  --effort high` for a lower-cost pass, or explicitly pin Astra when another
+  deep review is warranted. The default is never silent — the per-round
+  resolution and final report both state the resolved pair and its source.
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
@@ -105,20 +110,22 @@ mkdir -p "$STATE_DIR"
 LEDGER="$STATE_DIR/$OWNER-$REPO-$PR"
 touch "$LEDGER"
 
-# review-model routing — resolved ONCE, here, and reported. Precedence at each of
-# the two slots independently: invocation flag > .agents/stack.yml > stack default.
+# Read routing configuration here; resolve it again immediately before each
+# paid review, because the first-review exception expires after round 1.
+# Precedence per slot: invocation flag > first-review escalation > base config
+# > stack default. Explicit flags pin their slots for every round.
 FAST="<true iff --fast was passed; otherwise false>"
-MODEL="<review_model.slug, or gpt-5.6-terra>"            # --model overrides
-BASE_EFFORT="<review_model.effort, or medium>"           # --effort overrides, and
-ESCALATED_EFFORT="<review_model.escalated_effort, or high>"    # pins BOTH slots — an
-ESCALATE_ABOVE="<review_model.escalate_above_lines, or 400>"   # explicit effort is not
-                                                         # silently escalated past
-SIZE=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json additions,deletions \
-  --jq '.additions + .deletions')
-EFFORT="$BASE_EFFORT"
-if [ -n "$ESCALATE_ABOVE" ] && [ "$SIZE" -gt "$ESCALATE_ABOVE" ]; then
-  EFFORT="$ESCALATED_EFFORT"
-fi
+BASE_MODEL="<review_model.slug, or gpt-6-sol>"
+BASE_EFFORT="<review_model.effort, or high>"             # --effort overrides
+PINNED_MODEL="<--model value, if passed>"
+PINNED_EFFORT="<--effort value, if passed>"
+MODEL_PINNED="<true iff --model was passed>"
+EFFORT_PINNED="<true iff --effort was passed>"
+ESCALATED_MODEL="<review_model.escalated_slug, or gpt-6-astra>"
+ESCALATED_EFFORT="<review_model.escalated_effort, or high>"
+ESCALATE_ABOVE="<review_model.escalate_above_lines, or empty>"
+ESCALATE_FILES="<review_model.escalate_above_files, or empty>"
+ESCALATE_PATHS=(<review_model.escalate_paths, or no elements>)
 
 # the reviewer contract this loop delegates to, resolved through the host's installed
 # skill path (bin/install symlinks stack skills there). If your host installs skills
@@ -324,7 +331,8 @@ for the reviewer's marker:
 N=$((N+1)); test "$N" -le "$MAX_ROUNDS"   # false ⇒ stop the loop, verdict ROUNDS_EXHAUSTED
 HEAD=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .headRefOid)
 GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews" --jq '.[].body' \
-  | grep -c "codex-review head:$HEAD"
+  > "$SCRATCH/review-bodies.txt"
+grep -c "codex-review head:$HEAD" "$SCRATCH/review-bodies.txt" || true
 ```
 
 `--paginate` is not optional: that endpoint returns 30 reviews per page, and on
@@ -336,9 +344,43 @@ If the marker for **this exact SHA** already exists, the reviewer has already
 been paid for on this code — skip straight to step 3. A Codex round costs real
 money; never spend one on an unchanged head.
 
-**2. Review.** Run the `codex exec` command above. Capture its report. If it
-exits non-zero or posts nothing, do not retry blindly — record it and exit
-`BLOCKED`.
+**2. Review.** Resolve the route immediately before a paid round, not once in
+preflight. The previous round may have posted the first kstack review marker,
+after which an automatic Astra escalation must expire:
+
+```bash
+PRIOR_REVIEW_COUNT=$(grep -c 'codex-review head:' "$SCRATCH/review-bodies.txt" || true)
+SIZE=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json additions,deletions \
+  --jq '.additions + .deletions')
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr diff "$PR" --name-only > "$SCRATCH/changed-paths-raw.txt"
+sort -u "$SCRATCH/changed-paths-raw.txt" > "$SCRATCH/changed-paths.txt"
+FILE_COUNT=$(wc -l < "$SCRATCH/changed-paths.txt" | tr -d ' ')
+MATCHED_PATH=""
+while IFS= read -r path; do
+  for glob in "${ESCALATE_PATHS[@]}"; do
+    case "$path" in $glob) MATCHED_PATH="$path"; break 2 ;; esac
+  done
+done < "$SCRATCH/changed-paths.txt"
+MODEL="$BASE_MODEL"; EFFORT="$BASE_EFFORT"
+if [ "$PRIOR_REVIEW_COUNT" -eq 0 ] && \
+  { { [ -n "$ESCALATE_ABOVE" ] && [ "$SIZE" -gt "$ESCALATE_ABOVE" ]; } \
+    || { [ -n "$ESCALATE_FILES" ] && [ "$FILE_COUNT" -gt "$ESCALATE_FILES" ]; } \
+    || [ -n "$MATCHED_PATH" ]; }; then
+  MODEL="$ESCALATED_MODEL"; EFFORT="$ESCALATED_EFFORT"
+fi
+if [ "$MODEL_PINNED" = true ]; then MODEL="$PINNED_MODEL"; fi
+if [ "$EFFORT_PINNED" = true ]; then EFFORT="$PINNED_EFFORT"; fi
+```
+
+The path loop uses shell glob matching, not substring or regex matching, and
+retains the first matching path for the routing report. Size thresholds are raw GitHub counts if a project opts
+in; generated files and fixtures are not filtered from those optional counts.
+On a follow-up head, even a high-risk path uses the base model unless the
+invocation explicitly pins `--model gpt-6-astra`. This prevents an automatic
+Astra charge for each small fix while allowing a deliberate deep re-review.
+
+Run the `codex exec` command above. Capture its report. If it exits non-zero
+or posts nothing, do not retry blindly — record it and exit `BLOCKED`.
 
 **3. Read the findings.** Fetch the review for `$HEAD` and parse the
 `### Findings` list into `(priority, title, path)` triples. Classify:
@@ -437,10 +479,12 @@ Report one of these, always with the round count and what it cost:
 Design pushback ("this approach is wrong") is **always** `BLOCKED`, never
 something you concede to in an unattended round. That call is the user's.
 
-Every verdict report also carries the review-model routing as one line — model,
-effort, changed-line count, the source of each half, and whether `--fast` was
-requested — for example:
-*"review model: gpt-5.6-terra / high (stack.yml; 812 changed lines > escalate_above_lines 400); fast requested: yes"*.
+Every verdict report also carries the review-model routing for **each paid
+round** — model, effort, fired risk trigger (if any), whether this was the
+first review, the source of each slot, and whether `--fast` was requested —
+for example: *"round 1: gpt-6-astra / high (first review; stack.yml path
+trigger: bin/install); round 2: gpt-6-sol / high (follow-up); fast requested:
+no"*.
 Without it the escalation is invisible and the next reader cannot tell a cheap
 round from an expensive one.
 

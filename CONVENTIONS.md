@@ -60,7 +60,10 @@ review_gate:
 review_model:                   # which model reviews, and how hard — pr-loop only
   slug: <model-slug|null>       # passed to `codex exec -m`
   effort: <low|medium|high|xhigh|max|null>
-  escalate_above_lines: <int|null>   # changed lines above which escalated_effort applies
+  escalated_slug: <model-slug|null>  # first-review model when a risk trigger fires
+  escalate_above_lines: <int|null>  # optional raw changed-line trigger
+  escalate_above_files: <int|null>  # optional changed-file trigger
+  escalate_paths: []                # fnmatch globs; any matching changed path triggers
   escalated_effort: <effort|null>
 identities:
   maintainer: <gh-login|null>   # human owner: governs and merges
@@ -74,11 +77,16 @@ spec_output_dir: <path|null>
 
 `review_model` is the one block that defaults rather than refuses, and the
 reason is the asymmetry: an unset gate command silently passes a check that
-never ran, while an unset review model still produces a review — just at
-whatever tier the host's `~/.codex/config.toml` happens to name, which is a
-cost bug, not a correctness one. Refusing there would cost more than
-defaulting. The skill states the resolved model, effort, and where each came
-from in its report, so the default is never silent.
+never ran, while an unset review model can safely use a documented, pinned
+default rather than inheriting the host's interactive setting. Refusing there
+would cost more than defaulting. The default is `gpt-6-sol`/`high`. On the
+first review of a PR,
+configured risk triggers select `gpt-6-astra`/`high`; later heads return to
+the base lane unless `--model` explicitly pins Astra. Raw size triggers are
+disabled by default because generated data and fixtures can inflate them.
+`--model gpt-6-luna --effort high` is the economy override. The skill states
+the resolved model, effort, and where each came from in its report, so the
+default is never silent.
 
 **Missing-key policy — never silently default.** A skill that needs a key and
 does not find it either asks the user (interactive judgment calls) or refuses
