@@ -9,6 +9,15 @@ Sol unless Astra is explicitly pinned. Raw line/file thresholds are disabled
 by default, so archived data and fixtures no longer trigger Astra merely by
 inflating PR size. Project-specific path globs can opt into escalation.
 
+`session-titles` 0.2.0 takes a Claude session's PR from the `prNumber` that
+`list_sessions` reports, and no longer resolves a PR from the branch of a shared
+main checkout, where every session reads whatever is checked out now; Claude rows
+the app may have resolved that way go to an ambiguous section of the dry-run.
+The prefix strip now matches hand-typed `PR#12: ` and `<PREFIX>-3/PR#12 : `
+forms, so re-prefixing no longer stacks a second prefix. `--apply` checks each
+write with `get_session` and counts a session as renamed only when the title
+matches.
+
 `pr-loop`'s reviewer command now ends in `< /dev/null`. `codex exec` reads extra
 prompt text from stdin whenever stdin is not a TTY, so a round launched from a
 background shell with an open pipe hung on `Reading additional input from
