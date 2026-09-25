@@ -99,6 +99,8 @@ nowhere.
   do this sprint" → invoke `/delivery-retro`
 - "label my sessions", "what is each session working on", "retitle the agent
   sessions" → invoke `/session-titles`
+- "label my PRs", "tag the open PRs", "sweep PR labels", "which PRs are
+  MVP-2" → invoke `/pr-label-sweep`
 - "audit the board", "clean up the workspace", "reconcile finished issues",
   "these statuses are wrong" → invoke `/linear-steward`
 - "audit the release", "is the release ready", "what's blocking the release",

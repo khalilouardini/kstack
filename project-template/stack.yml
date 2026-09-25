@@ -34,7 +34,8 @@ scope_doc: null                  # e.g. docs/product/scope.md
 workspace_contract: null         # e.g. docs/product/tracker-contract.md
 
 # Issue-key prefix used by your tracker, without the number. Read by
-# session-titles (title prefixes) and next (issue references).
+# session-titles (title prefixes), next (issue references), and pr-label-sweep
+# (tracker rules).
 # null → session-titles falls back to PR numbers only.
 issue_prefix: null               # e.g. ACME  → matches ACME-123
 
@@ -117,3 +118,19 @@ role_appendix_dir: null          # e.g. .agents/appendices
 # Where the spec pipeline writes its spec files.
 # null → spec asks once where to write, and does not guess a directory.
 spec_output_dir: null            # e.g. docs/product/specs
+
+# Which GitHub labels pr-label-sweep adds to open PRs, and when. Each rule names
+# one existing repo label; it fires when ANY of its matchers matches:
+#   linear_project — the linked issue's project (needs issue_prefix + tracker MCP)
+#   linear_label   — any of the linked issue's labels
+#   paths          — fnmatch globs over the PR's changed paths
+#   text           — case-insensitive regexes over PR title, head branch, and the
+#                    linked issue's title (never the PR body)
+# The sweep only adds labels, never removes or creates them.
+# Empty → pr-label-sweep refuses and prints a draft block from `gh label list`.
+pr_labels:
+  rules: []
+  # - label: backend
+  #   paths: ["src/server/**"]
+  # - label: MVP-2
+  #   linear_project: ["Road to MVP-2"]

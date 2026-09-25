@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+New `tools/github/pr-label-sweep`: adds GitHub labels to open PRs from rules in
+a new `pr_labels.rules` block of `.agents/stack.yml` — the linked tracker
+issue's project or labels, fnmatch globs over changed paths, and regexes over
+the PR title, head branch and issue title (never the body). Dry-run by default,
+add-only, and it never creates a repo label; managed labels no rule supports are
+reported, not removed. Tracker rules are skipped, and the report says so, when
+`issue_prefix` is unset or the tracker MCP is not connected.
+
 `pr-loop` now uses `gpt-6-sol`/high for routine independent reviews and
 offers `gpt-6-luna`/high as the documented economy override. Optional
 first-review risk triggers route to `gpt-6-astra`/high; later heads return to

@@ -81,6 +81,7 @@ flowchart LR
       health["/health"]
       retro["/delivery-retro"]
       titles["/session-titles"]
+      labels["/pr-label-sweep"]
       steward["/linear-steward"]
       audit["/linear-release-audit"]
     end
@@ -89,7 +90,7 @@ flowchart LR
     classDef phase fill:#ddeeec,stroke:#1d6a63,color:#16292b
     classDef stopStyle fill:#f6dee5,stroke:#a04360,color:#16292b
     class router route
-    class spec,next,triage,intake,roles,dispatch,investigate,controls,explain,produce,respond,loop,landSkill,health,retro,titles,steward,audit phase
+    class spec,next,triage,intake,roles,dispatch,investigate,controls,explain,produce,respond,loop,landSkill,health,retro,titles,labels,steward,audit phase
     class human stopStyle
 ```
 
@@ -113,7 +114,7 @@ flowchart TB
     core --> coreSkills["router · investigate · careful<br/>freeze · unfreeze · explain-diff-html"]
     gates --> gatedCore["land · health"]
     scope --> roleSkills["spec · triage<br/>four role contracts"]
-    identities --> githubSkills["review skills · delivery-retro<br/>session-titles"]
+    identities --> githubSkills["review skills · delivery-retro<br/>session-titles · pr-label-sweep"]
     workspace --> linearSkills["next · dispatch-implementation<br/>feature-intake · steward · release-audit"]
 
     classDef source fill:#f6e6cf,stroke:#b8690c,color:#16292b
@@ -133,7 +134,7 @@ flowchart TB
 | Router | Local files | [`/stack`](../router/stack/SKILL.md) |
 | Core | Git + local filesystem | [`/investigate`](../core/investigate/SKILL.md), [`/careful`](../core/careful/SKILL.md), [`/freeze`](../core/freeze/SKILL.md), [`/unfreeze`](../core/unfreeze/SKILL.md), [`/explain-diff-html`](../core/explain-diff-html/SKILL.md), [`/land`](../core/land/SKILL.md), [`/health`](../core/health/SKILL.md) |
 | Roles | `scope_doc` | [`/spec`](../roles/spec/SKILL.md), [`/triage`](../roles/triage/SKILL.md), [`product-manager`](../roles/product-manager.md), [`tech-lead`](../roles/tech-lead.md), [`designer`](../roles/designer.md), [`qa`](../roles/qa.md) |
-| GitHub | `gh` plus configured identities or issue prefix | [`/review-claude-pr`](../tools/github/review-claude-pr/SKILL.md), [`/review-comments`](../tools/github/review-comments/SKILL.md), [`/pr-loop`](../tools/github/pr-loop/SKILL.md), [`/delivery-retro`](../tools/github/delivery-retro/SKILL.md), [`/session-titles`](../tools/github/session-titles/SKILL.md) |
+| GitHub | `gh` plus configured identities or issue prefix | [`/review-claude-pr`](../tools/github/review-claude-pr/SKILL.md), [`/review-comments`](../tools/github/review-comments/SKILL.md), [`/pr-loop`](../tools/github/pr-loop/SKILL.md), [`/delivery-retro`](../tools/github/delivery-retro/SKILL.md), [`/session-titles`](../tools/github/session-titles/SKILL.md), [`/pr-label-sweep`](../tools/github/pr-label-sweep/SKILL.md) |
 | Linear | Linear workspace + `workspace_contract` | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md) |
 
 Missing configuration is a supported state. A skill either asks for the missing
