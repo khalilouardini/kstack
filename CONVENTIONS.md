@@ -47,7 +47,7 @@ stack: 2                        # config schema version
 project: <slug>
 scope_doc: <path|null>          # scope/priority contract — roles, spec, triage, next
 workspace_contract: <path|null> # Linear workspace rules — tools/linear
-issue_prefix: <PREFIX|null>     # e.g. OGUR — session-titles, next
+issue_prefix: <PREFIX|null>     # e.g. OGUR — session-titles, next, pr-label-sweep
 gates:                          # `lint` + `test` are the two any skill may assume.
   lint: <cmd|null>              # must pass before any commit/push claim
   test: <cmd|null>              # fast suite
@@ -73,6 +73,9 @@ protected_branches: []          # fnmatch globs (`demo/*`) matched against the
                                 # branch name; triage may never propose CLOSE for one
 role_appendix_dir: <path|null>  # per-role project appendices (traps, factories, gates)
 spec_output_dir: <path|null>
+pr_labels:                      # pr-label-sweep only
+  rules: []                     # each: label + any of linear_project, linear_label,
+                                # paths (fnmatch), text (regex); a rule fires on ANY match
 ```
 
 `review_model` is the one block that defaults rather than refuses, and the

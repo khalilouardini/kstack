@@ -92,6 +92,7 @@ merges on its own.
 | [`/health`](core/health/SKILL.md) | Runs the project's own gates, scores them, reports the trend |
 | [`/delivery-retro`](tools/github/delivery-retro/SKILL.md) | Was this period fruitful vs the previous equal period — refuses activity metrics |
 | [`/session-titles`](tools/github/session-titles/SKILL.md) | Retitles open agent sessions with their issue key and PR |
+| [`/pr-label-sweep`](tools/github/pr-label-sweep/SKILL.md) | Adds milestone, area and client labels to open PRs from configured rules; add-only |
 | [`/linear-steward`](tools/linear/linear-steward/SKILL.md) | Tracker structural health; mutates only on explicit apply |
 | [`/linear-release-audit`](tools/linear/linear-release-audit/SKILL.md) | Audits a release against its gates using tracker + GitHub evidence |
 | [`/follow-builders`](tools/external/follow-builders/SKILL.md) | Vendored from [zarazhangrui/follow-builders](https://github.com/zarazhangrui/follow-builders): AI-builders digest, in-chat / Telegram / email. Needs `node`; `npm ci` in its `scripts/` once |

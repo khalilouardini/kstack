@@ -369,6 +369,7 @@ const SKILLS = [
   { n:"/health", t:"core", p:5, e:"ro", does:"Runs the project's own gates, scores them, and reports the trend against the last run. Never edits, never fixes.", says:["how healthy is this codebase?","quality score"] },
   { n:"/delivery-retro", t:"gh", p:5, e:"ro", does:"Was this period fruitful versus the previous equal period? Measures outcomes, flow, quality and focus — and refuses commits, lines and PR counts as scores.", says:["was this week fruitful?","what did we ship"] },
   { n:"/session-titles", t:"gh", p:5, e:"ro", does:"Sweeps open agent sessions across both harnesses, resolves each to a branch, PR and issue key, and retitles them so the session list is scannable.", says:["what is each session working on?"] },
+  { n:"/pr-label-sweep", t:"gh", p:5, e:null, does:"Adds the milestone, area and client labels your rules call for to every open PR, each citing the tracker project, changed path or title keyword that fired it. Add-only; never creates a label.", says:["label my PRs","sweep PR labels"] },
   { n:"/linear-steward", t:"linear", p:5, e:null, does:"Structural health of the tracker: unprojected, stale, GitHub-contradicted, duplicated, superseded, ungateable. Mutates nothing unless explicitly applied.", says:["audit the board","these statuses are wrong"] },
   { n:"/linear-release-audit", t:"linear", p:5, e:"ro", does:"Audits a release against its gate criteria using tracker and GitHub evidence together. Headline finding: issues marked done with no acceptance evidence.", says:["is the release ready?","what's blocking the release"] },
 ];
@@ -418,7 +419,7 @@ const LADDER = [
   { k:"gates.lint · gates.test", d:"your authoritative commands", v:[["core","/land"],["core","/health"]] },
   { k:"scope_doc", d:"what's in and out right now", v:[["roles","/spec"],["roles","/triage"],["roles","product-manager"],["roles","tech-lead"],["roles","designer"],["roles","qa"]] },
   { k:"identities.maintainer · identities.reviewer · identities.implementer", d:"who governs, reviews, and implements", v:[["gh","/review-claude-pr"],["gh","/review-comments"],["gh","/pr-loop"]] },
-  { k:"issue_prefix", d:"your tracker's key format", v:[["gh","/session-titles"],["gh","/delivery-retro"]] },
+  { k:"issue_prefix", d:"your tracker's key format", v:[["gh","/session-titles"],["gh","/delivery-retro"],["gh","/pr-label-sweep"]] },
   { k:"workspace_contract", d:"your tracker's own rules", v:[["linear","/next"],["linear","/dispatch-implementation"],["linear","/linear-steward"],["linear","/linear-feature-intake"],["linear","/linear-release-audit"]] },
 ];
 document.getElementById("ladder").innerHTML = LADDER.map(r => `
