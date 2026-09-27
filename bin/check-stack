@@ -310,6 +310,14 @@ def main(argv: list[str]) -> int:
         check_doc(path, r)
     scripts = check_scripts(r)
     pointers = check_codex_pointers(r)
+    routing_tests = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s",
+         str(REPO / "tools/github/pr-loop/tests")],
+        capture_output=True, text=True,
+    )
+    if routing_tests.returncode:
+        r.fail("tools/github/pr-loop/tests", "routing", routing_tests.stderr.strip())
+
 
     for where, check, msg in r.warns:
         print(f"WARN  {where}  [{check}] {msg}")

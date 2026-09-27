@@ -1,10 +1,10 @@
 ---
 name: review-claude-pr
-version: 0.2.0
-description: Review an open PR authored by the consuming repo's implementer identity and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
+version: 0.3.0
+description: Review a bot-authored PR with Codex or Claude using author-based role assignment and immediately post prioritized P0–P3 findings as the other bot. Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
-# review-claude-pr — review a bot-authored PR as Codex
+# review-claude-pr — review a bot-authored PR with the other engine
 
 ## When to invoke
 
@@ -21,6 +21,8 @@ defects, and never answers, fixes, or resolves them — that is
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before anything else:
 
+- **`identities.maintainer`** — required to validate that neither bot role is
+  assigned to the human maintainer.
 - **`identities.reviewer`** — the review-agent gh login, normally Codex, that
   publishes every review. Missing or null → **refuse**, naming
   `identities.reviewer`. Called `$REVIEWER` below.
@@ -42,11 +44,24 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
-This skill does not choose the model it runs on: it inherits whatever Codex
-session invoked it. Launched by `pr-loop`, that is the pair `pr-loop` resolved
-from `review_model.*`; launched by hand from an interactive Codex session, it
-is that session's own model and effort. If cost matters on a hand-run review,
-set them on the `codex` invocation — there is nothing to set here.
+This skill inherits its engine's model and effort. `pr-loop` selects them
+from the engine-specific configuration; an interactive invocation uses the
+current session's settings.
+
+## Resolve the PR roles
+
+Once the target PR is known, read
+[../pr-loop/references/routing.md](../pr-loop/references/routing.md) and follow
+its role-resolution and attribution rules. If unreadable, stop. Use the resolved
+accounts in every credential lookup, authorship check, filter, and delivery
+check below; do not restore the configured defaults. A parent loop's expected
+route must match the result. The standalone null-implementer fallback in
+`review-comments` is the only exception. Loop delegation and model launching
+belong to `pr-loop`, not to these child skills.
+
+The current engine must equal `$REVIEWER_ENGINE` before reviewing or posting.
+On mismatch, stop and name the required engine; an account swap does not
+change which model performed a review.
 
 ## Non-negotiable boundaries
 
@@ -62,7 +77,7 @@ the post-submit verification checks after the fact. Treat them as hard rules.
   once with `gh auth token --user "$REVIEWER"`, pass it only through `GH_TOKEN` on
   each `gh` invocation, and never call `gh auth switch`. Never post from
   `$IMPLEMENTER`, the maintainer, or another identity.
-- Put `**Review performed by Codex.**` in the body of every submitted GitHub
+- Put `**Review performed by <REVIEWER_LABEL>.**` in the body of every submitted GitHub
   review. This means the review body attached to the PR, not the PR description.
 - Post the completed review immediately. Do not show drafts or ask the user to
   approve wording.
@@ -118,7 +133,7 @@ Resolve the reviewer credential and verify the writer before reviewing. Keep the
 token in this shell only; do not print it or export it into unrelated commands:
 
 ```bash
-REVIEWER="<identities.reviewer>"
+REVIEWER="<resolved reviewer account>"
 REVIEWER_TOKEN=$(gh auth token --hostname github.com --user "$REVIEWER")
 ACTIVE_LOGIN=$(GH_TOKEN="$REVIEWER_TOKEN" gh api user --jq .login)
 test "$ACTIVE_LOGIN" = "$REVIEWER"
@@ -137,11 +152,12 @@ stop unless the user explicitly requested that exact PR despite its author.
 Use a hidden idempotency marker tied to the reviewed head SHA:
 
 ```text
-<!-- codex-review head:<full-head-sha> -->
+<!-- <REVIEW_MARKER> head:<full-head-sha> -->
 ```
 
-Check existing submitted reviews and conversation comments for that exact
-marker. If it exists, do not duplicate the review unless the user explicitly
+Substitute the resolved label and marker; never post the placeholders.
+Check existing submitted, non-PENDING reviews by `$REVIEWER` for that exact
+engine marker and head SHA. If it exists, do not duplicate the review unless the user explicitly
 asked to rerun it. A new head SHA is a new review target.
 
 ## 2. Inspect exactly what would merge
@@ -249,9 +265,9 @@ Anchor every inline comment to a changed line on the PR head. The review body
 must follow this shape:
 
 ```markdown
-## Codex review
+## <REVIEWER_LABEL> review
 
-**Review performed by Codex.**
+**Review performed by <REVIEWER_LABEL>.**
 
 Reviewed `<short-head-sha>` against `<base-branch>`.
 
@@ -264,11 +280,11 @@ Reviewed `<short-head-sha>` against `<base-branch>`.
 
 One concise assessment, followed by material test gaps or residual risks.
 
-<!-- codex-review head:<full-head-sha> -->
+<!-- <REVIEW_MARKER> head:<full-head-sha> -->
 ```
 
 Omit `Findings` when there are none. For a clean review, post a `COMMENT` review
-whose assessment says `No findings.` and still includes the Codex attribution and
+whose assessment says `No findings.` and still includes the resolved engine attribution and
 idempotency marker.
 
 Submit through the GitHub review API so the body, event, and ordered inline
@@ -291,7 +307,7 @@ After posting, fetch the submitted review and verify all of the following:
 
 - author login is `$REVIEWER`;
 - state matches the intended event;
-- body contains `Review performed by Codex` and the head-SHA marker;
+- body contains `Review performed by <REVIEWER_LABEL>` and the head-SHA marker;
 - every planned finding appears either inline or in the top-level body.
 
 ## Report back
