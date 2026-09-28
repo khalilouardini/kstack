@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+`pr-loop` reverses accounts and engines for PRs opened by the configured
+reviewer: Codex-authored PRs receive Claude reviews and Codex fixes. Shared
+routing aligns replies and attribution, scopes review reuse to account/engine/head,
+and retains the default Claude → Codex flow. `review_engines` and
+`claude_review_model` configure the pairing and Claude model independently of
+Codex model routing.
+
 New `tools/github/pr-label-sweep`: adds GitHub labels to open PRs from rules in
 a new `pr_labels.rules` block of `.agents/stack.yml` — the linked tracker
 issue's project or labels, fnmatch globs over changed paths, and regexes over

@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""Resolve PR roles without credentials, network access, or configuration writes."""
+import argparse
+import json
+
+
+def resolve(maintainer, reviewer, implementer, author, reviewer_engine='codex', implementer_engine='claude'):
+    accounts = [maintainer, reviewer, implementer]
+    if any(not value or value == 'null' for value in accounts):
+        raise ValueError('identities.maintainer, reviewer, and implementer are required')
+    if len({value.casefold() for value in accounts}) != 3:
+        raise ValueError('maintainer, reviewer, and implementer must be distinct')
+    if {reviewer_engine, implementer_engine} != {'codex', 'claude'}:
+        raise ValueError('review_engines must map the two bot identities to codex and claude')
+    reverse = author.casefold() == reviewer.casefold()
+    return dict(
+        direction='reverse' if reverse else 'forward',
+        reviewer=implementer if reverse else reviewer,
+        implementer=reviewer if reverse else implementer,
+        reviewer_engine=implementer_engine if reverse else reviewer_engine,
+        implementer_engine=reviewer_engine if reverse else implementer_engine,
+        author_matched=author.casefold() in {reviewer.casefold(), implementer.casefold()},
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    for key in ('maintainer', 'reviewer', 'implementer', 'author'):
+        parser.add_argument('--' + key, required=True)
+    parser.add_argument('--reviewer-engine', default='codex')
+    parser.add_argument('--implementer-engine', default='claude')
+    args = parser.parse_args()
+    try:
+        print(json.dumps(resolve(**vars(args))))
+    except ValueError as exc:
+        parser.error(str(exc))
+
+
+if __name__ == '__main__':
+    main()

@@ -1,6 +1,6 @@
 ---
 name: review-comments
-version: 0.2.0
+version: 0.3.0
 description: Find unanswered PR feedback, make the warranted code fixes, and reply under the configured implementer identity using a per-command token that never switches global gh state. Use when asked to "answer the review comments", "reply to the review", "address the PR feedback", or "/review-comments [PR#]". (kstack)
 ---
 
@@ -43,6 +43,21 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
+## Resolve the PR roles
+
+Once the target PR is known, read
+[../pr-loop/references/routing.md](../pr-loop/references/routing.md) and follow
+its role-resolution and attribution rules. If unreadable, stop. Use the resolved
+accounts in every credential lookup, authorship check, filter, and delivery
+check below; do not restore the configured defaults. A parent loop's expected
+route must match the result. The standalone missing-role fallbacks in the reference retain their existing
+behavior without reversal. Loop delegation and model launching
+belong to `pr-loop`, not to these child skills.
+
+When both bot identities are configured, the current engine must equal
+`$IMPLEMENTER_ENGINE` before editing or replying. On mismatch, stop and name
+the required engine.
+
 ## What this skill does
 
 The consuming repo declares distinct GitHub roles in `.agents/stack.yml`. This
@@ -65,16 +80,18 @@ tell the user — never post review answers from the wrong identity.
 
 ## What to scope
 
-1. **Resolve the target PR.** If the user passed a number (`/review-comments 117`), use it. Otherwise auto-detect the current branch's PR:
+1. **Bootstrap the maintainer token** using the lookup and verification in step 2
+   before the first PR read. Then **resolve the target PR.** If the user passed a number (`/review-comments 117`), use it. Otherwise auto-detect the current branch's PR:
    ```bash
    GH_TOKEN="$MAINTAINER_TOKEN" gh pr view --json number,url,headRefName,state
    ```
    If there is no PR for the branch, report that and stop.
-2. **Resolve and verify the credentials** without changing global auth state:
+2. **Resolve the route** from the target PR author using the reference above,
+   then **resolve and verify the credentials** without changing global auth state:
    ```bash
    MAINTAINER="<identities.maintainer>"
-   REVIEWER="<identities.reviewer>"       # may be null
-   IMPLEMENTER="<identities.implementer>" # null degrades to MAINTAINER as documented above
+   REVIEWER="<resolved reviewer account>"       # may be null standalone
+   IMPLEMENTER="<resolved implementer account>" # null uses documented fallback
    MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
    test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
    OWNER_REPO=$(GH_TOKEN="$MAINTAINER_TOKEN" gh repo view --json nameWithOwner --jq .nameWithOwner)
@@ -182,7 +199,7 @@ Apply the approved code edits first, then run the consuming repo's pre-push gate
 ```bash
 <gates.lint> && <gates.test>
 ```
-Commit/push under the user's normal branch discipline. **Commits use the user's git identity (the SSH key) — only the PR comments go out as the bot.** This split is intentional: the fix is authored by the human/Claude, the conversation reply is authored by the bot.
+Commit/push under the user's normal branch discipline. **Commits use the user's git identity (the SSH key) — only the PR comments go out as the bot.** This split is intentional: the fix is authored by the implementation session, the conversation reply is authored by the bot.
 
 **Re-fetch the comment `databaseId`s immediately before posting.** Reviews can be re-attributed or re-submitted mid-session, which invalidates ids captured earlier — a reply against a dead id fails or lands on the wrong thread.
 

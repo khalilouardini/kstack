@@ -1,7 +1,7 @@
 ---
 name: pr-loop
-version: 0.4.0
-description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED; each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, repeat-finding ledger, head-SHA marker, and pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
+version: 0.5.0
+description: Drive bounded review and fix rounds on a bot-authored PR, selecting Codex or Claude to review the other engine’s work from the PR author. Stops at CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
 ---
 
 # pr-loop — run the review ping-pong to a stop condition
@@ -50,7 +50,7 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   `review_model.escalated_effort`** —
   which model runs the reviewer round and at what reasoning effort. This is the
   model the review agent runs on, not the account it posts under
-  (`identities.reviewer`). **The one block that defaults instead of refusing**
+  (`identities.reviewer`). **Model settings default instead of refusing**
   (CONVENTIONS.md §2): missing or null → `gpt-6-sol` at `high`. On the first
   review of a PR, configured risk triggers select `gpt-6-astra` at `high`;
   the raw-size triggers default to disabled, and `escalate_paths` defaults to
@@ -61,15 +61,27 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
+## Resolve the direction
+
+Before preflight, read [references/routing.md](references/routing.md) and follow
+it in full. It defines author-based account/engine routing, delegation to the
+implementation engine, Claude model selection and invocation, and marker
+verification. If unreadable, stop. Its resolved roles replace the configured
+defaults in every command below. Resolve roles before tokens or models; the
+maintainer token used to read the PR is the bootstrap exception.
+
+The Codex-specific model block and invocation below apply **only** when
+`REVIEWER_ENGINE=codex`. For Claude, use the reference's model block and command.
+The original `/pr-loop <PR#>` invocation supports both directions automatically.
+
 ## What this skill drives
 
-This skill is the **driver** for two review skills that already exist and are
-not changed here:
+This skill is the **driver** for two review skills:
 
 - **the reviewer** — kstack [`tools/github/review-claude-pr`](../review-claude-pr/SKILL.md),
-  run by Codex, posts a `COMMENT` review as `identities.reviewer`.
+  run by the resolved review engine, posts a `COMMENT` review as `$REVIEWER`.
 - **the implementer** — kstack [`review-comments`](../review-comments/SKILL.md),
-  fixes the code and replies as `identities.implementer`.
+  fixes the code and replies as `$IMPLEMENTER`.
 
 Neither one decides when to stop. This one does. It is **unattended by design**:
 it posts, pushes, and replies without asking. It never merges unless `--merge`
@@ -86,10 +98,10 @@ MAX_ROUNDS=5; N=0                                        # --max-rounds override
                                                          # N counts rounds in THIS invocation only —
                                                          # see "Resuming after ROUNDS_EXHAUSTED"
 MAINTAINER="<identities.maintainer>"                    # from .agents/stack.yml
-REVIEWER="<identities.reviewer>"                        # Codex by default
-IMPLEMENTER="<identities.implementer>"                  # Claude by default
+REVIEWER="<resolved reviewer account>"                 # from routing.md
+IMPLEMENTER="<resolved implementer account>"           # from routing.md
 
-codex --version                                          # the loop is not runnable without it
+"$REVIEWER_ENGINE" --version                            # missing selected engine blocks
 MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
 REVIEWER_TOKEN=$(gh auth token --hostname github.com --user "$REVIEWER")
 IMPLEMENTER_TOKEN=$(gh auth token --hostname github.com --user "$IMPLEMENTER")
@@ -130,7 +142,7 @@ ESCALATE_PATHS=(<review_model.escalate_paths, or no elements>)
 # the reviewer contract this loop delegates to, resolved through the host's installed
 # skill path (bin/install symlinks stack skills there). If your host installs skills
 # somewhere else, assert that path instead — but assert one.
-test -r "$HOME/.codex/skills/review-claude-pr/SKILL.md"
+test -r "$REVIEW_SKILL"  # canonical absolute path resolved as routing.md specifies
 
 # the project review gate, ONLY when review_gate.skill_path is non-null — tracked,
 # because an untracked copy is not a dependency
@@ -149,13 +161,10 @@ CLAUDE_COMMITS=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json commits \
         or (.messageBody | split("\n") | any(test("^Co-Authored-By: Claude\\b.*<[^>]+>\\s*$"; "i"))))] | length')
 ```
 
-`state` must be `OPEN`. If `codex` is absent, stop and tell the user to install
-it (`npm i -g @openai/codex`) — do not fall back to reviewing your own PR
-yourself, which defeats the entire point of the loop.
-
-If the reviewer skill file is missing, stop. `codex exec` will silently proceed
-without it, produce no review and no marker, and the loop will report `BLOCKED`
-for a reason that looks like a Codex failure but is a missing dependency.
+`state` must be `OPEN`. If the selected engine or canonical reviewer skill
+is absent, stop with `BLOCKED`. Never substitute another engine or review the
+implementation yourself. Confirm both child skills include the routing contract;
+a stale installed skill must not silently restore the default identities.
 
 ### Authorship scope — enforced here, not assumed
 
@@ -168,7 +177,7 @@ Stop unless one of these holds, each machine-checked in preflight:
 
 - `$AUTHOR` or one of `$COMMIT_AUTHORS` is `$IMPLEMENTER` — a PR the implementer has already
   touched in earlier rounds; or
-- `$CLAUDE_COMMITS` is non-zero — the compatibility case for an older PR opened
+- The route is forward, `$IMPLEMENTER_ENGINE=claude`, and `$CLAUDE_COMMITS` is non-zero — the compatibility case for an older PR opened
   under the maintainer account: a head commit is authored by the `claude`
   login or carries a `Co-Authored-By: Claude` **trailer line**: a whole line
   starting `Co-Authored-By: Claude` and ending in an `<email>` address. A prose
@@ -287,7 +296,7 @@ if [ "$FAST" = true ]; then
 fi
 GH_TOKEN="$REVIEWER_TOKEN" codex exec -C "$REPO_ROOT" -s danger-full-access -o "$SCRATCH/codex-round-$N.txt" \
   -m "$MODEL" -c model_reasoning_effort="$EFFORT" "${FAST_ARGS[@]}" \
-  "Use \$review-claude-pr to review PR #$PR and post the findings." < /dev/null
+  "$REVIEW_PROMPT" < /dev/null
 ```
 
 - `--fast` sets `service_tier="fast"` and enables the CLI's `fast_mode` feature
@@ -330,22 +339,23 @@ for the reviewer's marker:
 ```bash
 N=$((N+1)); test "$N" -le "$MAX_ROUNDS"   # false ⇒ stop the loop, verdict ROUNDS_EXHAUSTED
 HEAD=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .headRefOid)
-GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews" --jq '.[].body' \
+GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews" --jq '.[] | select(.user.login == "'"$REVIEWER"'" and .state != "PENDING") | .body' \
   > "$SCRATCH/review-bodies.txt"
-grep -c "codex-review head:$HEAD" "$SCRATCH/review-bodies.txt" || true
+grep -Fxc "<!-- $REVIEW_MARKER head:$HEAD -->" "$SCRATCH/review-bodies.txt" || true
 ```
 
 `--paginate` is not optional: that endpoint returns 30 reviews per page, and on
 a PR with more than one page the marker for the current head can sit on a later
-one. Missing it buys a duplicate Codex review and breaks the one-round-per-SHA
+one. Missing it buys a duplicate review and breaks the one-round-per-SHA
 invariant this skill is built around.
 
 If the marker for **this exact SHA** already exists, the reviewer has already
-been paid for on this code — skip straight to step 3. A Codex round costs real
+been paid for on this code — skip straight to step 3. A review round costs real
 money; never spend one on an unchanged head.
 
-**2. Review.** Resolve the route immediately before a paid round, not once in
-preflight. The previous round may have posted the first kstack review marker,
+**2. Review.** For a Codex reviewer only, resolve the model immediately before
+a paid round, not once in preflight. Claude uses the routing reference’s model
+settings and skips this Codex block. The previous round may have posted the first kstack review marker,
 after which an automatic Astra escalation must expire:
 
 ```bash
@@ -379,10 +389,13 @@ On a follow-up head, even a high-risk path uses the base model unless the
 invocation explicitly pins `--model gpt-6-astra`. This prevents an automatic
 Astra charge for each small fix while allowing a deliberate deep re-review.
 
-Run the `codex exec` command above. Capture its report. If it exits non-zero
+Run the selected engine’s reviewer command. Capture its report. If it exits non-zero
 or posts nothing, do not retry blindly — record it and exit `BLOCKED`.
 
-**3. Read the findings.** Fetch the review for `$HEAD` and parse the
+**3. Read the findings.** Fetch the submitted review for `$HEAD`, verified
+against the resolved account and engine marker as routing.md requires. If the
+head moved during review, stop `BLOCKED`; never apply an old-head verdict to
+new code. Parse the
 `### Findings` list into `(priority, title, path)` triples. Classify:
 
 - any `P0`/`P1`/`P2` → there is work to do, continue to step 4.
@@ -408,7 +421,7 @@ repair attempt. Still failing → push nothing further, exit `BLOCKED`.
 "have I *already answered* this finding", and the answer has to outlive the
 process. `$SCRATCH` does not: it is `mktemp -d` under a `trap … EXIT`, so every
 capture from a previous invocation is gone before the next one starts. A guard
-that compares only to the previous in-session round cannot see a `P0` that Codex
+that compares only to the previous in-session round cannot see a `P0` that the reviewer
 has now raised four times across two invocations, and reads it as a first
 sighting.
 
@@ -432,7 +445,7 @@ minimum separate two findings that differ only by file. A finding parsed without
 a path falls back to `-`, which groups all path-less findings together; that is
 the one place the collision survives, and it is the conservative direction.
 
-A hit means Codex and you disagree: exit `BLOCKED` with both positions quoted,
+A hit means the reviewer and you disagree: exit `BLOCKED` with both positions quoted,
 and do not argue across another round. A miss means it is new; after the
 implementer pass in step 4 lands, record it:
 
@@ -452,7 +465,7 @@ invocation reuses the same review for free; the ledger misses, so the guard does
 not fire; and `review-comments` skips the thread because the bot commented last
 — so the round finds nothing to do and exhausts in the identical state, forever.
 Recording it means a re-raise of that same finding trips `BLOCKED`, which is
-exactly right: Codex restating a point you answered in prose *is* the
+exactly right: the reviewer restating a point you answered in prose *is* the
 disagreement the guard exists to catch.
 
 The rule the ordering protects is narrower than "wait for a push": never record
@@ -496,7 +509,7 @@ ran without a project review gate.
 
 Re-invoking `/pr-loop <PR#>` **continues from the current head — it does not
 restart the review from round 1**, and it never re-pays for a review of code
-already reviewed. What it does *not* usually do is skip the Codex call, and the
+already reviewed. What it does *not* usually do is skip the reviewer call, and the
 reason is the round ordering:
 
 **The cap fires at the top of a round, not before the implementer.** Step 1
@@ -512,7 +525,7 @@ That is still a resume rather than a restart, but the thing being resumed is the
 *work*, not the review: the earlier rounds' fixes are pushed, their findings are
 recorded in the ledger, and only the unreviewed delta is paid for.
 
-- **The head-SHA marker (step 1) skips the Codex call only when the head has not
+- **The head-SHA marker (step 1) skips the reviewer call only when the head has not
   moved *and* preflight passes.** That second condition rules out most of the
   exits you would expect to qualify. The binding block runs before step 1 and
   asserts `HEAD == headRefOid` and a clean tracked worktree, so: a `BLOCKED` on
@@ -534,7 +547,7 @@ recorded in the ledger, and only the unreviewed delta is paid for.
   whichever invocation sees it.
 
 `--max-rounds N` is therefore always "N more rounds", and each rerun after
-exhaustion should be assumed to cost one Codex review. There is no
+exhaustion should be assumed to cost one review. There is no
 total-across-invocations budget, by design — the human deciding to run it again
 *is* the budget.
 
@@ -568,12 +581,13 @@ unchanged PR.
 ## Safety invariants
 
 Every invariant here is **prompt-level**: no hook blocks a violating `git`,
-`gh`, or `codex` call — the procedure asserts, and the guards check before each
+`gh`, `claude`, or `codex` call — the procedure asserts, and the guards check before each
 outward step. Treat them as hard rules anyway.
 
 1. **The reviewer never edits code; the implementer never reviews its own work.**
+   Engines and accounts follow the PR author through the shared routing contract.
    Keep the two roles in their own skills and their own processes.
-2. **One paid Codex round per head SHA, enforced by the marker check.**
+2. **One paid review per engine/account/head SHA, enforced by the marker check.**
 3. **Bounded rounds and a repeat-finding guard** — an unbounded loop between two
    models is the failure mode this skill exists to prevent. The round cap bounds
    one invocation; the **durable ledger** bounds the sequence of invocations,
@@ -582,7 +596,7 @@ outward step. Treat them as hard rules anyway.
    needs it.
 4. **Global `gh` identity is never switched.** Every GitHub API call receives
    the intended role's verified token through `GH_TOKEN`.
-5. **No merge without `--merge` and green checks.** Codex posting
+5. **No merge without `--merge` and green checks.** A reviewer posting
    `No findings.` is not a merge authorization; CI is.
 6. **Every fix lands on the PR's own branch**, verified by the binding block
    before each implementer pass and by the pre-push guard before each push — never
@@ -598,7 +612,7 @@ outward step. Treat them as hard rules anyway.
    untracked paths.
 8. **Authorship is checked in preflight**, not inherited from the reviewer
    skill, whose explicit-number exception this loop would otherwise trip on
-   every run. New PRs qualify through `identities.implementer`; older PRs opened
+   every run. New PRs qualify through the resolved `$IMPLEMENTER`; older PRs opened
    under the maintainer qualify only through commit-level evidence (`claude`
    author login or `Co-Authored-By: Claude` trailer), never through the loop's
    impression of the PR.

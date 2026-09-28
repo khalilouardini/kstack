@@ -65,6 +65,14 @@ review_model:                   # which model reviews, and how hard — pr-loop 
   escalate_above_files: <int|null>  # optional changed-file trigger
   escalate_paths: []                # fnmatch globs; any matching changed path triggers
   escalated_effort: <effort|null>
+# Engines behind the default identity slots; PR authorship can reverse roles.
+review_engines:
+  reviewer: codex
+  implementer: claude
+# Used only when the resolved reviewer is Claude; Codex uses review_model.
+claude_review_model:
+  slug: sonnet
+  effort: high
 identities:
   maintainer: <gh-login|null>   # human owner: governs and merges
   reviewer: <gh-login|null>     # review agent; Codex by default
@@ -78,7 +86,7 @@ pr_labels:                      # pr-label-sweep only
                                 # paths (fnmatch), text (regex); a rule fires on ANY match
 ```
 
-`review_model` is the one block that defaults rather than refuses, and the
+Review model settings default rather than refuse, and the
 reason is the asymmetry: an unset gate command silently passes a check that
 never ran, while an unset review model can safely use a documented, pinned
 default rather than inheriting the host's interactive setting. Refusing there
@@ -90,6 +98,16 @@ disabled by default because generated data and fixtures can inflate them.
 `--model gpt-6-luna --effort high` is the economy override. The skill states
 the resolved model, effort, and where each came from in its report, so the
 default is never silent.
+
+The review skills resolve roles per PR: a PR opened by `identities.reviewer`
+swaps the default accounts and their `review_engines`; a PR opened by
+`identities.implementer` keeps them. The PR author takes precedence over commit
+authors and push actors. Missing `review_engines` defaults to reviewer `codex`,
+implementer `claude` for compatibility. The accounts and engines must be distinct.
+The loop runs in the implementation engine and launches the other engine for
+review. `claude_review_model` defaults to `sonnet` / `high`; `review_model` and
+its escalation settings are Codex-only. Overrides apply to the selected reviewer;
+`--fast` is rejected for Claude. Resolution never rewrites project configuration.
 
 **Missing-key policy — never silently default.** A skill that needs a key and
 does not find it either asks the user (interactive judgment calls) or refuses
