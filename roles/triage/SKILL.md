@@ -190,6 +190,22 @@ classify from metadata — typically fewer than a third of them.
   file. Closing is a conversation with a human. Asymmetric risk, asymmetric
   default.
 
+### Every PR pass needs a complete merge order
+
+Every proposal that scores PRs must include a **recommended merge order** for
+all `MERGE` and `REBASE+MERGE` candidates, not only the first few actions. Order
+PRs by their actual dependencies and shared-file collisions, and say why that
+order is safe. When one candidate is red or conflicted, keep it in the ordered
+list at the point it can proceed and name the checks or conflict resolution
+that must happen first. Do not imply that a blocked PR is ready to merge.
+
+Inspect changed-file lists for candidates whose ordering could interact. If the
+available evidence cannot establish a safe relative order, name the unresolved
+dependency and the information needed to decide it; do not invent an order.
+Under `--label`, calculate collisions within the scored set and state that an
+excluded PR may still touch the same files. If no PR is eligible to merge, say
+so and give the ordered next actions needed to reach a mergeable state.
+
 ### Protected branches are a special class
 
 Every branch matching a `protected_branches` glob from `.agents/stack.yml`, and
@@ -283,11 +299,13 @@ gave when `spec_output_dir` was absent):
 | Path | Branch | Uncommitted? | Verdict |
 |---|---|---|---|
 
-## Recommended sequence
-<The order to actually do this in, and why. Merge order matters when PRs touch
-the same files — name the collisions. Under a filter, say that collisions were
-computed within the scored set only: an excluded PR touching the same files will
-not appear here.>
+## Recommended merge order and next actions
+<Order every MERGE and REBASE+MERGE candidate, with dependencies, shared-file
+collisions, and required fixes before each blocked PR can merge. Then give the
+next actions for PARK/CLOSE or branch/worktree findings. If no PR is eligible,
+say so and order the work needed to unblock one. Under a filter, say that
+collisions were computed within the scored set only: an excluded PR touching the
+same files will not appear here.>
 ```
 
 Write the `**Filter:**` line on every proposal, including unfiltered ones — as
