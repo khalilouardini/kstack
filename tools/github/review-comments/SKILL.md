@@ -26,7 +26,7 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   from the generic `[bot]` noise filter so GitHub App-backed Codex reviews
   remain actionable.
 - **`identities.implementer`** — the implementation-agent login that authors
-  implementation PRs and every reply. Call it `$IMPLEMENTER` below. **Null →
+  every reply. Call it `$IMPLEMENTER` below. **Null →
   there is no implementer identity for this
   project**: post replies as the human account and say so plainly in the report
   ("replies posted as `<maintainer>`; no implementer identity configured —
@@ -46,8 +46,8 @@ Missing `.agents/stack.yml` altogether → refuse and name the file.
 ## What this skill does
 
 The consuming repo declares distinct GitHub roles in `.agents/stack.yml`. This
-skill uses the implementation agent (`identities.implementer`) for PR authorship
-and replies. If `identities.reviewer` is configured, it is recognized as the
+skill uses the implementation agent (`identities.implementer`) for replies;
+PRs themselves are opened by `identities.maintainer`. If `identities.reviewer` is configured, it is recognized as the
 expected reviewer.
 The skill walks a PR's open feedback, addresses each item — **making the code
 fix when one is warranted, not just replying** — and posts every reply under

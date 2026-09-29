@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+PRs are now opened by `identities.maintainer`, not `identities.implementer`.
+`land` binds the maintainer token for `gh pr create`; `dispatch-implementation`
+requires the same account instead of whatever global `gh` account is active.
+`pr-loop` and `review-claude-pr` treat a maintainer-opened PR with a
+`Co-Authored-By: Claude` trailer as the standard agent-built case; the
+implementer and reviewer accounts act only once a review loop starts.
+
 New `tools/github/pr-label-sweep`: adds GitHub labels to open PRs from rules in
 a new `pr_labels.rules` block of `.agents/stack.yml` — the linked tracker
 issue's project or labels, fnmatch globs over changed paths, and regexes over

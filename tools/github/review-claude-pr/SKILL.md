@@ -1,7 +1,7 @@
 ---
 name: review-claude-pr
 version: 0.2.0
-description: Review an open PR authored by the consuming repo's implementer identity and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
+description: Review an open agent-built PR (implementer-authored, or maintainer-opened with Claude-attributed commits) and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
 # review-claude-pr — review a bot-authored PR as Codex
@@ -131,8 +131,11 @@ Do not switch accounts. Prefix **every** later `gh` call in this skill with
 identify it as a draft in the summary.
 
 Confirm the PR author is `$IMPLEMENTER`. If it is not, inspect the PR commits for
-that author. If neither the PR nor its commits are attributable to `$IMPLEMENTER`,
-stop unless the user explicitly requested that exact PR despite its author.
+that author, then for Claude attribution: a commit authored by the `claude` login
+or carrying a whole-line `Co-Authored-By: Claude … <email>` trailer. PRs are
+opened by `identities.maintainer`, so the trailer is the normal evidence that a
+maintainer-opened PR is agent-built. If none of these hold, stop unless the user
+explicitly requested that exact PR despite its author.
 
 Use a hidden idempotency marker tied to the reviewed head SHA:
 

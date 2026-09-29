@@ -93,11 +93,11 @@ review_model:
   escalate_paths: []            # project-specific fnmatch globs; [] disables
   escalated_effort: high
 
-# GitHub logins. No defaults, ever — the human governs and merges, the reviewer
-# publishes findings (Codex by default), and the implementer opens PRs, fixes,
-# and replies (Claude by default). A skill refuses when a role it needs is null.
+# GitHub logins. No defaults, ever — the human opens PRs, governs, and merges;
+# once a review loop starts, the reviewer publishes findings (Codex by default)
+# and the implementer fixes and replies (Claude by default). A skill refuses when a role it needs is null.
 identities:
-  maintainer: null               # human account that governs and merges
+  maintainer: null               # human account that opens PRs, governs, merges
   reviewer: null                 # review-agent account; Codex by default
   implementer: null              # implementation-agent account; Claude by default
 

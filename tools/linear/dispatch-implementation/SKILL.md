@@ -138,6 +138,9 @@ can drift from the approved plan.
 The implementation session owns code and tests, not tracker truth beyond evidence it
 has actually produced.
 
+- It opens a PR only as `identities.maintainer`, through `/land` or with that
+  account's verified token bound via `GH_TOKEN` — never as the implementer or
+  reviewer account, and never by relying on the active global `gh` account.
 - If it opens a PR and the workspace contract defines a review status for that
   evidence, apply that transition with the same resolve → ledger → write → read-back
   discipline.
