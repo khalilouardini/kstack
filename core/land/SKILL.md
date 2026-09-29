@@ -32,10 +32,10 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   the same list for the same reason.)
 - **`issue_prefix`** — when set, an issue key may appear in the branch name and
   PR title. Optional; absent means plain branch names.
-- **`identities.implementer`** — the implementation-agent account that opens
-  the PR (Claude by default). Missing or null → **refuse**, naming
-  `identities.implementer`. Resolve its token for forge API calls; never switch
-  global `gh` identity.
+- **`identities.maintainer`** — the human owner's account, which opens every
+  PR. Missing or null → **refuse**, naming `identities.maintainer`. Resolve its
+  token for forge API calls; never switch global `gh` identity. The implementer
+  and reviewer accounts act only after a review loop starts on the open PR.
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
@@ -265,10 +265,10 @@ git push -u origin <your-branch>
 Then open the PR:
 
 ```bash
-IMPLEMENTER="<identities.implementer>"
-IMPLEMENTER_TOKEN=$(gh auth token --hostname github.com --user "$IMPLEMENTER")
-test "$(GH_TOKEN="$IMPLEMENTER_TOKEN" gh api user --jq .login)" = "$IMPLEMENTER"
-GH_TOKEN="$IMPLEMENTER_TOKEN" gh pr create --base <default-branch> --title "<type>: <what changed>" --body "<body>"
+MAINTAINER="<identities.maintainer>"
+MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
+test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr create --base <default-branch> --title "<type>: <what changed>" --body "<body>"
 ```
 
 Body: what changed and why, the gate results as evidence (`<gates.lint>` clean,
@@ -289,7 +289,7 @@ one.
 
 `gh` auth is **global mutable state**, shared by every shell and every concurrent
 session on the machine. Never call `gh auth switch` from this skill. Bind PR API
-calls to the verified implementer token with `GH_TOKEN`, which is process-local
+calls to the verified maintainer token with `GH_TOKEN`, which is process-local
 and safe for parallel sessions. Git transport authentication is separate from
 PR authorship: SSH keys and HTTPS credential helpers may identify the pusher,
 while the token-bound `gh pr create` determines the visible PR author.
@@ -319,7 +319,7 @@ other destructive git commands prompt. That covers one failure mode of invariant
 7. **Never rewrite a commit you did not author** — check `git patch-id --stable`
    first, and leave origin-duplicated commits for the rebase to drop.
 8. **Never switch global `gh` identity.** Bind forge API calls to the verified
-   implementer token; leave Git transport authentication independent.
+   maintainer token; leave Git transport authentication independent.
 
 ## What this skill is NOT for
 

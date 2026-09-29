@@ -66,9 +66,9 @@ review_model:                   # which model reviews, and how hard — pr-loop 
   escalate_paths: []                # fnmatch globs; any matching changed path triggers
   escalated_effort: <effort|null>
 identities:
-  maintainer: <gh-login|null>   # human owner: governs and merges
+  maintainer: <gh-login|null>   # human owner: opens PRs, governs, merges
   reviewer: <gh-login|null>     # review agent; Codex by default
-  implementer: <gh-login|null>  # implementation agent: opens PRs, fixes, replies
+  implementer: <gh-login|null>  # implementation agent: fixes and replies in a review loop
 protected_branches: []          # fnmatch globs (`demo/*`) matched against the
                                 # branch name; triage may never propose CLOSE for one
 role_appendix_dir: <path|null>  # per-role project appendices (traps, factories, gates)

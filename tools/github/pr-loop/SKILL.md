@@ -21,7 +21,8 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before preflight:
 
 - **`identities.maintainer`** — the human maintainer's gh login. This account
-  governs the repository and is the only account that ever merges.
+  opens every PR, governs the repository, and is the only account that ever
+  merges.
   Missing or null → **refuse**, naming `identities.maintainer`.
 - **`identities.reviewer`** — the review-agent login, normally Codex, that
   publishes every review. Missing or null → **refuse**, naming `identities.reviewer`.
@@ -168,14 +169,14 @@ Stop unless one of these holds, each machine-checked in preflight:
 
 - `$AUTHOR` or one of `$COMMIT_AUTHORS` is `$IMPLEMENTER` — a PR the implementer has already
   touched in earlier rounds; or
-- `$CLAUDE_COMMITS` is non-zero — the compatibility case for an older PR opened
-  under the maintainer account: a head commit is authored by the `claude`
-  login or carries a `Co-Authored-By: Claude` **trailer line**: a whole line
+- `$CLAUDE_COMMITS` is non-zero — the standard case: every PR is opened under
+  the maintainer account (`identities.maintainer`), and an agent-built one has a
+  head commit authored by the `claude` login or carrying a
+  `Co-Authored-By: Claude` **trailer line**: a whole line
   starting `Co-Authored-By: Claude` and ending in an `<email>` address. A prose
   mention of the phrase mid-sentence does not count — the match is anchored per
   line, so a human-only commit that merely discusses the trailer format stays at
-  `0`. New PRs should be opened directly under `$IMPLEMENTER` and satisfy the
-  first condition without relying on commit-message evidence.
+  `0`.
 
 The remaining exception is an explicit `--any-author` on the invocation — for a
 PR with no machine-attributable commit at all — which the user is stating
@@ -598,8 +599,8 @@ outward step. Treat them as hard rules anyway.
    untracked paths.
 8. **Authorship is checked in preflight**, not inherited from the reviewer
    skill, whose explicit-number exception this loop would otherwise trip on
-   every run. New PRs qualify through `identities.implementer`; older PRs opened
-   under the maintainer qualify only through commit-level evidence (`claude`
+   every run. PRs are opened under `identities.maintainer` and qualify through
+   commit-level evidence (`claude`
    author login or `Co-Authored-By: Claude` trailer), never through the loop's
    impression of the PR.
 9. **All three identities are required.** No maintainer, reviewer, or implementer
