@@ -35,7 +35,7 @@ review_gate:
 # Sol/high is normal. Astra/high is a first-review exception for high-risk paths;
 # use --model gpt-6-luna for an economy pass.
 review_model:
-  slug: gpt-6-sol
+  slug: gpt-6.1-sol
   effort: high
   escalated_slug: gpt-6-astra
   escalate_above_lines: null

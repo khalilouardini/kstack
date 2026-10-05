@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+Upgrade the default Codex reviewer from `gpt-6-sol` to `gpt-6.1-sol`,
+keeping high reasoning effort and the existing Astra escalation and Luna override.
+
 PRs are now opened by `identities.maintainer`, not `identities.implementer`.
 `land` binds the maintainer token for `gh pr create`; `dispatch-implementation`
 requires the same account instead of whatever global `gh` account is active.

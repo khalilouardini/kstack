@@ -85,7 +85,7 @@ review_gate:
 # in its report. This block never refuses: an unset review model can use a
 # pinned default rather than inheriting an unknown host setting.
 review_model:
-  slug: gpt-6-sol                # normal independent-review lane
+  slug: gpt-6.1-sol                # normal independent-review lane
   effort: high                   # low | medium | high | xhigh | max
   escalated_slug: gpt-6-astra    # first review only, when a risk trigger fires
   escalate_above_lines: null    # optional; raw additions + deletions
