@@ -96,6 +96,15 @@ does not find it either asks the user (interactive judgment calls) or refuses
 with the exact key name (gates and identities always refuse — a gate that
 defaults open is not a gate).
 
+`wave.max_review_rounds` missing/null defaults to 3, announced: observed later
+rounds addressed interactions among earlier fixes, so a bounded three-round run
+leaves further decisions human. `wave.review_concurrency` defaults to 1,
+announced, because concurrent reviewer processes share an account quota window.
+Both must be positive integers. `wave.contract_dir` has no project-neutral
+default; missing/null with shared literals refuses naming that exact key.
+These defaults bound work rather than invent evidence; gates and identities
+continue to refuse when absent.
+
 ## 3. Skill file anatomy
 
 - One directory per skill: `SKILL.md` (the procedure) + optional `bin/`,

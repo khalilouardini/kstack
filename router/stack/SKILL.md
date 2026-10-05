@@ -1,6 +1,6 @@
 ---
 name: stack
-version: 0.3.0
+version: 0.4.0
 description: Router for the kstack skill suite — sends a request to the right skill across decide, build, review, land, and operate, and disambiguates the review and decide clusters. Use when asked to "route this", "which stack skill fits this?", "what should I use for this", or "/stack". Proactively suggest when a request matches a stack skill's purpose and the right one is not obvious. (kstack)
 ---
 
@@ -54,6 +54,9 @@ adapter, or read `roles/<role>.md` and follow it in-session.
   invoke `/linear-feature-intake`
 
 ### Build
+
+- "run one wave", "plan a Linear batch", "build the approved wave",
+  `/wave plan|build` → invoke `/wave`
 
 - "start this ticket", "tackle ISSUE-123", "dispatch this issue", "begin work
   on this Linear ticket" → invoke `/dispatch-implementation`
