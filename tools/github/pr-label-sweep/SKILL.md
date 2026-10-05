@@ -1,6 +1,6 @@
 ---
 name: pr-label-sweep
-version: 0.1.0
+version: 0.2.0
 description: Sweep open GitHub PRs and add the labels the consuming repo's rules call for — from the linked tracker issue's project and labels, the changed paths, and client keywords in the title and branch — each label citing the evidence that fired it. Dry-run by default; add-only; never creates a repo label. Use when asked to "label my PRs", "tag the open PRs", "sweep PR labels", or "/pr-label-sweep [--apply] [--pr N]". (kstack)
 ---
 
@@ -17,6 +17,14 @@ is passed (on the invocation, or as a confirmation after reviewing the table).
 
 Not for removing labels, creating or renaming repo labels, or labelling issues.
 Filtering a backlog by label is `/triage --label`.
+
+## Recurring application
+
+Requests to run this sweep periodically route to
+`tools/github/sweep-schedules/SKILL.md`. That setup records recurring `--apply`
+authorization and defaults to every three hours; an ordinary manual invocation
+still requires `--apply`. Each scheduled run keeps the proposal table and
+verification, and never broadens the selected repository or archive scope.
 
 ## Configuration — read `.agents/stack.yml` first
 
