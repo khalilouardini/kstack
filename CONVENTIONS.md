@@ -82,7 +82,7 @@ pr_labels:                      # pr-label-sweep only
 reason is the asymmetry: an unset gate command silently passes a check that
 never ran, while an unset review model can safely use a documented, pinned
 default rather than inheriting the host's interactive setting. Refusing there
-would cost more than defaulting. The default is `gpt-6-sol`/`high`. On the
+would cost more than defaulting. The default is `gpt-6.1-sol`/`high`. On the
 first review of a PR,
 configured risk triggers select `gpt-6-astra`/`high`; later heads return to
 the base lane unless `--model` explicitly pins Astra. Raw size triggers are

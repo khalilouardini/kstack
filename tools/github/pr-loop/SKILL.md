@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.4.0
+version: 0.4.1
 description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED; each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, repeat-finding ledger, head-SHA marker, and pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
 ---
 
@@ -52,7 +52,7 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   which model runs the reviewer round and at what reasoning effort. This is the
   model the review agent runs on, not the account it posts under
   (`identities.reviewer`). **The one block that defaults instead of refusing**
-  (CONVENTIONS.md §2): missing or null → `gpt-6-sol` at `high`. On the first
+  (CONVENTIONS.md §2): missing or null → `gpt-6.1-sol` at `high`. On the first
   review of a PR, configured risk triggers select `gpt-6-astra` at `high`;
   the raw-size triggers default to disabled, and `escalate_paths` defaults to
   empty. Subsequent heads use the base lane. Use `--model gpt-6-luna
@@ -116,7 +116,7 @@ touch "$LEDGER"
 # Precedence per slot: invocation flag > first-review escalation > base config
 # > stack default. Explicit flags pin their slots for every round.
 FAST="<true iff --fast was passed; otherwise false>"
-BASE_MODEL="<review_model.slug, or gpt-6-sol>"
+BASE_MODEL="<review_model.slug, or gpt-6.1-sol>"
 BASE_EFFORT="<review_model.effort, or high>"             # --effort overrides
 PINNED_MODEL="<--model value, if passed>"
 PINNED_EFFORT="<--effort value, if passed>"
@@ -484,7 +484,7 @@ Every verdict report also carries the review-model routing for **each paid
 round** — model, effort, fired risk trigger (if any), whether this was the
 first review, the source of each slot, and whether `--fast` was requested —
 for example: *"round 1: gpt-6-astra / high (first review; stack.yml path
-trigger: bin/install); round 2: gpt-6-sol / high (follow-up); fast requested:
+trigger: bin/install); round 2: gpt-6.1-sol / high (follow-up); fast requested:
 no"*.
 Without it the escalation is invisible and the next reader cannot tell a cheap
 round from an expensive one.
