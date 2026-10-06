@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+New `sweep-schedules` sets up recurring session-title and PR-label application
+through the desktop scheduler, every three hours by default. Setup reuses a
+matching schedule, saves bounded apply authorization, and keeps unchanged runs
+quiet. Manual sweep defaults remain dry-run. `session-titles` now prefers the
+supported Codex desktop rename API; scheduled runs never rewrite the private
+CLI session index. Installation alone does not activate a schedule.
+
 Add `/wave`: a two-run Claude Code Workflow batch with human plan approval, contract seam checks and bounded review; Codex selects only.
 
 Upgrade the default Codex reviewer from `gpt-6-sol` to `gpt-6.1-sol`,

@@ -1,6 +1,6 @@
 ---
 name: stack
-version: 0.4.0
+version: 0.5.0
 description: Router for the kstack skill suite — sends a request to the right skill across decide, build, review, land, and operate, and disambiguates the review and decide clusters. Use when asked to "route this", "which stack skill fits this?", "what should I use for this", or "/stack". Proactively suggest when a request matches a stack skill's purpose and the right one is not obvious. (kstack)
 ---
 
@@ -96,6 +96,10 @@ adapter, or read `roles/<role>.md` and follow it in-session.
 nowhere.
 
 ### Operate
+
+- "run session titles and PR labels periodically", "automate the sweeps",
+  "schedule these sweeps every few hours" → invoke `/sweep-schedules`
+  (takes precedence over either manual sweep route below)
 
 - "health check", "code quality", "how healthy is this codebase", "run all the
   checks", "quality score" → invoke `/health`

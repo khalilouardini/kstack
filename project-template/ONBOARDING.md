@@ -177,6 +177,8 @@ Land and operate:
 - "health check" / "quality score" → `/health`
 - "was this week fruitful" → `/delivery-retro`
 - "what is each session working on" → `/session-titles`
+- "run title and PR-label sweeps every few hours" → `/sweep-schedules`
+  (desktop scheduler; defaults to three hours, requires label rules and session tools)
 - audit or repair the tracker → `/linear-steward`
 - audit a release against its gate criteria → `/linear-release-audit`
 - unsure which of the above → `/stack`
