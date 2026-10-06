@@ -2,7 +2,7 @@
 
 # kstack
 
-A personal agent harness that travels across projects. Twenty installable skills and four
+A personal agent harness that travels across projects. Twenty-four installable skills and four
 role contracts, each defined once, pointed at by every host and every repo that
 uses them.
 
@@ -64,6 +64,7 @@ half-day estimate, refuses to estimate what it cannot name),
 
 | Skill | Does | Enforcement |
 |---|---|---|
+| [`/wave`](tools/linear/wave/SKILL.md) | One independent batch through a Claude Code Workflow graph | prompt-level checkpoints; script checks approval/review routing; Codex selection only |
 | [`/dispatch-implementation`](tools/linear/dispatch-implementation/SKILL.md) | Starts one approved issue in an isolated worktree and automatically moves it to the contract's started status after the worktree exists | Linear write + mandatory read-back; prompt-level outside the skill |
 | [`/investigate`](core/investigate/SKILL.md) | Root-cause debugging: no fix before the cause is found; three failed attempts stops the run; every fix ships a fail-then-pass test | prompt + optional scope lock |
 | [`/careful`](core/careful/SKILL.md) | Pre-checks every shell command. Recursive deletes rooted at `/` or `$HOME` and force-pushes to the default branch are denied; the rest asks | **hook** (Claude Code) |

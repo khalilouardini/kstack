@@ -1,0 +1,46 @@
+[
+  {
+    "number": 1,
+    "name": "empty selection"
+  },
+  {
+    "number": 2,
+    "name": "no shared literals"
+  },
+  {
+    "number": 3,
+    "name": "contract before plans"
+  },
+  {
+    "number": 4,
+    "name": "missing contract directory"
+  },
+  {
+    "number": 5,
+    "name": "approval subset"
+  },
+  {
+    "number": 6,
+    "name": "stopped build"
+  },
+  {
+    "number": 7,
+    "name": "seam mismatch"
+  },
+  {
+    "number": 8,
+    "name": "rounds exhausted"
+  },
+  {
+    "number": 9,
+    "name": "no merge"
+  },
+  {
+    "number": 10,
+    "name": "schema agreement"
+  },
+  {
+    "number": 11,
+    "name": "sequential review"
+  }
+]

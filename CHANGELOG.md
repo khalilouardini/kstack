@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+Add `/wave`: a two-run Claude Code Workflow batch with human plan approval, contract seam checks and bounded review; Codex selects only.
+
 Upgrade the default Codex reviewer from `gpt-6-sol` to `gpt-6.1-sol`,
 keeping high reasoning effort and the existing Astra escalation and Luna override.
 

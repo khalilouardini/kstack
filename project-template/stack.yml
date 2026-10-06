@@ -134,3 +134,9 @@ pr_labels:
   #   paths: ["src/server/**"]
   # - label: MVP-2
   #   linear_project: ["Road to MVP-2"]
+
+# Missing/null rounds and concurrency use announced defaults, not host settings.
+wave:
+  max_review_rounds: 3  # three bounds unattended review; later rounds address fix interactions
+  review_concurrency: 1  # reviewer processes share one account quota window
+  contract_dir: null  # project-specific; refuse if shared literals need a contract
