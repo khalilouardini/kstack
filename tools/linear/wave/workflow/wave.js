@@ -1368,7 +1368,9 @@ if (args.stage === 'plan') {
   phase('Select');
   const selected = await call('A1 select', `${read(args.paths.next, 'selection is read-only; no adaptation')}
 Run /next with argument tokens ${JSON.stringify(args.selection)} in parallel mode.
-Return all tracks, sequenced and already_active entries. TRACK branch/worktree are
+PLAN_ONLY candidates must go in sequenced with the unmet build condition and source,
+never tracks. They do not count toward N and must not reach --approve all.
+Return all implementation-eligible tracks, sequenced and already_active entries. TRACK branch/worktree are
 proposals only. Select no more than requested; explicitly report every excluded issue.`, schemas.SELECT, 'Select');
   const record = {state:'STOPPED', run_id:args.run_id, wave_id:args.wave_id,
     tracks:selected?.tracks || [], plans:[], contract:null, literals:[],

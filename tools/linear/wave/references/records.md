@@ -6,7 +6,9 @@ compares every field and type, including nested records, to this block.
 All fields are required; nullable values explicitly represent absent evidence.
 A STOPPED record always has a non-empty stop_reason and evidence. Branch and
 worktree in selection are proposed names/absolute paths; only dispatch read-back
-proves their existence. PLAN.worktree must match the recovered TRACK.worktree.
+proves their existence. A1 excludes PLAN_ONLY from TRACK/SELECT.tracks and lists
+it in sequenced with the unmet condition/source. It does not count toward N;
+the two-stage wave's approval path receives implementation-eligible work only. PLAN.worktree must match the recovered TRACK.worktree.
 Run ids are caller-supplied Workflow invocation ids; the tool's actual run id is
 attached by the invoking skill after return if the tool allocates it itself.
 

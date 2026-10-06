@@ -229,12 +229,14 @@ can produce a draft, with no launch authorization.
 
 Keep the shared lifecycle at the installed stack's root; copy/adapt
 [`ORCHESTRATION.md`](ORCHESTRATION.md) and [`orchestration.json`](orchestration.json)
-into the consuming root and `orchestration/<slug>.json`. Pin the reviewed kstack
-revision in the root index. Groups describe subunits without new sessions; one
+into the consuming root and the one active `orchestration/<slug>.json`. Adapt
+[`orchestration-index.json`](orchestration-index.json) into `orchestration/index.json`;
+its required source pin is checked against the physical installed stack HEAD. Groups describe subunits without new sessions; one
 executable issue maps to one persistent session. `/next` reads indexed conditions
 and checks live evidence. `/wave` retains its current human plan checkpoint.
 
-In Linear, link the shared team-owned contract from project overviews and keep
+The human maintainer manually publishes/links the shared team-owned Linear contract
+under the workspace rules and verifies read-back; the roadmap skill never writes it. Keep
 each pilot document with its project. Publishing a graph does not execute it;
 the persistent-session controller remains an experimental integration requirement.
 

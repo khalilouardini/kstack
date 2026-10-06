@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "manifest": {
+      "type": "string",
+      "pattern": "^orchestration/[a-z][a-z0-9_-]*\\.json$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source_revision",
+    "manifest"
+  ],
+  "additionalProperties": false
+}

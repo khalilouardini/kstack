@@ -63,7 +63,10 @@ For new work, compose `/spec` → `/linear-feature-intake` → `/linear-roadmap`
 For existing approved tickets, start with `/linear-roadmap`. A simple prompt can
 produce a draft graph; scope approval and ticket creation remain separate steps.
 The shared lifecycle lives once at the stack root, with a versioned schema and
-per-project records. Publishing or preparing a roadmap grants no execution permission.
+one indexed manifest containing each repo's projects/subunits. Indexed validation
+checks the source pin; `/next` gives plan-only work a planning kickoff and excludes
+it from wave batches. The human publishes Linear views manually under workspace
+rules. Preparing a roadmap grants no execution permission.
 
 The four **role contracts** are dispatched as subagents, not invoked as slash
 commands: [`product-manager`](roles/product-manager.md) (one verdict, cited,

@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """Validate/render a declarative roadmap. Stdlib only; no network or mutations."""
 import argparse
-import html
+import hashlib
 import json
 from pathlib import Path
 import re
 import sys
+import subprocess
 
-SCHEMA = Path(__file__).resolve().parents[1] / 'references/graph.schema.json'
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+STACK_ROOT = Path(__file__).resolve().parents[4]
+SCHEMA = SKILL_ROOT / 'references/graph.schema.json'
+INDEX_SCHEMA = SKILL_ROOT / 'references/index.schema.json'
+MERMAID_ESCAPES = [('#', '#35;'), ('&', '#amp;'), ('<', '#lt;'), ('>', '#gt;'),
+                   ('"', '#quot;'), ('`', '#96;'), ('%', '#37;')]
 EVENTS = {
     'unit': ('plan', 'build', 'merge'), 'group': (),
     'human': ('approve',), 'evidence': ('pass',),
@@ -69,18 +75,52 @@ def acyclic(graph, label):
             if indegree[target] == 0:
                 ready.append(target)
     if visited != len(graph):
-        remaining = sorted(str(n) for n, degree in indegree.items() if degree)
-        raise ValueError(f'{label} cycle: {", ".join(remaining)}')
+        remaining = {n for n, degree in indegree.items() if degree}
+        cycle = cycle_path(graph, remaining)
+        raise ValueError(f'{label} cycle: {" -> ".join(map(str, cycle))}')
+
+
+def cycle_path(graph, remaining):
+    """Find one actual back-edge cycle; downstream blocked nodes are excluded."""
+    finished = set()
+    for start in sorted(remaining, key=str):
+        if start in finished:
+            continue
+        path, active = [start], {start: 0}
+        stack = [(start, iter(sorted(graph[start], key=str)))]
+        while stack:
+            node, targets = stack[-1]
+            target = next(targets, None)
+            if target is None:
+                stack.pop()
+                active.pop(node)
+                path.pop()
+                finished.add(node)
+            elif target in active:
+                return path[active[target]:] + [target]
+            elif target in remaining and target not in finished:
+                active[target] = len(path)
+                path.append(target)
+                stack.append((target, iter(sorted(graph[target], key=str))))
+    raise ValueError('cycle could not be reconstructed')
+
+
+def no_placeholder(value, where):
+    if value.lstrip().upper().startswith('TODO:'):
+        raise ValueError(f'{where}: recorded project retains a TODO citation/check')
 
 
 def validate(record):
-    check_schema(record, json.loads(SCHEMA.read_text()))
+    check_schema(record, json.loads(SCHEMA.read_text(encoding='utf-8')))
     projects = {p['key']: p for p in record['projects']}
     if len(projects) != len(record['projects']):
         raise ValueError('duplicate project key')
     linear_ids = [p['linear_id'] for p in record['projects'] if p['linear_id'] is not None]
     if len(set(linear_ids)) != len(linear_ids):
         raise ValueError('one Linear project mapped to multiple project keys')
+    for p in projects.values():
+        if p['authorization'] == 'recorded':
+            no_placeholder(p['scope_source'], p['key'] + '.scope_source')
     nodes = {n['id']: n for n in record['nodes']}
     if len(nodes) != len(record['nodes']):
         raise ValueError('duplicate node id')
@@ -90,6 +130,12 @@ def validate(record):
     for n in nodes.values():
         if n['project'] not in projects:
             raise ValueError(f'{n["id"]}: unknown project')
+        if projects[n['project']]['authorization'] == 'recorded':
+            no_placeholder(n['source'], n['id'] + '.source')
+            for criterion in n['acceptance']:
+                no_placeholder(criterion, n['id'] + '.acceptance')
+        if n['kind'] == 'group' and n['issue_ref'] is not None:
+            raise ValueError(f'{n["id"]}: groups cannot carry issue_ref')
         if n['unit_of'] is not None:
             parent = nodes.get(n['unit_of'])
             if not parent or parent['kind'] != 'group' or parent['project'] != n['project']:
@@ -118,7 +164,15 @@ def validate(record):
             raise ValueError('edge references an unsupported event or a non-executable group')
         if source == target:
             raise ValueError('self dependency')
+        if any(projects[n['project']]['authorization'] == 'recorded' for n in (a, b)):
+            no_placeholder(e['source'], f'{e["from"]} -> {e["to"]}.source')
         kind = e['type']
+        if a['kind'] == 'human' and kind != 'human_decision':
+            raise ValueError('human approve edges must be human_decision')
+        if a['kind'] == 'evidence' and kind != 'evidence_required':
+            raise ValueError('evidence pass edges must be evidence_required')
+        if kind == 'release_after' and e['from_event'] not in ('merge', 'release', 'complete'):
+            raise ValueError('release_after source must be merge/release/complete')
         if kind == 'start_after' and (b['kind'] != 'unit' or e['to_event'] not in ('plan', 'build')):
             raise ValueError('start_after must target unit plan/build')
         if kind == 'merge_after' and (b['kind'] != 'unit' or e['to_event'] != 'merge'):
@@ -147,7 +201,10 @@ def render(record):
     nodes = record['nodes']
 
     def label(title):
-        return html.escape(' '.join(title.split()), quote=True)
+        text = ' '.join(title.split())
+        for raw, code in MERMAID_ESCAPES:  # Escape literal entity markers first.
+            text = text.replace(raw, code)
+        return text
 
     def children(project, parent, indent):
         for n in nodes:
@@ -174,20 +231,70 @@ def render(record):
     return '\n'.join(lines) + '\n'
 
 
+def installed_revision():
+    """Read the actual installed source revision; never fetch or mutate Git."""
+    try:
+        revision = subprocess.run(
+            ['git', '-C', str(STACK_ROOT), 'rev-parse', 'HEAD'],
+            check=True, capture_output=True, text=True, encoding='utf-8',
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ['git', '-C', str(STACK_ROOT), 'status', '--porcelain', '--untracked-files=all', '--',
+             'ORCHESTRATION.md', 'tools/linear/linear-roadmap'],
+            check=True, capture_output=True, text=True, encoding='utf-8',
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError('cannot read installed kstack source revision') from error
+    if dirty:
+        raise ValueError('installed lifecycle/roadmap source has uncommitted changes')
+    return revision
+
+
+def load_index(path):
+    path = path.resolve()
+    if path.name != 'index.json' or path.parent.name != 'orchestration':
+        raise ValueError('index must be <consuming-root>/orchestration/index.json')
+    consumer = path.parent.parent
+    if consumer == STACK_ROOT:
+        raise ValueError('consuming root equals stack root; do not overwrite shared lifecycle')
+    index = json.loads(path.read_text(encoding='utf-8'))
+    check_schema(index, json.loads(INDEX_SCHEMA.read_text(encoding='utf-8')))
+    actual = installed_revision()
+    if index['source_revision'] != actual:
+        raise ValueError(f'source revision mismatch: index {index["source_revision"]}, installed {actual}')
+    manifest = (consumer / index['manifest']).resolve()
+    try:
+        manifest.relative_to(path.parent)
+    except ValueError as error:
+        raise ValueError('manifest escapes consuming orchestration directory') from error
+    data = manifest.read_bytes()
+    record = validate(json.loads(data.decode('utf-8')))
+    revision = 'sha256:' + hashlib.sha256(data).hexdigest()
+    return record, revision
+
+
 def main():
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('validate', 'render'))
-    parser.add_argument('manifest', type=Path)
+    parser.add_argument('action', choices=('validate', 'render', 'validate-index', 'render-index'))
+    parser.add_argument('manifest', type=Path, help='manifest, or orchestration/index.json for *-index')
     args = parser.parse_args()
     try:
-        record = validate(json.loads(args.manifest.read_text()))
-    except (OSError, ValueError, TypeError) as error:
+        if args.action.endswith('-index'):
+            record, revision = load_index(args.manifest)
+        else:
+            record = validate(json.loads(args.manifest.read_text(encoding='utf-8')))
+            revision = None
+        if args.action.startswith('render'):
+            print(render(record), end='')
+        else:
+            print(f'VALID structure: {len(record["projects"])} project(s), {len(record["nodes"])} nodes. Live readiness not checked.')
+            if revision:
+                print(f'manifest_revision: {revision}')
+    except (OSError, ValueError, TypeError, RecursionError) as error:
         print(f'INVALID: {error}', file=sys.stderr)
         return 1
-    if args.action == 'render':
-        print(render(record), end='')
-    else:
-        print(f'VALID structure: {len(record["projects"])} project(s), {len(record["nodes"])} nodes. Live readiness not checked.')
     return 0
 
 

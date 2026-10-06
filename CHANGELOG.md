@@ -5,8 +5,10 @@
 Add `/linear-roadmap` to prepare reusable project/subunit roadmaps from existing
 Linear work, specs or prompts. A versioned JSON contract and stdlib validator
 generate Mermaid and check combined event dependencies; `/next` consults these
-conditions using live evidence. Root lifecycle and consuming-project templates
-keep shared policy separate from pilot data. Document the missing session
+conditions using live evidence. One machine-readable index names the combined
+manifest and checks its source revision. PLAN_ONLY has a planning handoff and is
+excluded from wave tracks. Root lifecycle and consuming-project templates keep
+shared policy separate from pilot data. Document the missing session
 controller and automatic-plan path; existing `/wave` approval remains unchanged.
 
 New `sweep-schedules` sets up recurring session-title and PR-label application

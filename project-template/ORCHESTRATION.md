@@ -8,18 +8,27 @@ human checkpoints here rather than duplicating the lifecycle procedure.
 
 ## Source revision and roadmap index
 
-- Reviewed kstack commit / PR and central Linear contract URL: fill in before use.
-- Lifecycle source: kstack root `ORCHESTRATION.md`; schema version: 1.
-- Manifest: `orchestration/<slug>.json`, adapted from `project-template/orchestration.json`.
-- Observation time and unresolved source conflicts: fill in from live reads.
+- Central Linear contract and reviewed source PR: fill in.
+- Machine index: `orchestration/index.json`, adapted from `project-template/orchestration-index.json`.
+- Exactly one active manifest: the index's `manifest` path; schema version 1.
+- Observation time and unresolved conflicts: fill in from live reads.
 
-Use `/linear-roadmap <project|spec|prompt>` to prepare/update these records.
-An approved spec goes through `/linear-feature-intake` for ticket creation first;
-existing approved work skips both steps. Prompt-only graphs remain DRAFT.
-The root index can list several manifests; `unit_of` groups represent subunits.
-The schema and physical validator live with the installed roadmap skill. Run
-`graph-record validate` then `graph-record render` on the manifest and replace
-only its generated view. This example has no tracker IDs or execution permission.
+Resolve the installed roadmap directory physically (Claude symlink via `pwd -P`,
+or Codex pointer's canonical path), then obtain `<stack-root>` using
+`git -C <physical-skill-directory> rev-parse --show-toplevel`. Run:
+
+```text
+python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <absolute-consuming-root>/orchestration/index.json
+python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record render-index <absolute-consuming-root>/orchestration/index.json
+```
+
+Set the index's source_revision to the explicitly adopted reviewed stack HEAD.
+The commands check it against installed source and emit the exact manifest SHA256.
+Stop on mismatch; never silently update the pin. `/linear-roadmap` updates the one
+manifest with all projects/subunits; `unit_of` groups do not create sessions. An
+approved spec needs intake-created executable tickets before mapping. Prompt-only
+input can produce DRAFT. Refuse writes if consuming root equals stack root.
+This example has no tracker IDs or execution permission.
 
 ## Project graph
 
@@ -66,7 +75,7 @@ flowchart LR
 - Scope authority and explicit exception, if any:
 - Human owner and authorized notification channel:
 - Root graph revision and source observations:
-- Pilot boundary: one rehearsal, then one wave; two ticket sessions maximum:
+- Execution/rehearsal boundary and explicit policy values:
 
 ## Conditions
 
@@ -74,14 +83,24 @@ flowchart LR
 | -- | -- | -- | -- | -- | -- |
 | Contract | Authorized scope | Accepted shared contract | Default-branch SHA | Contract decision + merge | Scope record |
 | API unit | Contract merged | Tests, current-head independent review | Gate output + review SHA | If graph requires + merge | Issue body |
-| UI unit | Contract merged | Tests, current-head independent review | Gate output + review SHA | If graph requires + merge | Issue body |
+| UI unit | Contract merged | API merged, tests, current-head independent review | Gate output + review SHA | If graph requires + merge | Issue body |
 | Release | Required units integrated | Acceptance artefacts at deployed SHA | Artefact + production verification | Deploy + release sign-off | Project acceptance |
+
+## Human decisions
+
+Before a controller exists, record verifier, observation UTC time, result and
+evidence per condition in the Conditions table; add columns as needed. Index human
+decisions below and read their original scope decision-log/Linear comment sources.
+
+| Node/event | Outcome | Authorized actor | Recorded UTC | Manifest sha256 / scope boundary | Original record | Verifier / observed UTC |
+| -- | -- | -- | -- | -- | -- | -- |
+| TODO: human node/approve | TODO: explicit APPROVE/REJECT | TODO: human actor | TODO: time | TODO: exact digest and criteria | TODO: URL or file:line | TODO: verified observation |
 
 ## Human handoff and runtime references
 
 Session ID/handle, worktree, plan revision, actual model/effort, PR/head SHA,
-validation and review verdicts, summary text and approvals live in the controller
-ledger. The graph may display links to them. Missing observations remain UNKNOWN;
+validation/review verdicts and summary text will live in the future controller
+ledger; verified manual decisions remain readable sources. The graph may display links to them. Missing observations remain UNKNOWN;
 this template has no completed or approved nodes by default.
 
 Record disagreements between project and issue conditions here before declaring

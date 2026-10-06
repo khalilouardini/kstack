@@ -14,7 +14,9 @@
     "implementation_model": "claude-opus-5-5",
     "default_effort": "xhigh",
     "max_sessions": 2,
-    "review_rounds": 3
+    "review_rounds": 3,
+    "max_plan_revisions": 2,
+    "review_concurrency": 1
   },
   "nodes": [
     {
@@ -128,6 +130,20 @@
       ],
       "source": "Approved source or proposed draft source",
       "effort": null
+    },
+    {
+      "id": "provider",
+      "title": "Identity provider configured",
+      "kind": "external",
+      "project": "onboarding",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "human",
+      "acceptance": [
+        "Check the cited acceptance criteria"
+      ],
+      "source": "Synthetic fixture: provider configuration record",
+      "effort": null
     }
   ],
   "edges": [
@@ -146,22 +162,6 @@
       "type": "start_after",
       "source": "Cited prerequisite",
       "from": "contract"
-    },
-    {
-      "from_event": "merge",
-      "to": "ui",
-      "to_event": "build",
-      "type": "start_after",
-      "source": "Cited prerequisite",
-      "from": "contract"
-    },
-    {
-      "from_event": "merge",
-      "to": "ui",
-      "to_event": "merge",
-      "type": "merge_after",
-      "source": "Cited prerequisite",
-      "from": "api"
     },
     {
       "from_event": "pass",
@@ -212,12 +212,20 @@
       "source": "Cited prerequisite"
     },
     {
-      "from": "merge",
-      "from_event": "approve",
+      "from": "provider",
+      "from_event": "complete",
       "to": "api",
-      "to_event": "merge",
-      "type": "human_decision",
-      "source": "Cited prerequisite"
+      "to_event": "plan",
+      "type": "start_after",
+      "source": "Synthetic fixture: provider prerequisite"
+    },
+    {
+      "from": "api",
+      "from_event": "merge",
+      "to": "ui",
+      "to_event": "build",
+      "type": "start_after",
+      "source": "Synthetic fixture: account before welcome"
     }
   ]
 }

@@ -10,8 +10,8 @@ The canonical lifecycle is this root file. The structural contract is
 [`graph.schema.json`](tools/linear/linear-roadmap/references/graph.schema.json),
 version 1; its [format and publication rules](tools/linear/linear-roadmap/references/contract.md)
 explain typed event conditions and project/subunit grouping. Projects keep domain
-data in `orchestration/<slug>.json` and index generated diagrams from their root
-`ORCHESTRATION.md`. Use [the root template](project-template/ORCHESTRATION.md) and
+data in one authoritative `orchestration/<slug>.json`, named by the machine-readable
+`orchestration/index.json`; their root `ORCHESTRATION.md` shows its generated view. Use [the root template](project-template/ORCHESTRATION.md) and
 [manifest example](project-template/orchestration.json); do not fork this lifecycle.
 
 Preparation composes existing authorities:
@@ -37,13 +37,18 @@ A simple prompt can draft a graph; it does not authorize execution. `/next`
 consults indexed manifests, distinguishing plan, build, merge and release conditions
 with live evidence. Its existing scope and parallel-independence checks still apply.
 
-Publish one central Linear contract outside pilot projects, with the source
+The human maintainer manually publishes one central Linear contract outside pilot
+projects, following the workspace contract and verifying read-back, with the source
 commit/PR and schema version. The available connector supports a team-owned
 document rather than a workspace-root parent. Link that shared document from
 each project/subunit; keep each pilot's issue IDs in a separate project document.
 Links inherit actual access controls and do not grant access to other teams.
-Each project pins a reviewed kstack revision; changing the shared source calls
-for explicit reconciliation, never an implicit change in execution authority.
+Each repository's `orchestration/index.json` requires `source_revision`, the full
+reviewed kstack commit SHA. Both roadmap and `/next` use `validate-index` to check
+it against the physical installed HEAD and refuse mismatches/dirty source. They
+never silently repin. Each active manifest holds all its projects/subunits, so
+uniqueness and cycles are checked together. Source changes require explicit
+reconciliation; a matching pin is not execution approval.
 
 ## The graph
 
@@ -64,7 +69,7 @@ flowchart TD
   VALIDATE -->|revise within cap| SESSION
   VALIDATE -->|scope, policy or unresolved risk| QUESTION["HUMAN: resolve the named decision"]
   QUESTION --> SESSION
-  VALIDATE -->|pass| BUILD["Same Opus 5.5 session: implement and run gates"]
+  VALIDATE -->|pass| BUILD["Same configured ticket session: implement and run gates"]
   BUILD --> LAND["Project review gate when applicable; /land opens PR"]
   LAND --> REVIEW["Automatically run /pr-loop; independent Codex reviewer"]
   REVIEW -->|fix within round cap| BUILD
@@ -118,18 +123,19 @@ Workflow options or a Desktop automation API.
   handle, branch, absolute worktree, plan revision, PR URL and current head SHA.
   Recover an existing mapping before creating a session. Never silently create a
   replacement session for a review fix or restart.
-- Pin the exact implementation model to `claude-opus-5-5`. Set `high` for bounded
-  work; use `xhigh` (Extra) for engine, access-control, metering, cross-layer or
-  difficult integration work. Record the reason and actual resolved settings.
-  A model substitution or effort cap is a mismatch to report, not a silent pass.
+- Pin `policy.implementation_model` and `policy.default_effort`, with each unit's
+  explicit effort override when needed. Record the difficulty reason and actual
+  resolved settings. The MVP pilot's Opus 5.5/high-or-xhigh choice is project data,
+  not a universal model literal. A substituted model/effort is a mismatch to report.
 - Start every ticket session in the host's actual Plan mode. A prompt saying
   "plan first" is not proof that Plan mode is active. After validation, resume
   that same session with execution permission limited to the validated plan.
 - Automatic plan validation checks acceptance criteria coverage, file scope,
   dependency conditions, runnable tests, project gates and unresolved decisions.
   It uses a distinct validation context rather than an implementer's self-approval.
-  It returns PASS, REVISE or HUMAN_REQUIRED with evidence. Two automatic revision
-  attempts bound the pilot; after that, stop the track at a human node.
+  It returns PASS, REVISE or HUMAN_REQUIRED with evidence. Bound revisions with
+  `policy.max_plan_revisions`; exhaustion stops at a human node. The validation
+  verdict HUMAN_REQUIRED and rehearsal state both name an unresolved decision.
 - Bind PASS to the exact plan content digest, issue criteria, fetched base SHA and
   scope evidence. Changed plan, base or criteria invalidates the approval. An
   automatic PASS cannot authorize scope expansion, policy changes, a merge,
@@ -141,11 +147,19 @@ Workflow options or a Desktop automation API.
 ## Dependencies, evidence and human decisions
 
 Keep distinct edge types: `start_after`, `merge_after`, `release_after`,
-`evidence_required`, `human_decision`, `verify_after`, and `review_after`. Native Linear blocking relations are
-start constraints; the other types belong in a structured project execution
-record. Generate the diagram from those records and live observations.
+`evidence_required`, `human_decision`, `verify_after`, and `review_after`.
+Any edge targeting plan/build is a start prerequisite. Native Linear blockers
+target plan and retain `/next`'s existing blocked-issue precedence; an upstream
+engineering blocker requires verified merge. Build-only graph edges never relax
+an open native relation. See the format contract for other source kinds and typed
+edge constraints. Generate the view from the combined manifest and observations.
 
-For each condition, record its source, verifier, evidence and observation time.
+The manifest records each condition's source. Verifier, evidence, result and
+observation time belong in the root Conditions table or future runtime ledger,
+not extra edge fields. Before a controller exists, human decisions live as original
+scope decision-log entries or Linear comments by authorized humans, indexed in the
+root Human decisions table with actor/date, exact boundary and manifest digest.
+`/next` reads and verifies these original records; it creates no approvals.
 A merged PR requires confirmation that its changes reached the fetched default
 branch; a release requires its real tag and gate artefacts. CLEAN review applies
 to a head SHA, not to a branch name. Missing evidence is UNKNOWN. Conflicting
@@ -170,16 +184,20 @@ this document.
 
 ## Resumption and bounded execution
 
-Store runtime state beneath `${KSTACK_STATE:-$HOME/.kstack}/projects/<slug>/`,
-not in the tracked project graph. Acquire one coordinator lease per project;
+Store future runtime state beneath
+`${KSTACK_STATE:-$HOME/.kstack}/projects/<stack.yml project>/orchestration/<manifest slug>/`,
+not in the tracked graph. The repo key and manifest key are different namespaces. Acquire one coordinator lease per project;
 record an append-only transition ledger, approval evidence and graph revision.
 Before restarting, reconcile sessions, worktrees, PRs and default-branch state.
 Do not replay a side effect merely because a workflow node was interrupted.
 
 Only select the next wave after the human merge decisions and integration checks
 for the current one. Respect `/next`'s independence evidence, `/wave`'s seam checks
-and `/pr-loop`'s configured review cap. First pilot: at most two ticket sessions
-in flight and one Codex reviewer, then reassess from actual outcomes.
+and the resolved review cap: the lower of `policy.review_rounds` and configured
+`wave.max_review_rounds`, passed explicitly to `/pr-loop`. Review concurrency is
+the lower of `policy.review_concurrency` and configured wave review concurrency;
+ticket concurrency is bounded by `policy.max_sessions`. Report all resolved values.
+Pilot choices live in that pilot's project document/manifest, not this lifecycle.
 
 Session orchestration policies above remain specification/prompt-level. The
 roadmap script enforces structural and combined-event checks; it does not verify
@@ -194,8 +212,9 @@ restart behavior without duplicate work or unauthorized transitions.
    generated view/index at the consuming root using
    [the project template](project-template/ORCHESTRATION.md). Pin the reviewed
    shared-source revision and link the separate pilot from its Linear overview.
-2. Run a read-only rehearsal: enumerate READY_TO_PLAN, ACTIVE, MERGE_BLOCKED,
-   HUMAN_REQUIRED and UNKNOWN nodes with source evidence. Do not dispatch yet.
+2. Use `/next`'s graph-analysis step for the read-only rehearsal. Its contract
+   defines UNMAPPED, ACTIVE, HUMAN_REQUIRED, UNKNOWN, BLOCKED, PLAN_ONLY,
+   READY_TO_BUILD and MERGE_BLOCKED from verified event evidence. Do not dispatch.
 3. Prove the session adapter on one existing or approved unit, then implement the
    automatic-plan path explicitly. Keep human merge and release checkpoints.
 4. Run one bounded wave; compare the observed transitions against the graph before

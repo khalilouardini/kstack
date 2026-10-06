@@ -14,7 +14,9 @@
     "implementation_model": "claude-opus-5-5",
     "default_effort": "high",
     "max_sessions": 2,
-    "review_rounds": 3
+    "review_rounds": 3,
+    "max_plan_revisions": 2,
+    "review_concurrency": 1
   },
   "nodes": [
     {

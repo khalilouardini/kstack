@@ -8,7 +8,8 @@
     },
     "title": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "[\\s\\S]*\\S[\\s\\S]*"
     },
     "projects": {
       "type": "array",
@@ -22,7 +23,8 @@
           },
           "title": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*"
           },
           "linear_id": {
             "type": [
@@ -34,7 +36,8 @@
           },
           "scope_source": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*"
           },
           "authorization": {
             "enum": [
@@ -58,7 +61,8 @@
       "properties": {
         "implementation_model": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
         },
         "default_effort": {
           "enum": [
@@ -74,13 +78,24 @@
         "review_rounds": {
           "type": "integer",
           "minimum": 1
+        },
+        "max_plan_revisions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "review_concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
         }
       },
       "required": [
         "implementation_model",
         "default_effort",
         "max_sessions",
-        "review_rounds"
+        "review_rounds",
+        "max_plan_revisions",
+        "review_concurrency"
       ],
       "additionalProperties": false
     },
@@ -96,7 +111,8 @@
           },
           "title": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*"
           },
           "kind": {
             "enum": [
@@ -117,7 +133,8 @@
               "string",
               "null"
             ],
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*"
           },
           "issue_ref": {
             "type": [
@@ -129,19 +146,22 @@
           },
           "owner": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*"
           },
           "acceptance": {
             "type": "array",
             "minItems": 1,
             "items": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "pattern": "[\\s\\S]*\\S[\\s\\S]*"
             }
           },
           "source": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*"
           },
           "effort": {
             "enum": [
@@ -177,7 +197,8 @@
           },
           "from_event": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*"
           },
           "to": {
             "type": "string",
@@ -185,7 +206,8 @@
           },
           "to_event": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*"
           },
           "type": {
             "enum": [
@@ -200,7 +222,8 @@
           },
           "source": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*"
           }
         },
         "required": [

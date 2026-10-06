@@ -25,7 +25,7 @@ DESC_HARD, DESC_SOFT = 1024, 500
 # purpose: skills legitimately cite the consuming repo's docs/ paths, and a
 # false failure teaches people to ignore the gate.
 REPO_PREFIXES = ("router/", "core/", "roles/", "tools/", "bin/", "hosts/", "project-template/")
-ROOT_FILES = {"CONVENTIONS.md", "VERSION", "CHANGELOG.md", "ORCHESTRATION.md"}
+ROOT_FILES = {"CONVENTIONS.md", "VERSION", "CHANGELOG.md"}
 BACKTICKED = re.compile(r"`([A-Za-z0-9_][A-Za-z0-9_./-]*)`")
 FORBIDDEN = [
     (re.compile(r"OGUR-"), "OGUR-"),
@@ -329,8 +329,8 @@ def main(argv: list[str]) -> int:
         )
         print(out.stdout, end="")
         print(out.stderr, end="")
-        if out.returncode:
-            r.fail("tools/linear/linear-roadmap/tests", "harness", "roadmap tests failed")
+        if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+            r.fail("tools/linear/linear-roadmap/tests", "harness", "roadmap tests failed or none discovered")
 
     for where, check, msg in r.warns:
         print(f"WARN  {where}  [{check}] {msg}")

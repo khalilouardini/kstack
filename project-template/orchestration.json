@@ -6,7 +6,7 @@
       "key": "example",
       "title": "Example proposed project",
       "linear_id": null,
-      "scope_source": "Proposed prompt; no scope approval yet",
+      "scope_source": "TODO: cited prompt/spec/owner scope source",
       "authorization": "draft"
     }
   ],
@@ -14,7 +14,9 @@
     "implementation_model": "claude-opus-5-5",
     "default_effort": "high",
     "max_sessions": 2,
-    "review_rounds": 3
+    "review_rounds": 3,
+    "max_plan_revisions": 2,
+    "review_concurrency": 1
   },
   "nodes": [
     {
@@ -26,9 +28,9 @@
       "issue_ref": null,
       "owner": "human",
       "acceptance": [
-        "Check the cited acceptance criteria"
+        "TODO: runnable acceptance criterion from source"
       ],
-      "source": "Approved source or proposed draft source",
+      "source": "TODO: cited issue/spec/owner source",
       "effort": null
     },
     {
@@ -40,9 +42,9 @@
       "issue_ref": null,
       "owner": "implementer",
       "acceptance": [
-        "Check the cited acceptance criteria"
+        "TODO: runnable acceptance criterion from source"
       ],
-      "source": "Approved source or proposed draft source",
+      "source": "TODO: cited issue/spec/owner source",
       "effort": null
     },
     {
@@ -54,9 +56,9 @@
       "issue_ref": null,
       "owner": "implementer",
       "acceptance": [
-        "Check the cited acceptance criteria"
+        "TODO: runnable acceptance criterion from source"
       ],
-      "source": "Approved source or proposed draft source",
+      "source": "TODO: cited issue/spec/owner source",
       "effort": null
     },
     {
@@ -68,9 +70,9 @@
       "issue_ref": null,
       "owner": "implementer",
       "acceptance": [
-        "Check the cited acceptance criteria"
+        "TODO: runnable acceptance criterion from source"
       ],
-      "source": "Approved source or proposed draft source",
+      "source": "TODO: cited issue/spec/owner source",
       "effort": null
     },
     {
@@ -82,9 +84,9 @@
       "issue_ref": null,
       "owner": "implementer",
       "acceptance": [
-        "Check the cited acceptance criteria"
+        "TODO: runnable acceptance criterion from source"
       ],
-      "source": "Approved source or proposed draft source",
+      "source": "TODO: cited issue/spec/owner source",
       "effort": null
     },
     {
@@ -96,9 +98,9 @@
       "issue_ref": null,
       "owner": "implementer",
       "acceptance": [
-        "Check the cited acceptance criteria"
+        "TODO: runnable acceptance criterion from source"
       ],
-      "source": "Approved source or proposed draft source",
+      "source": "TODO: cited issue/spec/owner source",
       "effort": null
     },
     {
@@ -110,9 +112,9 @@
       "issue_ref": null,
       "owner": "human",
       "acceptance": [
-        "Check the cited acceptance criteria"
+        "TODO: runnable acceptance criterion from source"
       ],
-      "source": "Approved source or proposed draft source",
+      "source": "TODO: cited issue/spec/owner source",
       "effort": null
     },
     {
@@ -124,9 +126,9 @@
       "issue_ref": null,
       "owner": "implementer",
       "acceptance": [
-        "Check the cited acceptance criteria"
+        "TODO: runnable acceptance criterion from source"
       ],
-      "source": "Approved source or proposed draft source",
+      "source": "TODO: cited issue/spec/owner source",
       "effort": null
     },
     {
@@ -138,9 +140,9 @@
       "issue_ref": null,
       "owner": "human",
       "acceptance": [
-        "Check the cited acceptance criteria"
+        "TODO: runnable acceptance criterion from source"
       ],
-      "source": "Approved source or proposed draft source",
+      "source": "TODO: cited issue/spec/owner source",
       "effort": null
     },
     {
@@ -152,9 +154,9 @@
       "issue_ref": null,
       "owner": "human",
       "acceptance": [
-        "Check the cited acceptance criteria"
+        "TODO: runnable acceptance criterion from source"
       ],
-      "source": "Approved source or proposed draft source",
+      "source": "TODO: cited issue/spec/owner source",
       "effort": null
     }
   ],
@@ -164,7 +166,7 @@
       "to": "contract",
       "to_event": "plan",
       "type": "human_decision",
-      "source": "Cited prerequisite",
+      "source": "TODO: cited prerequisite",
       "from": "scope"
     },
     {
@@ -172,7 +174,7 @@
       "to": "api",
       "to_event": "build",
       "type": "start_after",
-      "source": "Cited prerequisite",
+      "source": "TODO: cited prerequisite",
       "from": "contract"
     },
     {
@@ -180,7 +182,7 @@
       "to": "ui",
       "to_event": "build",
       "type": "start_after",
-      "source": "Cited prerequisite",
+      "source": "TODO: cited prerequisite",
       "from": "contract"
     },
     {
@@ -188,7 +190,7 @@
       "to": "ui",
       "to_event": "merge",
       "type": "merge_after",
-      "source": "Cited prerequisite",
+      "source": "TODO: cited prerequisite",
       "from": "api"
     },
     {
@@ -196,7 +198,7 @@
       "to": "merge",
       "to_event": "approve",
       "type": "evidence_required",
-      "source": "Cited prerequisite",
+      "source": "TODO: cited prerequisite",
       "from": "eval"
     },
     {
@@ -204,7 +206,7 @@
       "to": "ui",
       "to_event": "merge",
       "type": "human_decision",
-      "source": "Cited prerequisite",
+      "source": "TODO: cited prerequisite",
       "from": "merge"
     },
     {
@@ -212,7 +214,7 @@
       "to": "release",
       "to_event": "release",
       "type": "release_after",
-      "source": "Cited prerequisite",
+      "source": "TODO: cited prerequisite",
       "from": "ui"
     },
     {
@@ -221,7 +223,7 @@
       "to": "eval",
       "to_event": "pass",
       "type": "verify_after",
-      "source": "Cited prerequisite"
+      "source": "TODO: cited prerequisite"
     },
     {
       "from": "ui",
@@ -229,7 +231,7 @@
       "to": "eval",
       "to_event": "pass",
       "type": "verify_after",
-      "source": "Cited prerequisite"
+      "source": "TODO: cited prerequisite"
     },
     {
       "from": "ui",
@@ -237,7 +239,7 @@
       "to": "merge",
       "to_event": "approve",
       "type": "review_after",
-      "source": "Cited prerequisite"
+      "source": "TODO: cited prerequisite"
     },
     {
       "from": "merge",
@@ -245,7 +247,7 @@
       "to": "api",
       "to_event": "merge",
       "type": "human_decision",
-      "source": "Cited prerequisite"
+      "source": "TODO: cited prerequisite"
     },
     {
       "from": "contract",
@@ -253,7 +255,7 @@
       "to": "contract_review",
       "to_event": "approve",
       "type": "review_after",
-      "source": "Cited contract review policy"
+      "source": "TODO: cited prerequisite"
     },
     {
       "from": "contract_review",
@@ -261,7 +263,7 @@
       "to": "contract",
       "to_event": "merge",
       "type": "human_decision",
-      "source": "Cited human merge authority"
+      "source": "TODO: cited prerequisite"
     },
     {
       "from": "ui",
@@ -269,7 +271,7 @@
       "to": "release_review",
       "to_event": "approve",
       "type": "review_after",
-      "source": "Cited integration and release policy"
+      "source": "TODO: cited prerequisite"
     },
     {
       "from": "release_review",
@@ -277,7 +279,7 @@
       "to": "release",
       "to_event": "release",
       "type": "human_decision",
-      "source": "Cited human deployment authority"
+      "source": "TODO: cited prerequisite"
     }
   ]
 }

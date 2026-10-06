@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "source_revision": "TODO: exact reviewed kstack commit (40 lowercase hex)",
+  "manifest": "orchestration/project.json"
+}

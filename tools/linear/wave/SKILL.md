@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.1.0
+version: 0.2.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -25,7 +25,8 @@ and name the dependency. Do not approximate selection rules.
 ## Project-level orchestration design
 
 For the requested single Ultracode coordinator and one persistent Desktop session
-per ticket, read the stack-root [ORCHESTRATION.md](../../../ORCHESTRATION.md).
+per ticket, resolve the physical stack root as described in Invocation below and
+read `<stack-root>/ORCHESTRATION.md`; do not follow a lexical symlink-relative link.
 It is an experimental specification, not an additional wave mode. This skill
 still uses the two human checkpoints below; it does not automatically approve
 plans, preserve one Desktop session across stages or advance to another wave.
@@ -55,7 +56,9 @@ Read every composed procedure by physical path, never copy its rules here.
 
 Read `hosts/HOSTS.md`. Claude Code supplies the Workflow tool. On Codex, run
 A1 only: read `tools/linear/next/SKILL.md` and follow it top to bottom in parallel
-mode with the supplied milestone/project/count tokens. Render that selection
+mode with the supplied milestone/project/count tokens. PLAN_ONLY candidates
+must go into SELECT.sequenced with their unmet condition/source, never TRACK.
+They do not count toward N and cannot reach `--approve all`. Render that selection
 and say **the graph did not run**; no dispatch, tracker write, contract or build.
 A Codex build invocation refuses because approval cannot restore a missing tool.
 The graph's policies remain prompt-level; absence of Workflow on Codex is
