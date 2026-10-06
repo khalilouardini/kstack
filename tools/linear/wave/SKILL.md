@@ -22,6 +22,14 @@ in an ordinary `/next` invocation. Project filters depend on the canonical
 `next` supporting repeatable `--project`; if it does not, refuse that option
 and name the dependency. Do not approximate selection rules.
 
+## Project-level orchestration design
+
+For the requested single Ultracode coordinator and one persistent Desktop session
+per ticket, read the stack-root [ORCHESTRATION.md](../../../ORCHESTRATION.md).
+It is an experimental specification, not an additional wave mode. This skill
+still uses the two human checkpoints below; it does not automatically approve
+plans, preserve one Desktop session across stages or advance to another wave.
+
 ## Configuration
 
 Read the consuming repo's `.agents/stack.yml` first (CONVENTIONS §2).

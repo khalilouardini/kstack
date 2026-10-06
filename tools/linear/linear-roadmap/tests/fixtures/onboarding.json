@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "title": "Onboarding project",
+  "projects": [
+    {
+      "key": "onboarding",
+      "title": "Onboarding project",
+      "linear_id": "dd22da19-3818-5404-89e1-b7499ce0b870",
+      "scope_source": "Synthetic scope fixture, not live authorization",
+      "authorization": "recorded"
+    }
+  ],
+  "policy": {
+    "implementation_model": "claude-opus-5-5",
+    "default_effort": "xhigh",
+    "max_sessions": 2,
+    "review_rounds": 3
+  },
+  "nodes": [
+    {
+      "id": "scope",
+      "title": "Scope decision",
+      "kind": "human",
+      "project": "onboarding",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "human",
+      "acceptance": [
+        "Check the cited acceptance criteria"
+      ],
+      "source": "Approved source or proposed draft source",
+      "effort": null
+    },
+    {
+      "id": "feature",
+      "title": "Feature units",
+      "kind": "group",
+      "project": "onboarding",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "implementer",
+      "acceptance": [
+        "Check the cited acceptance criteria"
+      ],
+      "source": "Approved source or proposed draft source",
+      "effort": null
+    },
+    {
+      "id": "contract",
+      "title": "Frozen contract",
+      "kind": "unit",
+      "project": "onboarding",
+      "unit_of": "feature",
+      "issue_ref": "53e9e42d-edaa-54ed-9ebf-59dc489d94db",
+      "owner": "implementer",
+      "acceptance": [
+        "Check the cited acceptance criteria"
+      ],
+      "source": "Approved source or proposed draft source",
+      "effort": null
+    },
+    {
+      "id": "api",
+      "title": "Account admission",
+      "kind": "unit",
+      "project": "onboarding",
+      "unit_of": "feature",
+      "issue_ref": "d6881710-7f0b-513f-b11e-72a1d3a1e2be",
+      "owner": "implementer",
+      "acceptance": [
+        "Check the cited acceptance criteria"
+      ],
+      "source": "Approved source or proposed draft source",
+      "effort": null
+    },
+    {
+      "id": "ui",
+      "title": "Welcome flow",
+      "kind": "unit",
+      "project": "onboarding",
+      "unit_of": "feature",
+      "issue_ref": "ef2bfc28-c08d-57f2-a801-4d8b2081066b",
+      "owner": "implementer",
+      "acceptance": [
+        "Check the cited acceptance criteria"
+      ],
+      "source": "Approved source or proposed draft source",
+      "effort": null
+    },
+    {
+      "id": "eval",
+      "title": "Acceptance evidence",
+      "kind": "evidence",
+      "project": "onboarding",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "implementer",
+      "acceptance": [
+        "Check the cited acceptance criteria"
+      ],
+      "source": "Approved source or proposed draft source",
+      "effort": null
+    },
+    {
+      "id": "merge",
+      "title": "Review and merge decision",
+      "kind": "human",
+      "project": "onboarding",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "human",
+      "acceptance": [
+        "Check the cited acceptance criteria"
+      ],
+      "source": "Approved source or proposed draft source",
+      "effort": null
+    },
+    {
+      "id": "release",
+      "title": "Release verification",
+      "kind": "release",
+      "project": "onboarding",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "implementer",
+      "acceptance": [
+        "Check the cited acceptance criteria"
+      ],
+      "source": "Approved source or proposed draft source",
+      "effort": null
+    }
+  ],
+  "edges": [
+    {
+      "from_event": "approve",
+      "to": "contract",
+      "to_event": "plan",
+      "type": "human_decision",
+      "source": "Cited prerequisite",
+      "from": "scope"
+    },
+    {
+      "from_event": "merge",
+      "to": "api",
+      "to_event": "build",
+      "type": "start_after",
+      "source": "Cited prerequisite",
+      "from": "contract"
+    },
+    {
+      "from_event": "merge",
+      "to": "ui",
+      "to_event": "build",
+      "type": "start_after",
+      "source": "Cited prerequisite",
+      "from": "contract"
+    },
+    {
+      "from_event": "merge",
+      "to": "ui",
+      "to_event": "merge",
+      "type": "merge_after",
+      "source": "Cited prerequisite",
+      "from": "api"
+    },
+    {
+      "from_event": "pass",
+      "to": "merge",
+      "to_event": "approve",
+      "type": "evidence_required",
+      "source": "Cited prerequisite",
+      "from": "eval"
+    },
+    {
+      "from_event": "approve",
+      "to": "ui",
+      "to_event": "merge",
+      "type": "human_decision",
+      "source": "Cited prerequisite",
+      "from": "merge"
+    },
+    {
+      "from_event": "merge",
+      "to": "release",
+      "to_event": "release",
+      "type": "release_after",
+      "source": "Cited prerequisite",
+      "from": "ui"
+    },
+    {
+      "from": "api",
+      "from_event": "build",
+      "to": "eval",
+      "to_event": "pass",
+      "type": "verify_after",
+      "source": "Cited prerequisite"
+    },
+    {
+      "from": "ui",
+      "from_event": "build",
+      "to": "eval",
+      "to_event": "pass",
+      "type": "verify_after",
+      "source": "Cited prerequisite"
+    },
+    {
+      "from": "ui",
+      "from_event": "build",
+      "to": "merge",
+      "to_event": "approve",
+      "type": "review_after",
+      "source": "Cited prerequisite"
+    },
+    {
+      "from": "merge",
+      "from_event": "approve",
+      "to": "api",
+      "to_event": "merge",
+      "type": "human_decision",
+      "source": "Cited prerequisite"
+    }
+  ]
+}

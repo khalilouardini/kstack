@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "projects": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "linear_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "scope_source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "authorization": {
+            "enum": [
+              "draft",
+              "recorded"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "linear_id",
+          "scope_source",
+          "authorization"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "implementation_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "default_effort": {
+          "enum": [
+            "high",
+            "xhigh"
+          ]
+        },
+        "max_sessions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "review_rounds": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "implementation_model",
+        "default_effort",
+        "max_sessions",
+        "review_rounds"
+      ],
+      "additionalProperties": false
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "unit",
+              "group",
+              "human",
+              "evidence",
+              "external",
+              "release"
+            ]
+          },
+          "project": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "unit_of": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "issue_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1
+          },
+          "acceptance": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "effort": {
+            "enum": [
+              null,
+              "high",
+              "xhigh"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "kind",
+          "project",
+          "unit_of",
+          "issue_ref",
+          "owner",
+          "acceptance",
+          "source",
+          "effort"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "from_event": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "to_event": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "start_after",
+              "merge_after",
+              "release_after",
+              "evidence_required",
+              "human_decision",
+              "verify_after",
+              "review_after"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "from",
+          "from_event",
+          "to",
+          "to_event",
+          "type",
+          "source"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "title",
+    "projects",
+    "policy",
+    "nodes",
+    "edges"
+  ],
+  "additionalProperties": false
+}

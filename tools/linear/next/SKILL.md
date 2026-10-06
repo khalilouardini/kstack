@@ -1,6 +1,6 @@
 ---
 name: next
-version: 0.3.0
+version: 0.4.0
 description: Read Linear and recommend scoped work. Default gives one recommendation; --parallel [N] selects up to five independent tracks, optionally across repeated --project filters, with separate kickoffs. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
@@ -200,6 +200,37 @@ than useless.
 2. **Milestone `progress` derives from issue closure**, not from real completion.
    A milestone reading 100% means its issues are closed, which is not the same
    claim. Never quote milestone progress as evidence that something works.
+
+## Project orchestration records — optional, read-only
+
+Read root `ORCHESTRATION.md` when present and follow its manifest index; do not
+infer readiness from a Mermaid picture or load an unrelated unindexed draft.
+For an indexed `orchestration/<slug>.json` covering candidate project IDs, read
+the shared lifecycle and `tools/linear/linear-roadmap/references/contract.md`,
+then run that skill's physical `bin/graph-record validate <absolute-path>`.
+An unreadable/invalid indexed record stops recommendations for its affected
+projects and names the missing input. Absent records keep the existing procedure.
+
+Resolve `issue_ref` by canonical Linear UUID, then check applicable incoming event
+conditions against fresh evidence. A start prerequisite targeting plan must hold
+before recommending a new plan session; one targeting build must hold before an
+implementation kickoff. If only planning is allowed, label it PLAN ONLY. Never
+suggest that `/dispatch-implementation` or `/wave build` supports the new controller.
+Scope authorization still comes from the existing contract gate below.
+
+A merge/release-only edge does not itself block planning/building. State the
+later condition and human decision; it cannot relax the existing parallel-mode
+independence bar. Fetch PR/default-branch, acceptance and recorded human-decision
+evidence as required by each condition. Status Done, a draft/recorded field or a
+structural validator pass is not that evidence. UNKNOWN or conflicting start
+evidence blocks the affected kickoff; report the named decision, never treat it
+as satisfied. Do not store approvals or mutate the roadmap here.
+
+Use unresolved downstream prerequisites to explain what ready work unblocks,
+within the existing release/scope ranking. Do not invent durations or claim a
+computed critical path without them. Include the manifest revision and condition
+source in the recommendation, and carry later review/merge gates into its kickoff.
+These instructions are prompt-level; the validator enforces structure only.
 
 ## Procedure
 
@@ -652,6 +683,8 @@ integration-order preference.
   remaining, and contract section all follow each issue's resolved milestone.
 - **Project filters form one union; authorization stays per issue.** Resolve IDs,
   verify membership, and check every pair across all projects and active work.
+- **Indexed graph conditions supplement the contract.** Check event evidence,
+  preserve human gates and distinguish plan-only from implementation readiness.
 - **Fail closed on incomplete tracker state.** Name the missing input rather than
   ranking on a subset.
 - **Never invent a ticket.** If the right next step has no tracker issue, say

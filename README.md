@@ -2,15 +2,20 @@
 
 # kstack
 
-A personal agent harness that travels across projects. Twenty-four installable skills and four
+A personal agent harness that travels across projects. Twenty-six installable skills and four
 role contracts, each defined once, pointed at by every host and every repo that
 uses them.
 
 **Start here:** [`router/stack/SKILL.md`](router/stack/SKILL.md) routes any
 request to the right skill. The [visual guide](docs/skill-map.md) explains the
 router, workflow phases, capability tiers, and the decision and review clusters
-with diagrams that render directly on GitHub. The
-[interactive map](docs/skill-map.html) adds filtering when opened locally.
+with diagrams that render directly on GitHub.
+The root [project orchestration graph](ORCHESTRATION.md) defines the experimental
+Ultracode coordinator, per-ticket sessions and human checkpoints;
+[the project template](project-template/ORCHESTRATION.md) carries project-specific conditions.
+[`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) prepares a typed record
+and generates its Mermaid view; `/next` reads its conditions before recommending work.
+The [interactive map](docs/skill-map.html) adds filtering when opened locally.
 
 ```bash
 git clone <this repo> ~/projects/kstack
@@ -52,6 +57,13 @@ needs a Linear workspace.
 | [`/triage`](roles/triage/SKILL.md) | Scores every open PR, branch and worktree against the scope doc; writes a dated proposal | Closing, merging or deleting anything |
 | [`/next`](tools/linear/next/SKILL.md) | Recommends one scoped issue or up to five independent tracks across repeated project filters | Inventing a ticket; any write |
 | [`/linear-feature-intake`](tools/linear/linear-feature-intake/SKILL.md) | Turns a scope verdict into the right tracker records | Forming a verdict of its own |
+| [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) | Maps existing work or drafts a proposed graph; validates JSON and generates Mermaid | Creating tickets, granting scope or launching sessions |
+
+For new work, compose `/spec` → `/linear-feature-intake` → `/linear-roadmap`.
+For existing approved tickets, start with `/linear-roadmap`. A simple prompt can
+produce a draft graph; scope approval and ticket creation remain separate steps.
+The shared lifecycle lives once at the stack root, with a versioned schema and
+per-project records. Publishing or preparing a roadmap grants no execution permission.
 
 The four **role contracts** are dispatched as subagents, not invoked as slash
 commands: [`product-manager`](roles/product-manager.md) (one verdict, cited,

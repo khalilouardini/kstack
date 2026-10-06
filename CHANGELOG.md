@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+Add `/linear-roadmap` to prepare reusable project/subunit roadmaps from existing
+Linear work, specs or prompts. A versioned JSON contract and stdlib validator
+generate Mermaid and check combined event dependencies; `/next` consults these
+conditions using live evidence. Root lifecycle and consuming-project templates
+keep shared policy separate from pilot data. Document the missing session
+controller and automatic-plan path; existing `/wave` approval remains unchanged.
+
 New `sweep-schedules` sets up recurring session-title and PR-label application
 through the desktop scheduler, every three hours by default. Setup reuses a
 matching schedule, saves bounded apply authorization, and keeps unchanged runs
