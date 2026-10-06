@@ -38,7 +38,8 @@ adapter, or read `roles/<role>.md` and follow it in-session.
 - "should we build X", "is this in scope", "spec this out", "write this up as a
   ticket", "is this worth building" → invoke `/spec`
 - "what should I work on next", "what's next", "pick my next ticket", "what's
-  the highest-leverage thing right now" → invoke `/next`
+  the highest-leverage thing right now", "what can I run in parallel across these
+  projects" → invoke `/next` (preserve repeated `--project` and `--parallel` flags)
 - "triage the backlog", "clean up the open PRs", "which branches can we
   delete", "what's still open and does it matter" → invoke `/triage`
 - "is *just this* in scope?" — scope verdict only, no spec → dispatch
@@ -165,7 +166,7 @@ One axis: **which direction the work is moving**.
 |---|---|---|
 | A new idea coming **in** | "should we build this at all?" | `/spec` — `product-manager` runs first and alone; only an active-milestone IN fans out to `tech-lead` + `designer`, then `qa` |
 | One narrow question about an idea already understood | "is just this in scope?" / "how long?" / "which component?" / "what proves it?" | the single role contract, dispatched alone |
-| The backlog, **forward** | "what do I pick up next?" | `/next` — reads the tracker, recommends exactly one thing, read-only |
+| The backlog, **forward** | "what do I pick up next?" | `/next` — reads the tracker, recommends one issue or an independent batch with optional repeated `--project` filters, read-only |
 | Work already open, **backward** | "what do we do with everything still unfinished?" | `/triage` — scores open PRs, branches, worktrees; writes a proposal, executes nothing |
 | A decision already made, needing a record | "file it" | `/linear-feature-intake` — executes a verdict, never forms one |
 
