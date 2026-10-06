@@ -1,0 +1,427 @@
+{
+  "tracks": [
+    {
+      "issue_id": "T-1",
+      "title": "Track 1",
+      "project": "Project",
+      "milestone": "M1",
+      "contract_citation": "scope:12",
+      "branch": "codex/t-1",
+      "worktree": "/tmp/track-1",
+      "file_scope": [
+        "file1.txt"
+      ],
+      "integration_order": 1
+    },
+    {
+      "issue_id": "T-2",
+      "title": "Track 2",
+      "project": "Project",
+      "milestone": "M1",
+      "contract_citation": "scope:12",
+      "branch": "codex/t-2",
+      "worktree": "/tmp/track-2",
+      "file_scope": [
+        "file2.txt"
+      ],
+      "integration_order": 2
+    },
+    {
+      "issue_id": "T-3",
+      "title": "Track 3",
+      "project": "Project",
+      "milestone": "M1",
+      "contract_citation": "scope:12",
+      "branch": "codex/t-3",
+      "worktree": "/tmp/track-3",
+      "file_scope": [
+        "file3.txt"
+      ],
+      "integration_order": 3
+    }
+  ],
+  "literals": [
+    {
+      "literal": "AGREED",
+      "files": [
+        "file1.txt",
+        "file2.txt"
+      ],
+      "tracks": [
+        "T-1",
+        "T-2"
+      ],
+      "why": "status marker"
+    }
+  ],
+  "contract": {
+    "state": "PR_OPEN",
+    "pr": "https://example.test/pr/contract",
+    "branch": "codex/contract",
+    "file": "/tmp/contract/one.json",
+    "stop_reason": null,
+    "evidence": [
+      "test passed"
+    ]
+  },
+  "plan_record": {
+    "state": "AWAITING_APPROVAL",
+    "run_id": "plan-run",
+    "wave_id": "wave-1",
+    "tracks": [
+      {
+        "issue_id": "T-1",
+        "title": "Track 1",
+        "project": "Project",
+        "milestone": "M1",
+        "contract_citation": "scope:12",
+        "branch": "codex/t-1",
+        "worktree": "/tmp/track-1",
+        "file_scope": [
+          "file1.txt"
+        ],
+        "integration_order": 1
+      },
+      {
+        "issue_id": "T-2",
+        "title": "Track 2",
+        "project": "Project",
+        "milestone": "M1",
+        "contract_citation": "scope:12",
+        "branch": "codex/t-2",
+        "worktree": "/tmp/track-2",
+        "file_scope": [
+          "file2.txt"
+        ],
+        "integration_order": 2
+      },
+      {
+        "issue_id": "T-3",
+        "title": "Track 3",
+        "project": "Project",
+        "milestone": "M1",
+        "contract_citation": "scope:12",
+        "branch": "codex/t-3",
+        "worktree": "/tmp/track-3",
+        "file_scope": [
+          "file3.txt"
+        ],
+        "integration_order": 3
+      }
+    ],
+    "plans": [
+      {
+        "issue_id": "T-1",
+        "worktree": "/tmp/track-1",
+        "branch": "codex/t-1",
+        "linear_status_readback": "started id verified",
+        "acceptance_criteria_cited": [
+          "issue AC1"
+        ],
+        "files": [
+          "file1.txt"
+        ],
+        "tests": [
+          "runner test"
+        ],
+        "risks": [],
+        "state": "PLANNED",
+        "stop_reason": null,
+        "evidence": [
+          "worktree read-back"
+        ]
+      },
+      {
+        "issue_id": "T-2",
+        "worktree": "/tmp/track-2",
+        "branch": "codex/t-2",
+        "linear_status_readback": "started id verified",
+        "acceptance_criteria_cited": [
+          "issue AC1"
+        ],
+        "files": [
+          "file2.txt"
+        ],
+        "tests": [
+          "runner test"
+        ],
+        "risks": [],
+        "state": "PLANNED",
+        "stop_reason": null,
+        "evidence": [
+          "worktree read-back"
+        ]
+      },
+      {
+        "issue_id": "T-3",
+        "worktree": "/tmp/track-3",
+        "branch": "codex/t-3",
+        "linear_status_readback": "started id verified",
+        "acceptance_criteria_cited": [
+          "issue AC1"
+        ],
+        "files": [
+          "file3.txt"
+        ],
+        "tests": [
+          "runner test"
+        ],
+        "risks": [],
+        "state": "PLANNED",
+        "stop_reason": null,
+        "evidence": [
+          "worktree read-back"
+        ]
+      }
+    ],
+    "contract": null,
+    "literals": [],
+    "sequenced": [],
+    "already_active": [],
+    "build_command": "/wave build --approve all",
+    "stop_reason": null,
+    "evidence": []
+  },
+  "responses": {
+    "A1 select": {
+      "tracks": [
+        {
+          "issue_id": "T-1",
+          "title": "Track 1",
+          "project": "Project",
+          "milestone": "M1",
+          "contract_citation": "scope:12",
+          "branch": "codex/t-1",
+          "worktree": "/tmp/track-1",
+          "file_scope": [
+            "file1.txt"
+          ],
+          "integration_order": 1
+        },
+        {
+          "issue_id": "T-2",
+          "title": "Track 2",
+          "project": "Project",
+          "milestone": "M1",
+          "contract_citation": "scope:12",
+          "branch": "codex/t-2",
+          "worktree": "/tmp/track-2",
+          "file_scope": [
+            "file2.txt"
+          ],
+          "integration_order": 2
+        },
+        {
+          "issue_id": "T-3",
+          "title": "Track 3",
+          "project": "Project",
+          "milestone": "M1",
+          "contract_citation": "scope:12",
+          "branch": "codex/t-3",
+          "worktree": "/tmp/track-3",
+          "file_scope": [
+            "file3.txt"
+          ],
+          "integration_order": 3
+        }
+      ],
+      "sequenced": [],
+      "already_active": []
+    },
+    "A2 shared-literal scan": {
+      "literals": []
+    },
+    "A3 contract": {
+      "state": "PR_OPEN",
+      "pr": "https://example.test/pr/contract",
+      "branch": "codex/contract",
+      "file": "/tmp/contract/one.json",
+      "stop_reason": null,
+      "evidence": [
+        "test passed"
+      ]
+    },
+    "B2 seam check": {
+      "exit": 0,
+      "table": [],
+      "open_questions": []
+    },
+    "A4 plan T-1": {
+      "issue_id": "T-1",
+      "worktree": "/tmp/track-1",
+      "branch": "codex/t-1",
+      "linear_status_readback": "started id verified",
+      "acceptance_criteria_cited": [
+        "issue AC1"
+      ],
+      "files": [
+        "file1.txt"
+      ],
+      "tests": [
+        "runner test"
+      ],
+      "risks": [],
+      "state": "PLANNED",
+      "stop_reason": null,
+      "evidence": [
+        "worktree read-back"
+      ]
+    },
+    "B1 build T-1": {
+      "issue_id": "T-1",
+      "state": "PR_OPEN",
+      "pr": "https://example.test/pr/1",
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "files_touched": [
+        "file1.txt"
+      ],
+      "gates": {
+        "lint": {
+          "cmd": "lint",
+          "exit": 0
+        },
+        "test": {
+          "cmd": "test",
+          "exit": 0,
+          "count": 1
+        }
+      },
+      "acceptance_evidence": [
+        "AC1 passed"
+      ],
+      "open_questions": [],
+      "stop_reason": null,
+      "evidence": [
+        "gates green"
+      ]
+    },
+    "B3 review T-1": {
+      "pr": "https://example.test/pr/1",
+      "verdict": "CLEAN",
+      "rounds": 1,
+      "open_findings": [],
+      "model_routing": [
+        "configured reviewer"
+      ],
+      "open_questions": []
+    },
+    "A4 plan T-2": {
+      "issue_id": "T-2",
+      "worktree": "/tmp/track-2",
+      "branch": "codex/t-2",
+      "linear_status_readback": "started id verified",
+      "acceptance_criteria_cited": [
+        "issue AC1"
+      ],
+      "files": [
+        "file2.txt"
+      ],
+      "tests": [
+        "runner test"
+      ],
+      "risks": [],
+      "state": "PLANNED",
+      "stop_reason": null,
+      "evidence": [
+        "worktree read-back"
+      ]
+    },
+    "B1 build T-2": {
+      "issue_id": "T-2",
+      "state": "PR_OPEN",
+      "pr": "https://example.test/pr/2",
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "files_touched": [
+        "file2.txt"
+      ],
+      "gates": {
+        "lint": {
+          "cmd": "lint",
+          "exit": 0
+        },
+        "test": {
+          "cmd": "test",
+          "exit": 0,
+          "count": 1
+        }
+      },
+      "acceptance_evidence": [
+        "AC1 passed"
+      ],
+      "open_questions": [],
+      "stop_reason": null,
+      "evidence": [
+        "gates green"
+      ]
+    },
+    "B3 review T-2": {
+      "pr": "https://example.test/pr/2",
+      "verdict": "CLEAN",
+      "rounds": 1,
+      "open_findings": [],
+      "model_routing": [
+        "configured reviewer"
+      ],
+      "open_questions": []
+    },
+    "A4 plan T-3": {
+      "issue_id": "T-3",
+      "worktree": "/tmp/track-3",
+      "branch": "codex/t-3",
+      "linear_status_readback": "started id verified",
+      "acceptance_criteria_cited": [
+        "issue AC1"
+      ],
+      "files": [
+        "file3.txt"
+      ],
+      "tests": [
+        "runner test"
+      ],
+      "risks": [],
+      "state": "PLANNED",
+      "stop_reason": null,
+      "evidence": [
+        "worktree read-back"
+      ]
+    },
+    "B1 build T-3": {
+      "issue_id": "T-3",
+      "state": "PR_OPEN",
+      "pr": "https://example.test/pr/3",
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "files_touched": [
+        "file3.txt"
+      ],
+      "gates": {
+        "lint": {
+          "cmd": "lint",
+          "exit": 0
+        },
+        "test": {
+          "cmd": "test",
+          "exit": 0,
+          "count": 1
+        }
+      },
+      "acceptance_evidence": [
+        "AC1 passed"
+      ],
+      "open_questions": [],
+      "stop_reason": null,
+      "evidence": [
+        "gates green"
+      ]
+    },
+    "B3 review T-3": {
+      "pr": "https://example.test/pr/3",
+      "verdict": "CLEAN",
+      "rounds": 1,
+      "open_findings": [],
+      "model_routing": [
+        "configured reviewer"
+      ],
+      "open_questions": []
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 # kstack
 
-A personal agent harness that travels across projects. Twenty installable skills and four
+A personal agent harness that travels across projects. Twenty-four installable skills and four
 role contracts, each defined once, pointed at by every host and every repo that
 uses them.
 
@@ -50,7 +50,7 @@ needs a Linear workspace.
 |---|---|---|
 | [`/spec`](roles/spec/SKILL.md) | Product gate: the scope role runs first and alone; only an in-scope verdict fans out to tech-lead + designer, then qa | Spending four agents on an idea that fails the first gate |
 | [`/triage`](roles/triage/SKILL.md) | Scores every open PR, branch and worktree against the scope doc; writes a dated proposal | Closing, merging or deleting anything |
-| [`/next`](tools/linear/next/SKILL.md) | Reads the board and recommends exactly one thing to pick up | Inventing a ticket; any write |
+| [`/next`](tools/linear/next/SKILL.md) | Recommends one scoped issue or up to five independent tracks across repeated project filters | Inventing a ticket; any write |
 | [`/linear-feature-intake`](tools/linear/linear-feature-intake/SKILL.md) | Turns a scope verdict into the right tracker records | Forming a verdict of its own |
 
 The four **role contracts** are dispatched as subagents, not invoked as slash
@@ -64,6 +64,7 @@ half-day estimate, refuses to estimate what it cannot name),
 
 | Skill | Does | Enforcement |
 |---|---|---|
+| [`/wave`](tools/linear/wave/SKILL.md) | One independent batch through a Claude Code Workflow graph | prompt-level checkpoints; script checks approval/review routing; Codex selection only |
 | [`/dispatch-implementation`](tools/linear/dispatch-implementation/SKILL.md) | Starts one approved issue in an isolated worktree and automatically moves it to the contract's started status after the worktree exists | Linear write + mandatory read-back; prompt-level outside the skill |
 | [`/investigate`](core/investigate/SKILL.md) | Root-cause debugging: no fix before the cause is found; three failed attempts stops the run; every fix ships a fail-then-pass test | prompt + optional scope lock |
 | [`/careful`](core/careful/SKILL.md) | Pre-checks every shell command. Recursive deletes rooted at `/` or `$HOME` and force-pushes to the default branch are denied; the rest asks | **hook** (Claude Code) |
@@ -145,3 +146,15 @@ from the OGUR harness. The router pattern, the two `PreToolUse` hook scripts,
 questions inside the product gate are adapted from
 [garrytan/gstack](https://github.com/garrytan/gstack) (MIT). gstack's
 auto-decide pipelines are deliberately not ported — see the refusals above.
+
+### Select parallel work across projects
+
+```text
+/next --project "Road to MVP-2" --project "MVP-2 stretch" --project "MVP 2.3" --parallel 5
+```
+
+`next` resolves project IDs, verifies membership, and selects one combined batch.
+Each track keeps its own milestone authorization and reports its project and gate.
+Active release work breaks ties between equally large independent batches. The
+skill only proposes separate branch/worktree kickoffs; it creates nothing. Without
+project filters, `/next any --parallel 3` still selects one milestone.

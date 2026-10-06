@@ -1,7 +1,7 @@
 ---
 name: next
-version: 0.2.0
-description: Read Linear — open issues, cycles, projects, milestones, deadlines, blockers — and decide what to work on next, gated against the consuming repo's scope doc. Default mode makes exactly ONE recommendation with a ranked top 3; --parallel [N] instead returns up to N mutually-independent issues as a batch, each with its own paste-ready kickoff — and its own branch and worktree when the track is engineering work. Read-only; never creates, closes, or reassigns an issue, and never invents one. Use when asked to "what should I work on next", "what's next", "pick my next ticket", "what can I run in parallel", or "/next [<milestone-id>|any] [--parallel [N]]". (kstack)
+version: 0.3.0
+description: Read Linear and recommend scoped work. Default gives one recommendation; --parallel [N] selects up to five independent tracks, optionally across repeated --project filters, with separate kickoffs. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
 # next — what to pick up now
@@ -9,7 +9,8 @@ description: Read Linear — open issues, cycles, projects, milestones, deadline
 ## When to invoke
 
 Someone needs to decide what starts now, and the tracker holds more open work
-than fits in one head. Invoke as `/next [<milestone-id>|any] [--parallel [N]]`.
+than fits in one head. Invoke as
+`/next [<milestone-id>|any] [--project "<name-or-id>"]... [--parallel [N]]`.
 Forward-looking;
 the complement to `triage`, which audits unfinished GitHub work backwards. Not
 for deciding whether a *new* idea is in scope (that is the `spec` pipeline's
@@ -31,6 +32,56 @@ set of things that can start *at once* without colliding." Same configuration,
 same contract gate, same blocker analysis; the output is a batch of up to N issues
 proven independent of each other instead of a single decision. Default N = 3. See
 **Parallel mode** below.
+
+## Project filters — `--project "<name-or-id>"` (repeatable)
+
+Parse quoted values as one argument. Each `--project` requires a non-empty value;
+refuse malformed flags before tracker access. Repeated filters form a **union**,
+not an intersection and not one batch per project. Resolve each value to a
+canonical Linear project ID: accept an ID only after fetching that project;
+otherwise exhaust project lookup and require exactly one exact name match.
+Missing or ambiguous names → refuse with the value and available IDs; never
+silently broaden the query or choose the first search result. Deduplicate resolved
+IDs, including a name and ID that refer to the same project.
+
+Verify each project's team membership against the consuming team, then fetch
+issues using those **IDs**, keeping the team constraint. Exhaust every page and
+verify **each returned issue's `project.id` is in the resolved set** and its team
+matches. A cross-team project may contribute only the consuming team's issues.
+A project not belonging to that team, leaked row, unavailable membership, or
+truncated result → fail closed, naming the input. Null project membership never
+matches a filter. Do not silently discard leaks and call the query verified.
+Deduplicate issues by canonical issue ID before selecting.
+
+With filters and no positional milestone (or `any`), consider each issue under
+**its own authorized milestone**; do not narrow the pool to the active milestone
+or let a winner seed one milestone. With an explicit positional milestone, apply
+it as an additional restriction across the selected projects. Project names are
+selection boundaries, **not scope authorization**: neither a release-looking
+name nor membership makes an issue IN. Map `projectMilestone.id` plus project ID
+to the scope doc's milestone and ratified IN line. If tracker milestones use a
+different vocabulary, use an explicit mapping in the scope/workspace contract;
+never equate a project with a milestone or guess from similar names. An issue
+with null or unresolved milestone is ineligible unless the contract explicitly
+assigns its scope to a milestone. Report unmapped issues and TBD/non-binding IN
+lists as unauthorized; fail closed if the mapping data could not be fetched.
+
+Without `--parallel` (including `--parallel 1`), project filters still yield one
+recommendation and at most two runners-up. With `--parallel`, select **one
+combined batch**, using the cross-project checks below. Without project filters,
+the existing single-milestone resolution remains unchanged.
+
+Examples:
+
+```text
+/next --project "Road to MVP-2" --project "MVP-2 stretch" --project "MVP 2.3" --parallel 5
+/next <milestone-id> --project "Road to MVP-2" --project "MVP-2 stretch" --parallel 3
+/next --project "<project-id>"                  # one recommendation
+/next any --parallel 3                        # legacy single-milestone batch
+/next <milestone-id>                          # legacy single recommendation
+```
+
+For focused offline validation, use [references/validation.md](references/validation.md).
 
 ## Configuration — read `.agents/stack.yml` first
 
@@ -97,6 +148,11 @@ blocked by another ticket, lost to an apparently-unblocked cycle item and nothin
 in the output revealed the omission.
 
 Read **open issues across the team**, not just the active cycle, and paginate.
+With project filters, restrict the candidate queries to the resolved project IDs
+as well. Verify IDs and membership using the project-filter procedure; a connector
+name filter is not proof. Fetch blocking neighbors outside those projects (and
+outside the team when linked) to establish their state and transitive dependencies.
+The project union limits recommendations, not the dependency evidence.
 
 **Resolve the team first, and filter on it.** A state-only filter returns every
 team's open issues in a multi-team workspace, so an unrelated team's P1 can win
@@ -107,11 +163,16 @@ consuming team cannot be identified from either, **refuse this fallback** rather
 than ranking a workspace-wide result; say which key would have resolved it.
 
 ```bash
-# TEAM_KEY resolved above — never run this query unscoped
+# Base query without project filters; TEAM_KEY resolved above — never unscoped
 curl -s https://api.linear.app/graphql \
   -H "Authorization: $LINEAR_API_KEY" -H "Content-Type: application/json" \
-  -d '{"query":"query($after:String,$team:String!){ issues(first:100, after:$after, filter:{team:{key:{eq:$team}}, state:{type:{nin:[\"completed\",\"canceled\"]}}}) { pageInfo { hasNextPage endCursor } nodes { identifier title priority estimate dueDate state { name type } assignee { name } cycle { name endsAt isActive } project { id name } projectMilestone { name targetDate } labels { nodes { name } } relations { nodes { type relatedIssue { identifier state { type } } } } inverseRelations { nodes { type issue { identifier state { type } } } } } } }","variables":{"after":null,"team":"'"$TEAM_KEY"'"}}'
+  -d '{"query":"query($after:String,$team:String!){ issues(first:100, after:$after, filter:{team:{key:{eq:$team}}, state:{type:{nin:[\"completed\",\"canceled\"]}}}) { pageInfo { hasNextPage endCursor } nodes { id identifier team { id key } title priority estimate dueDate state { name type } assignee { name } cycle { name endsAt isActive } project { id name } projectMilestone { id name targetDate } labels { nodes { name } } relations { nodes { type relatedIssue { identifier state { type } } } } inverseRelations { nodes { type issue { identifier state { type } } } } } } }","variables":{"after":null,"team":"'"$TEAM_KEY"'"}}'
 ```
+
+For project-filtered GraphQL reads, extend the base query with a project-ID
+variable/filter using the available schema, or run one ID-filtered query per
+resolved project and union the verified results. Do not run this team-only
+example unchanged and present it as a project-filtered query.
 
 Follow `pageInfo.hasNextPage` / `endCursor` until exhausted. `relations` gives
 what this issue blocks; `inverseRelations` gives what blocks it — you need both,
@@ -159,7 +220,7 @@ than useless.
    If the document's structure disagrees with this table, **the document wins**
    and you say so.
 
-   **Resolve the target milestone** from the argument — a milestone id the scope
+   **Without project filters, resolve the target milestone** from the argument — a milestone id the scope
    doc defines, or `any` (whichever milestone the winning candidate serves). With
    no argument, the target is the **active** milestone: the earliest gate the
    decision log does not record as released. **A passed date does not advance it**
@@ -167,12 +228,15 @@ than useless.
    days to *that* gate; if it is negative, write `overdue by N days`, never "soon"
    or "coming up".
 
+   With project filters, resolve each candidate as described under **Project
+   filters**; only an explicit positional milestone restricts that union.
+
    A gate whose entry carries no date, or whose IN list the document marks as
    under redefinition or TBD, is reported as such rather than given an invented
    one.
 
 2. **Pull tracker state — all of it.** Every open issue on the team (not only the
-   active cycle), paginated to exhaustion, each carrying priority, estimate,
+   active cycle), restricted to the verified project union when filters are set, paginated to exhaustion, each carrying priority, estimate,
    state, assignee, due date, cycle, **project, project milestone and its target
    date, and both directions of its blocking relations**. Verify the filter
    actually applied (trap 1). If any of those inputs is missing, fail closed per
@@ -184,12 +248,14 @@ than useless.
    before computing a batch, and fail closed if they are unavailable. Default mode
    does not need them, which is why they are not in the base query.
 3. **Gate each candidate against the contract.** An issue that does not trace to a
-   line in the target milestone's IN list is not that milestone's next step
+   line in its resolved milestone's IN list is not that milestone's next step
    regardless of its tracker priority. **When tracker priority and contract scope
    disagree, say so loudly** — that disagreement is usually the most useful thing
    on the screen, because it means the board has drifted from what was ratified.
 4. **Check blockers before recommending.** If the strongest candidate is blocked,
-   recommend *the unblocking work* instead and name what it releases. Two kinds:
+   recommend *the unblocking work* instead and name what it releases, only if
+   that work passes the same project/team and scope gate. Otherwise report the
+   external prerequisite without making it a selected track. Two kinds:
 
    - **Linear blocking relations**, from `inverseRelations` — authoritative, since
      the board maintains them.
@@ -216,7 +282,11 @@ than useless.
    If a row cannot be verified, say so and rank without it rather than assuming it
    still holds. Report any row found stale — that is a finding about the contract,
    and it is worth more than the recommendation it changed.
-5. **Prefer work that unblocks other work**, then work on the critical path, then
+5. **With project filters, prefer authorized active release work** over later or
+   stretch work: derive active/unreleased gates from the scope doc and decision
+   log, not project names or passed dates. Within that release tier, prefer work
+   that unblocks other work, then the critical path, then the rest. Without
+   filters, **prefer work that unblocks other work**, then work on the critical path, then
    everything else. A two-hour task that releases four tickets beats a one-day
    task that releases none.
 6. **Non-engineering items count.** If the binding constraint is "nobody has asked
@@ -238,7 +308,7 @@ batch. Above **5**, clamp to 5 and say the clamp applied: more concurrent
 worktrees than that cannot be supervised by one person, and the batch stops
 fitting the one-screen ceiling the output section is built around.
 
-### Resolving `any` for a batch
+### Resolving `any` for a batch without project filters
 
 `any` is defined in step 1 as "whichever milestone the winning candidate serves,"
 and parallel mode has no winning candidate — so that definition does not survive
@@ -246,7 +316,7 @@ the composition `/next any --parallel 3` unaided. Left undefined it is circular:
 the target milestone must be known to gate candidates, but it would depend on a
 candidate chosen after gating.
 
-**A parallel batch is always single-milestone.** Under `any`, resolve the
+**Without project filters, a parallel batch is always single-milestone.** Under `any`, resolve the
 milestone *before* selecting tracks: gate every candidate against each milestone's
 IN list, rank the gated candidates by step 5's preference, and take the milestone
 the top-ranked one serves. The batch is then drawn from that milestone alone, and
@@ -256,23 +326,37 @@ choice was made on their behalf.
 
 This is the one place the top-ranked candidate does seed something, and it is not
 the batch — it fixes the *scope*, after which cardinality is maximized within that
-scope exactly as below. A batch spanning two milestones is never emitted: the
+scope exactly as below. Without project filters, a batch spanning two milestones is never emitted: the
 output cannot describe it in one gate line, and "these five things are next" across
 two different gates is not a decision anyone can act on.
 
 **Configuration and steps 1–4 of the Procedure are unchanged.** Read
 `.agents/stack.yml`, read the file named by `scope_doc` in full, pull tracker state
-to exhaustion, gate every candidate against the target milestone's IN list, verify
+to exhaustion, gate every candidate against its resolved milestone's IN list (one target
+without project filters, per issue with them), verify
 both kinds of blocker. Parallel mode changes what happens *after* the gating, never
 the gating itself, and the hard read-only rule above covers it unchanged.
 
 ### Selecting the tracks
 
-From the gated, unblocked candidates, select the **largest mutually-independent
+Before selection, read active work across the repository, including open PRs and
+linked branches, local worktrees, and available session/ownership evidence, even
+when their issues lie outside the requested projects. Remove already active issues
+from the fresh-track pool; report resume/review instructions separately. Treat
+active work as a fixed concurrency constraint: a new track must also have no
+blocking dependency, shared file, or unmerged foundation with it. Fetch real diffs
+and establish concrete scopes; if relevant active scope or ownership cannot be
+verified, sequence the affected candidate instead of declaring it independent.
+Do not use assignee or In Progress alone as proof of a live session.
+
+From the gated, unblocked, inactive candidates, select the **largest mutually-independent
 set of size ≤ N** — maximum cardinality, not merely a set nothing can be added
 to. Step 5's preference (work that unblocks other work first, then the critical
 path, then the rest) breaks ties **among the batches that are already largest**;
-it does not choose the first track and let the rest fall out around it.
+it does not choose the first track and let the rest fall out around it. With
+project filters, compare equal-size batches first by the number of authorized
+active-release tracks, then by step 5's remaining preferences. Later work fills
+spare capacity only when independent; do not reserve one slot per project.
 
 The distinction is not pedantic, and greedy-by-priority gets it wrong. If the
 highest-priority candidate A collides with both B and C while B and C are
@@ -285,7 +369,8 @@ that trade is the reader's to see.
 
 Independence must hold **pairwise across every pair in the batch**, not merely
 between each candidate and the top-ranked one. Three tracks is three pairs; four is
-six. Checking each track only against track 1 is the failure this mode is most
+six; five is ten. These checks cross project and milestone boundaries as well.
+Checking each track only against track 1 is the failure this mode is most
 likely to ship, because the output reads identically either way and the collision
 does not surface until merge.
 
@@ -300,12 +385,15 @@ A pair is independent only when all four hold:
    underfill — which silently defeats the cardinality rule above. Related and
    duplicate edges are **context**: read them, mention them if they matter, never
    let them block.
-2. **No dependency edge between them**, in either direction — again blocking type
-   only, by the same reasoning.
+2. **No dependency path between them**, direct or transitive in either direction — again blocking type
+   only, by the same reasoning. Follow blocking neighbors outside the selected
+   projects too; missing relation pages or neighbor state cannot prove independence.
 3. **No shared not-yet-merged foundation.** Two issues stacked on the same open PR
    are not independent: a stacked PR's `MERGED` state proves nothing about the
    default branch, because the base can merge out from under it and strand the
-   code off it.
+   code off it. Verify required foundation code is reachable from the current
+   default branch; an open/unmerged foundation blocks starting even one dependent
+   track. Do not substitute a stacked PR's merged label for reachability.
 4. **Scopes isolatable in separate worktrees**, with no overlap in the files each
    will touch — and **this one has to be proven from evidence you actually
    fetched**, which the base query does not provide. An unstarted issue has no
@@ -340,7 +428,8 @@ If none passes, say so and name what they are all waiting on.
 Every rule in **Agent handoff** applies per track, and one paragraph per issue
 still means one paragraph per issue. Additionally:
 
-- **Each *engineering* track names its own branch and its own worktree.** Several
+- **Each *engineering* track names its own branch and its own distinct worktree
+  path in the kickoff.** Several
   agent sessions in one working directory is the concurrency hazard this mode
   exists to manage, not to create. A fresh worktree may need the repo's install
   step re-run before its checks pass.
@@ -372,7 +461,8 @@ still means one paragraph per issue. Additionally:
   `Sequenced instead` for lacking a file scope to compare.
 
   **Gating and rendering.** It is gated like everything else: it enters the batch
-  only if it traces to a line in the target milestone's IN list. That it has no
+  only if it traces to a line in its resolved milestone's IN list. With project filters, record its
+  project and milestone from the contract; do not assign it to a project by guess. That it has no
   tracker issue is not a defect to paper over — it is the finding the Rules section
   already requires ("a contract IN line with no tracker issue is a finding"), so
   surface it. It has no identifier and no estimate, and **inventing either would
@@ -419,7 +509,7 @@ under `--parallel` the batch *is* the answer and there is no #1.
 
 Short. The whole point is that it fits in one screen.
 
-Every milestone-dependent field below is **derived from the resolved milestone**,
+Every milestone-dependent field below is **derived from the issue's resolved milestone**,
 never written literally. Under an explicit milestone argument the gate line
 carries whatever the scope doc states for *that* milestone — including "scope and
 date TBD, under redefinition" while such a banner stands — and cites its IN-list
@@ -434,7 +524,7 @@ the right issue.
 **Why this one:** <two sentences. The contract line it serves, and what it
 unblocks or de-risks.>
 
-**Gate:** <MILESTONE> (<gate date>, N days) · **Contract:** <section, as the doc numbers it>
+**Project:** <project name and ID> · **Gate:** <MILESTONE> (<gate date>, N days) · **Contract:** <section, as the doc numbers it>
 **Size:** <tracker estimate, or "unestimated — treat as unknown">
 **Blocked by:** <nothing / what, and whether that is also worth doing first>
 
@@ -471,7 +561,12 @@ three deserve mention, the board needs grooming and that is itself the finding.
 ### Parallel mode output
 
 Used only under `--parallel`, and only when at least two tracks passed the bar.
-Same one-screen ceiling; every milestone-derived field works identically.
+Same one-screen ceiling; every milestone-derived field works identically. With
+project filters, replace the shared Gate/Contract line with a Projects line listing
+the resolved name/ID pairs, and render **Project, Milestone, Gate, and Contract
+separately on every track**, including human actions. Never label a mixed batch
+with one shared gate or date. A single-track collapse uses that track's own fields;
+runner-up lines also name their project and milestone when filters are supplied.
 
 ```
 ## Parallel batch: <k> tracks (<N> requested, <k> passed the bar)
@@ -479,22 +574,27 @@ Same one-screen ceiling; every milestone-derived field works identically.
 **Gate:** <MILESTONE> (<gate date>, N days) · **Contract:** <section, as the doc numbers it>
 
 **Track 1 — `<id>` <title>**
-<size> · <contract section> · branch `<name>`, own worktree
+Project: <name, ID> · Milestone: <name, ID> · Gate: <date/TBD/overdue>
+<size> · <contract section> · branch `<name>`, worktree `<distinct path>`
 <one short paste-ready kickoff paragraph, this issue only>
 
 **Track 2 — `(no issue)` <one-line action>**          ← untracked human action
+Project: <contract assignment> · Milestone: <contract assignment> · Gate: <date/TBD/overdue>
 untracked human action · <contract section> · no branch, no worktree
 Proposed issue title: "<title>" — not created.
 Independent because: <the one sentence from criterion 2 above>
 <one short execution kickoff paragraph for the person>
 
 **Track 3 — `<id>` <title>**
-<size> · <contract section> · branch `<name>`, own worktree
+Project: <name, ID> · Milestone: <name, ID> · Gate: <date/TBD/overdue>
+<size> · <contract section> · branch `<name>`, worktree `<distinct path>`
 <one short paste-ready kickoff paragraph, this issue only>
 
 **Sequenced instead** (passed the contract gate, failed the concurrency bar):
 - `<id>` — <the concrete collision: the file it shares with track M, the
   dependency edge, or the unmerged base it stacks on>
+
+**Already active:** <issue, project, milestone, branch/PR, resume or review action>
 
 **Integration order:** <which track's PR should land first, and why; "independent,
 any order" is a valid answer>
@@ -549,7 +649,9 @@ integration-order preference.
 - **Do not duplicate active work.** A live branch or PR gets a resume/review
   instruction, not another agent session.
 - **Every milestone-dependent field is derived.** Gate name, gate date, days
-  remaining, and contract section all follow the resolved milestone.
+  remaining, and contract section all follow each issue's resolved milestone.
+- **Project filters form one union; authorization stays per issue.** Resolve IDs,
+  verify membership, and check every pair across all projects and active work.
 - **Fail closed on incomplete tracker state.** Name the missing input rather than
   ranking on a subset.
 - **Never invent a ticket.** If the right next step has no tracker issue, say

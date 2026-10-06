@@ -9,6 +9,8 @@ quiet. Manual sweep defaults remain dry-run. `session-titles` now prefers the
 supported Codex desktop rename API; scheduled runs never rewrite the private
 CLI session index. Installation alone does not activate a schedule.
 
+Add `/wave`: a two-run Claude Code Workflow batch with human plan approval, contract seam checks and bounded review; Codex selects only.
+
 Upgrade the default Codex reviewer from `gpt-6-sol` to `gpt-6.1-sol`,
 keeping high reasoning effort and the existing Astra escalation and Luna override.
 

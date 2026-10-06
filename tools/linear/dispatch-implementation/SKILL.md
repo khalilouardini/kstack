@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.1.0
+version: 0.2.0
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -12,7 +12,7 @@ An existing, approved Linear issue is ready to be picked up by Claude or Codex.
 Invoke as:
 
 ```text
-/dispatch-implementation <ISSUE-ID> [--executor claude|codex] [--model <name>]
+/dispatch-implementation <ISSUE-ID> [--executor claude|codex] [--model <name>] [--plan-only]
 ```
 
 The exact issue identifier is required. Invoking this skill is explicit authorization
@@ -114,6 +114,16 @@ this skill is not intercepted. The read-back is the proof that this invocation's
 write landed; it is not a global guarantee about other sessions.
 
 ## 4. Route plan-only, then stop for approval
+
+**Graph node / `--plan-only` mode (prompt-level):** run §1–3 unchanged,
+including the isolated workspace and status ledger/write/read-back. In §4,
+write the acceptance-cited plan in the current agent and return it; launch no
+separate executor and grant no implementation permission. For `/wave`, use
+PLAN from `tools/linear/wave/references/records.md`; refusals return STOPPED with
+stop_reason and evidence rather than waiting. `/wave build --approve` supplies
+the human approval for that exact wave/plan, resumes the same dispatch worktree
+with the returned plan context, and records the approval ids in WAVE_REPORT.
+All Refusals still apply. Ordinary invocation follows the executor route below.
 
 Select the executor and model from explicit flags when supplied. Otherwise choose by
 risk, ambiguity, relevant strengths, and expected horizon, and state the choice in

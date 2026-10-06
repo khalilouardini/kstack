@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -310,6 +311,15 @@ def main(argv: list[str]) -> int:
         check_doc(path, r)
     scripts = check_scripts(r)
     pointers = check_codex_pointers(r)
+    harness = REPO / "tools/linear/wave/tests/run.mjs"
+    if harness.is_file():
+        if shutil.which("node") is None:
+            r.warn("tools/linear/wave/tests/run.mjs", "harness", "node absent; wave harness did not run")
+        else:
+            out = subprocess.run(["node", str(harness)], capture_output=True, text=True)
+            print(out.stdout, end="")
+            if out.returncode:
+                r.fail("tools/linear/wave/tests/run.mjs", "harness", out.stderr.strip() or "wave harness failed")
 
     for where, check, msg in r.warns:
         print(f"WARN  {where}  [{check}] {msg}")

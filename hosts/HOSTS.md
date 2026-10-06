@@ -11,6 +11,7 @@ written down; skills and adapters point here instead of restating them.
 | `hooks:` frontmatter | honored — registers `PreToolUse` | **not read** |
 | Enforcement of `careful` / `freeze` | hook-enforced | **prompt-level only** |
 | Tool vocabulary in prose | named tools (`Read`, `Bash`, …) resolve | name the capability, not the tool |
+| Workflow tool | Claude Code only; `/wave` runs the graph | absent; `/wave plan` runs A1 selection only and says the graph did not run; build refuses |
 | Regeneration needed after an edit | no, except frontmatter for the codex copy | yes, whenever frontmatter changes |
 
 ## Install

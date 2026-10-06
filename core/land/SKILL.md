@@ -1,6 +1,6 @@
 ---
 name: land
-version: 0.2.0
+version: 0.3.0
 description: Land an agent session's work safely — dedicated branch, concurrent-session guards re-run before every commit, the repo's own lint and test gates from .agents/stack.yml, atomic commits, then one PR. Stops at the PR; merging is a human decision. Use when asked to "land this", "commit and push", "open a PR", "ship it", or "/land". (kstack)
 ---
 
@@ -104,6 +104,12 @@ Two things actually protect you, in order:
    catches drift that already happened rather than preventing what happens next.
    In a shared worktree this is the best available check — not a guarantee, and
    not a substitute for (1).
+
+**Headless graph node (prompt-level):** wherever this procedure asks a human
+to decide — including unaccounted tracked modifications (Step 2) or a red gate
+not caused by the change (Step 7) — return `STOPPED` with `stop_reason` and the
+concrete evidence instead of waiting. Preserve the workspace; never resume on
+your own judgement. This changes no gate, identity, or refusal rule.
 
 ## Step 0 — baseline, before you touch anything
 
