@@ -42,5 +42,9 @@
   {
     "number": 11,
     "name": "sequential review"
+  },
+  {
+    "number": 12,
+    "name": "plan-only excluded before wave approval"
   }
 ]

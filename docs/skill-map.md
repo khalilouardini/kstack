@@ -51,6 +51,7 @@ flowchart LR
       next["/next"]
       triage["/triage"]
       intake["/linear-feature-intake"]
+      roadmap["/linear-roadmap"]
       roles["product-manager · tech-lead<br/>designer · qa"]
     end
 
@@ -90,7 +91,7 @@ flowchart LR
     classDef phase fill:#ddeeec,stroke:#1d6a63,color:#16292b
     classDef stopStyle fill:#f6dee5,stroke:#a04360,color:#16292b
     class router route
-    class spec,next,triage,intake,roles,dispatch,investigate,controls,explain,produce,respond,loop,landSkill,health,retro,titles,labels,steward,audit phase
+    class spec,next,triage,intake,roadmap,roles,dispatch,investigate,controls,explain,produce,respond,loop,landSkill,health,retro,titles,labels,steward,audit phase
     class human stopStyle
 ```
 
@@ -115,7 +116,7 @@ flowchart TB
     gates --> gatedCore["land · health"]
     scope --> roleSkills["spec · triage<br/>four role contracts"]
     identities --> githubSkills["review skills · delivery-retro<br/>session-titles · pr-label-sweep"]
-    workspace --> linearSkills["next · dispatch-implementation<br/>feature-intake · steward · release-audit"]
+    workspace --> linearSkills["next · dispatch-implementation<br/>feature-intake · linear-roadmap<br/>steward · release-audit"]
 
     classDef source fill:#f6e6cf,stroke:#b8690c,color:#16292b
     classDef coreStyle fill:#ddeeec,stroke:#1d6a63,color:#16292b
@@ -135,7 +136,7 @@ flowchart TB
 | Core | Git + local filesystem | [`/investigate`](../core/investigate/SKILL.md), [`/careful`](../core/careful/SKILL.md), [`/freeze`](../core/freeze/SKILL.md), [`/unfreeze`](../core/unfreeze/SKILL.md), [`/explain-diff-html`](../core/explain-diff-html/SKILL.md), [`/land`](../core/land/SKILL.md), [`/health`](../core/health/SKILL.md) |
 | Roles | `scope_doc` | [`/spec`](../roles/spec/SKILL.md), [`/triage`](../roles/triage/SKILL.md), [`product-manager`](../roles/product-manager.md), [`tech-lead`](../roles/tech-lead.md), [`designer`](../roles/designer.md), [`qa`](../roles/qa.md) |
 | GitHub | `gh` plus configured identities or issue prefix | [`/review-claude-pr`](../tools/github/review-claude-pr/SKILL.md), [`/review-comments`](../tools/github/review-comments/SKILL.md), [`/pr-loop`](../tools/github/pr-loop/SKILL.md), [`/delivery-retro`](../tools/github/delivery-retro/SKILL.md), [`/session-titles`](../tools/github/session-titles/SKILL.md), [`/pr-label-sweep`](../tools/github/pr-label-sweep/SKILL.md) |
-| Linear | Linear workspace + `workspace_contract` | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/wave`](../tools/linear/wave/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md) |
+| Linear | Linear workspace + `workspace_contract` | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/wave`](../tools/linear/wave/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-roadmap`](../tools/linear/linear-roadmap/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md) |
 
 Missing configuration is a supported state. A skill either asks for the missing
 judgment or refuses and names the exact key; it never silently invents a value.
@@ -150,6 +151,7 @@ flowchart TD
     question -->|What to start next| next["/next"]
     question -->|What to do with open work| triage["/triage"]
     question -->|Record an existing verdict| intake["/linear-feature-intake"]
+    question -->|Map a project or subunit| roadmap["/linear-roadmap"]
 
     one -->|Is it in scope?| pm[product-manager]
     one -->|What exists and how long?| tl[tech-lead]
@@ -165,9 +167,13 @@ flowchart TD
     classDef action fill:#ece0f4,stroke:#7a4b9c,color:#16292b
     classDef stopStyle fill:#f6dee5,stroke:#a04360,color:#16292b
     class question,one,verdict decision
-    class spec,next,triage,intake,pm,tl,design,qa,gate,fanout action
+    class spec,next,triage,intake,roadmap,pm,tl,design,qa,gate,fanout action
     class rejected stopStyle
 ```
+
+`/linear-roadmap` consumes existing tickets or drafts proposed work; it validates
+a typed record and generates its Mermaid view without launching sessions.
+See the root [orchestration contract](../ORCHESTRATION.md).
 
 `/next` and `/triage` are complements: `/next` looks forward at what to start;
 `/triage` looks backward at work already left open.

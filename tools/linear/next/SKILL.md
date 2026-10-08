@@ -1,6 +1,6 @@
 ---
 name: next
-version: 0.3.0
+version: 0.5.0
 description: Read Linear and recommend scoped work. Default gives one recommendation; --parallel [N] selects up to five independent tracks, optionally across repeated --project filters, with separate kickoffs. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
@@ -200,6 +200,58 @@ than useless.
 2. **Milestone `progress` derives from issue closure**, not from real completion.
    A milestone reading 100% means its issues are closed, which is not the same
    claim. Never quote milestone progress as evidence that something works.
+
+## Project orchestration records — optional, read-only
+
+When `orchestration/index.json` exists, it is the sole active manifest index.
+Resolve this skill's physical canonical directory: follow the installed Claude
+symlink with `cd <installed-next-directory> && pwd -P`, or read Codex's generated
+pointer and use its canonical target. Obtain `<stack-root>` with
+`git -C <physical-next-directory> rev-parse --show-toplevel`. Read
+`<stack-root>/ORCHESTRATION.md` and the roadmap `references/contract.md` beneath
+that root, then run `python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <absolute-consuming-root>/orchestration/index.json`. Unreadable,
+invalid or mismatched pins stop the covered-project recommendation; never auto-repin.
+Absent index keeps the legacy procedure only where the root graph does not claim
+adoption. If the root claims adoption but lacks its index, stop recommendations
+for the affected projects until the index is repaired; never fall back around
+their graph conditions.
+
+Read the exact manifest named by the index. Cite the `sha256:<digest>` reported
+by indexed validation as its revision. Never combine additional files or infer
+readiness from Mermaid. A covered project's open issue without a kind `unit`
+matching its canonical UUID is UNMAPPED: report it and require graph refresh
+before a kickoff. Other node kinds can share issue references for context only.
+
+This analysis owns the read-only graph rehearsal. Use the state predicates in the
+contract: ACTIVE, HUMAN_REQUIRED, UNKNOWN, BLOCKED, PLAN_ONLY, READY_TO_BUILD and
+MERGE_BLOCKED. Scope authorization and the independence bar below still apply.
+A start prerequisite is **any edge targeting plan or build**, regardless of type.
+Native Linear blockers always target plan; step 4's native-blocker rule wins over
+a graph's build-only edge. An open native blocker excludes even a plan-only
+kickoff. Report conflicting representations as a named human decision.
+
+Check each event against fresh PR/default-branch, acceptance and human-decision
+evidence. Before a controller exists, read the root Human decisions table and its
+original scope decision-log entry or Linear comment, including authorized actor,
+UTC date, exact boundary and manifest digest. A changed graph/scope invalidates a
+decision unless its owner explicitly reaffirms it. Do not write approval records.
+Done, a draft/recorded field or structural validity is not completion evidence.
+
+Verified plan/native conditions with a false or unknown later build condition
+permit PLAN_ONLY in default mode. Its kickoff calls
+`/dispatch-implementation <id> --plan-only` only after the dispatcher's unchanged
+scope/lifecycle guards pass; it ends at a plan, with no code edits or PR. Name the
+unmet build event and source, and re-check it before any later implementation.
+READY_TO_BUILD gets the existing implementation kickoff, as does engineering
+work without an adopted graph. Later merge/release
+conditions never waive the scope or parallel-independence bar.
+
+PLAN_ONLY does not count toward N in `--parallel`. List it under Planning only,
+outside the selected implementation batch. For `/wave` selection, put these
+candidates in `sequenced` with the unmet condition/source, never SELECT.tracks;
+`--approve all` can therefore approve only the implementation-eligible batch.
+Use unresolved downstream conditions within the existing release/scope ranking;
+do not invent durations or a computed critical path. These rules are prompt-level.
 
 ## Procedure
 
@@ -471,21 +523,23 @@ still means one paragraph per issue. Additionally:
   no branch, no worktree. Propose the title; never create the ticket.
 - **An issue already owned by a live branch or PR is not a new track.** Mark it
   `already active` and hand off a resume instruction instead.
-- Each **engineering** kickoff still ends with: open a PR, do not merge, do not
-  mark the issue complete.
+- Each **READY_TO_BUILD or graphless engineering** kickoff ends with: open a PR, do not merge,
+  do not mark the issue complete. PLAN_ONLY uses the plan-only variant below and
+  is listed outside the N selected implementation tracks.
 
 ## Agent handoff
 
 After ranking, write a paste-ready kickoff for the recommended work — one
 paragraph a person can paste straight into a fresh coding-agent session (Claude
-Code, Codex, whichever host they drive). This is an execution handoff, not a
-second recommendation.
+Code, Codex, whichever host they drive). This handoff follows the readiness state; it is not a second recommendation.
 
 - Write **one short paragraph for the #1 issue**. Use its tracker outcome and
   acceptance criteria, the contract boundary, known prerequisites, the relevant
-  validation, and the instruction to open a PR without merging or marking the
-  issue complete. Do not invent implementation scope that the tracker does not
-  contain.
+  validation, and, for READY_TO_BUILD or graphless engineering, the instruction to open a PR without
+  merging or marking the issue complete. For PLAN_ONLY, use: "Run
+  `/dispatch-implementation <id> --plan-only`, honoring its scope/workspace rules.
+  Produce the acceptance-cited plan and stop. No implementation or PR; build waits
+  for <event, unmet condition, source>." Do not invent scope.
 - If #1 is already genuinely active, tell the agent to resume the named branch or
   PR instead of creating a duplicate session. If #1 is non-engineering, write an
   execution kickoff for the human action; do not manufacture an agent task or a
@@ -525,13 +579,15 @@ the right issue.
 unblocks or de-risks.>
 
 **Project:** <project name and ID> · **Gate:** <MILESTONE> (<gate date>, N days) · **Contract:** <section, as the doc numbers it>
+**Readiness:** <READY_TO_BUILD / PLAN_ONLY / ACTIVE; omit when no graph>
+**Graph:** <manifest path, sha256 revision, condition source; omit when no graph>
 **Size:** <tracker estimate, or "unestimated — treat as unknown">
 **Blocked by:** <nothing / what, and whether that is also worth doing first>
 
 **First action:** <one concrete thing doable in under 30 minutes>
 
-**Kickoff:** <one short, paste-ready paragraph for #1; use "Execution kickoff"
-instead when #1 is non-engineering>
+**Kickoff:** <implementation paragraph for READY_TO_BUILD or graphless engineering; plan-only paragraph
+with unmet build condition for PLAN_ONLY; human action when non-engineering>
 
 ---
 
@@ -575,6 +631,7 @@ runner-up lines also name their project and milestone when filters are supplied.
 
 **Track 1 — `<id>` <title>**
 Project: <name, ID> · Milestone: <name, ID> · Gate: <date/TBD/overdue>
+Readiness: READY_TO_BUILD · Graph: <path, sha256 revision, condition source; omit without graph>
 <size> · <contract section> · branch `<name>`, worktree `<distinct path>`
 <one short paste-ready kickoff paragraph, this issue only>
 
@@ -587,12 +644,17 @@ Independent because: <the one sentence from criterion 2 above>
 
 **Track 3 — `<id>` <title>**
 Project: <name, ID> · Milestone: <name, ID> · Gate: <date/TBD/overdue>
+Readiness: READY_TO_BUILD · Graph: <path, sha256 revision, condition source; omit without graph>
 <size> · <contract section> · branch `<name>`, worktree `<distinct path>`
 <one short paste-ready kickoff paragraph, this issue only>
 
 **Sequenced instead** (passed the contract gate, failed the concurrency bar):
 - `<id>` — <the concrete collision: the file it shares with track M, the
   dependency edge, or the unmerged base it stacks on>
+
+**Planning only** (outside N, no implementation or PR):
+- `<id>` — PLAN_ONLY — <manifest sha256, unmet build condition/source>
+  <plan-only kickoff using /dispatch-implementation --plan-only; stop at plan>
 
 **Already active:** <issue, project, milestone, branch/PR, resume or review action>
 
@@ -652,6 +714,8 @@ integration-order preference.
   remaining, and contract section all follow each issue's resolved milestone.
 - **Project filters form one union; authorization stays per issue.** Resolve IDs,
   verify membership, and check every pair across all projects and active work.
+- **Indexed graph conditions supplement the contract.** Check event evidence,
+  preserve human gates and distinguish plan-only from implementation readiness.
 - **Fail closed on incomplete tracker state.** Name the missing input rather than
   ranking on a subset.
 - **Never invent a ticket.** If the right next step has no tracker issue, say

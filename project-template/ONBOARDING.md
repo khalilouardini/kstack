@@ -220,6 +220,26 @@ a domain skill. Both answers are useful; guessing is not.
 > [`../docs/MIGRATION-ogur.md`](../docs/MIGRATION-ogur.md). Read it as an
 > example of applying the rule of thumb, not as a checklist for your repo.
 
+## Optional: prepare a project orchestration map
+
+After scope and tracker setup, use `/linear-roadmap <project>` to map existing
+approved tickets. For new work, `/spec` supplies the verdict and
+`/linear-feature-intake` creates the approved records first. Prompt-only input
+can produce a draft, with no launch authorization.
+
+Keep the shared lifecycle at the installed stack's root; copy/adapt
+[`ORCHESTRATION.md`](ORCHESTRATION.md) and [`orchestration.json`](orchestration.json)
+into the consuming root and the one active `orchestration/<slug>.json`. Adapt
+[`orchestration-index.json`](orchestration-index.json) into `orchestration/index.json`;
+its required source pin is checked against the physical installed stack HEAD. Groups describe subunits without new sessions; one
+executable issue maps to one persistent session. `/next` reads indexed conditions
+and checks live evidence. `/wave` retains its current human plan checkpoint.
+
+The human maintainer manually publishes/links the shared team-owned Linear contract
+under the workspace rules and verifies read-back; the roadmap skill never writes it. Keep
+each pilot document with its project. Publishing a graph does not execute it;
+the persistent-session controller remains an experimental integration requirement.
+
 ## Verify, then delete the old copies
 
 ```bash

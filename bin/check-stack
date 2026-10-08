@@ -321,6 +321,17 @@ def main(argv: list[str]) -> int:
             if out.returncode:
                 r.fail("tools/linear/wave/tests/run.mjs", "harness", out.stderr.strip() or "wave harness failed")
 
+    roadmap_tests = REPO / "tools/linear/linear-roadmap/tests"
+    if roadmap_tests.is_dir():
+        out = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(roadmap_tests)],
+            capture_output=True, text=True,
+        )
+        print(out.stdout, end="")
+        print(out.stderr, end="")
+        if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+            r.fail("tools/linear/linear-roadmap/tests", "harness", "roadmap tests failed or none discovered")
+
     for where, check, msg in r.warns:
         print(f"WARN  {where}  [{check}] {msg}")
     for where, check, msg in r.fails:
