@@ -31,7 +31,9 @@ flowchart LR
 ```
 
 [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) prepares local artifacts
-and reads the tracker. `/spec` remains the scope authority and intake remains the
+and creates or updates the consuming product’s local scope contract, including
+its project boundaries and impact on the whole product. Proposed scope remains
+draft until authorized. It reads the tracker. `/spec` remains the scope authority and intake remains the
 ticket-writing authority. Existing approved tickets skip those creation steps.
 A simple prompt can draft a graph; it does not authorize execution. `/next`
 consults indexed manifests, distinguishing plan, build, merge and release conditions

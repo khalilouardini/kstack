@@ -1,7 +1,7 @@
 ---
 name: linear-roadmap
-version: 0.2.0
-description: Build a typed orchestration roadmap and Mermaid graph from existing Linear work or draft a proposed graph from a prompt. Writes local artifacts; tracker reads only. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap <project|spec|prompt>". Does not launch sessions or create tickets. (kstack)
+version: 0.3.0
+description: Build a typed orchestration roadmap and Mermaid graph from existing Linear work or draft a proposed graph from a prompt. Creates or updates the local product scope contract; tracker reads only. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap <project|spec|prompt>". Does not launch sessions or create tickets. (kstack)
 ---
 
 # linear-roadmap — prepare the graph before execution
@@ -10,8 +10,9 @@ description: Build a typed orchestration roadmap and Mermaid graph from existing
 
 A project or subunit needs a reusable execution map before `/next` or `/wave`.
 Invoke `/linear-roadmap <project|spec|prompt>`. This skill creates local roadmap
-artifacts and reads Linear; it does not create issues, rewrite scope, publish to
-Linear, invoke Workflow, or start a ticket session. Those limits are prompt-level.
+artifacts, creates or updates the local product scope contract, and reads Linear;
+it does not create issues, grant scope approval, publish to Linear, invoke
+Workflow, or start a ticket session. Those limits are prompt-level.
 The validator checks structure and phase dependencies; it proves no live readiness.
 
 ## Inputs and composition
@@ -53,6 +54,40 @@ call this roadmap builder. The roadmap consumes their outputs. Explicit recorded
 owner exceptions must be cited, never disguised as a product-manager verdict or
 an active-milestone status change. These rules are prompt-level.
 
+## Create or update the product scope contract
+
+Every roadmap run must inspect the consuming project's scope contract and create
+or update it when the roadmap introduces missing or changed scope. Its title and
+filename are incidental: it is the contract describing this project and what it
+means for the whole product, not just a task list or execution graph.
+
+- Reuse `scope_doc` from `.agents/stack.yml` when configured. If absent, look for
+  an existing product/MVP scope contract before creating one at a suitable local
+  documentation path. Report the chosen path explicitly; do not silently change
+  configuration. If adoption of the new contract is authorized, set `scope_doc`
+  to that path so downstream scope gates can find it.
+- Describe the product purpose and intended users, the project's contribution
+  to the whole product, included outcomes and explicit exclusions, its milestone
+  or MVP boundaries, acceptance/release gates with checks, dependencies on other
+  projects, and effects on shared product behavior or contracts. Cite the source
+  for decisions; identify assumptions and unresolved owner decisions.
+- Edit the existing contract in place, preserving unrelated projects and recorded
+  decisions. Record the material scope delta and its product consequences. If the
+  contract already covers the roadmap accurately, report that finding and its
+  citation; avoid a duplicate document or a cosmetic rewrite.
+- Apply scope decisions already authorized by the owner. Otherwise record new
+  scope or changes in a clearly marked DRAFT/proposed section or new DRAFT file,
+  preserving approved boundaries. File creation, editing, Linear membership and
+  graph validation do not constitute scope approval. Keep affected work `draft`
+  until recorded authorization exists; cite that authorization for `recorded`
+  work. A new draft contract does not cure missing scope authority.
+
+Reference the contract in the graph's `scope_source` and link it from root
+`ORCHESTRATION.md`. Report its path, whether it was created, updated or already
+current, the product impact, and any decisions needed to adopt proposed scope.
+This requirement is prompt-level; the graph validator does not check the prose
+contract's existence, completeness or approval.
+
 ## Produce and validate
 
 1. Use `project-template/orchestration.json` as a format example. Resolve project
@@ -87,7 +122,8 @@ an active-milestone status change. These rules are prompt-level.
 
 ## Output
 
-Return DRAFT or MAPPED, local JSON and root graph paths, validator exit code,
+Return DRAFT or MAPPED, the scope contract path and change status, local JSON
+and root graph paths, validator exit code,
 source observations and up to three next actions. MAPPED means existing records
 were mapped, not that their work is ready. Actual readiness needs live evidence,
 source freshness and the explicit controller's admission checks. `/wave` keeps
