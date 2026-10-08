@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Require `/linear-roadmap` to create or update the consuming product’s scope
+contract when needed, covering project purpose, boundaries, acceptance gates and
+product impact. Preserve approved scope and mark unauthorized changes as drafts.
+
 Add `/linear-roadmap` to prepare reusable project/subunit roadmaps from existing
 Linear work, specs or prompts. A versioned JSON contract and stdlib validator
 generate Mermaid and check combined event dependencies; `/next` consults these
