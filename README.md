@@ -57,11 +57,14 @@ needs a Linear workspace.
 | [`/triage`](roles/triage/SKILL.md) | Scores every open PR, branch and worktree against the scope doc; writes a dated proposal | Closing, merging or deleting anything |
 | [`/next`](tools/linear/next/SKILL.md) | Recommends one scoped issue or up to five independent tracks across repeated project filters | Inventing a ticket; any write |
 | [`/linear-feature-intake`](tools/linear/linear-feature-intake/SKILL.md) | Turns a scope verdict into the right tracker records | Forming a verdict of its own |
-| [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) | Maps existing work or drafts a proposed graph; validates JSON and generates Mermaid | Creating tickets, granting scope or launching sessions |
+| [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) | Creates or updates the product scope contract; maps work, validates JSON and generates Mermaid | Creating tickets, granting scope or launching sessions |
 
 For new work, compose `/spec` → `/linear-feature-intake` → `/linear-roadmap`.
 For existing approved tickets, start with `/linear-roadmap`. A simple prompt can
-produce a draft graph; scope approval and ticket creation remain separate steps.
+produce a draft graph and scope contract; scope approval and ticket creation remain separate steps.
+Every roadmap run checks the product scope contract, updating it or creating one
+when needed. The contract explains the project’s purpose, boundaries, release
+gates and impact on the whole product; its title and filename are flexible.
 The shared lifecycle lives once at the stack root, with a versioned schema and
 one indexed manifest containing each repo's projects/subunits. Indexed validation
 checks the source pin; `/next` gives plan-only work a planning kickoff and excludes
