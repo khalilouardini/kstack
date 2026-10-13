@@ -67,6 +67,50 @@ foundation, open child, or active work unless specified. File scopes are concret
     conflicts with later tracks C and E, which are independent of each other;
     `--parallel 2` → C,E and disclose why A was excluded. For an equal-size
     choice between {A,D} and {C,E}, choose {A,D} for active release priority.
+13. **Accepted external overlap:** open PR #900, unrelated to candidates' own
+    issues, touches `src/d.py`. Three filters with `--parallel 5` → A,C,E,F;
+    D is sequenced against #900. Add `--accept-overlap 900` → A,C,D,E,F;
+    D's kickoff lists #900's title/author and `src/d.py`, uses the default branch,
+    and records Pending overlap while #900 is open. After #900 merges, rebase
+    onto the fetched default branch before `land` Step 7, never onto its PR head.
+14. **Two active PRs on one file:** #900 and #901 both touch `src/d.py`.
+    Accept only 900 → D stays sequenced, naming #901. Accept both → D may join.
+    This also models OGUR-371 sharing `docs/design/ux-spec.md` with #478 and #459:
+    accepting one does not exempt the other.
+15. **Within-batch overlap:** open PR #902 touches `src/shared.py`; accept it
+    with the three filters and `--parallel 5` → A,C,D,E,F. B is still sequenced
+    against A under criterion 4. A's kickoff records #902 and the exact path;
+    Integration order cannot admit B.
+16. **Unused and empty:** accepted open PR #903 touches `src/unrelated.py`.
+    Every gated scope is concrete → report #903 unused, with its title/author.
+    Repeat with every gated candidate blocked and no tracks selected: preserve
+    the unused report. OUT issue G is not part of this reported candidate set.
+17. **Refusal and deduplication:** `0`, `-1`, `1.5`, `abc`, `#900`, a bare flag,
+    a nonexistent PR, a MERGED PR or a CLOSED PR → refuse before selection,
+    quoting the value (or `<missing>`). `--accept-overlap 900` repeated twice
+    validates one PR and emits one entry per candidate/PR intersection.
+18. **Foundation and own active PR:** C needs code on accepted open PR #904 →
+    C remains excluded under criterion 3. Accept F's own live PR from case 8 →
+    F remains already active; record its overlap against F rather than unused.
+    Blocking paths, scope failures and graph conditions remain unchanged too.
+19. **Default-mode monotonicity and kickoff types:** default #1 A overlaps an
+    unaccepted active PR; accepted #900 touches only D. Default mode with and
+    without `--accept-overlap 900` still recommends A. The flag reports known
+    intersections without adding a file-collision bar for #1. Repeat with
+    `--parallel 1` and an explicit milestone plus project filters. Parallel
+    kickoffs still need the existing concurrency checks. With no flag, omit
+    overlap clauses; PLAN_ONLY records risks without rebase, and human actions
+    receive no overlap or git instruction.
+20. **Unknown and mixed reporting:** with flag 900, D's gated scope is unknown →
+    report unused status unverified, naming D; do not call #900 unused. Separately,
+    #902 touches selected A and sequenced B → list both intersections, even
+    though the PR overlaps a selected track. Preserve all evidence if it exceeds
+    the usual one-screen target; unknown default report scope does not alter #1.
+21. **Complete diffs and renamed paths:** accepted PR #905 has 140 changed file
+    records, with the candidate path on page 2 → exhaust the pages and find it.
+    Receiving only 100 records while `changedFiles` is 140 → refuse. A renamed
+    record with `filename: src/renamed.py`, `previous_filename: src/d.py` → D's
+    intersection includes the old path. A moving head requires a stable re-read.
 
 For every case: propose distinct engineering branches and worktree paths only;
 one kickoff per selected issue ends with open a PR, do not merge, do not mark

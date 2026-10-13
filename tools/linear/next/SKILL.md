@@ -1,7 +1,7 @@
 ---
 name: next
-version: 0.5.0
-description: Read Linear and recommend scoped work. Default gives one recommendation; --parallel [N] selects up to five independent tracks, optionally across repeated --project filters, with separate kickoffs. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
+version: 0.6.0
+description: Read Linear and recommend scoped work. Default gives one recommendation; --parallel [N] selects up to five independent tracks, optionally across repeated --project filters, with separate kickoffs. --accept-overlap names open PRs whose file overlap the human accepts. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
 # next — what to pick up now
@@ -10,7 +10,7 @@ description: Read Linear and recommend scoped work. Default gives one recommenda
 
 Someone needs to decide what starts now, and the tracker holds more open work
 than fits in one head. Invoke as
-`/next [<milestone-id>|any] [--project "<name-or-id>"]... [--parallel [N]]`.
+`/next [<milestone-id>|any] [--project "<name-or-id>"]... [--parallel [N]] [--accept-overlap <PR#>]...`.
 Forward-looking;
 the complement to `triage`, which audits unfinished GitHub work backwards. Not
 for deciding whether a *new* idea is in scope (that is the `spec` pipeline's
@@ -82,6 +82,74 @@ Examples:
 ```
 
 For focused offline validation, use [references/validation.md](references/validation.md).
+
+## Accepted file overlaps — `--accept-overlap <PR#>` (repeatable)
+
+The human may explicitly accept file overlap with named active PRs, expecting
+the implementer to resolve it by rebasing. This flag composes with default mode,
+`--parallel` (including 1), the milestone argument and repeated `--project` filters.
+
+**Validate every occurrence before any selection**, as with `--parallel N`.
+Each value must match `^[1-9][0-9]*$`, a positive decimal integer naming a PR
+in the consuming repository
+whose state is **OPEN at run time**. Missing, non-integer, zero, negative,
+nonexistent, closed or merged values → **refuse**, quoting the supplied value
+(or `<missing>`). Use `--accept-overlap 479`, without a leading `#`.
+Deduplicate PR numbers after validation. Fetch each PR's live diff, number,
+title and author; unavailable state, metadata or incomplete diff evidence →
+refuse, naming the value. Fetch `changedFiles`, state and head SHA with
+`gh pr view <n> --json changedFiles,state,headRefOid,number,title,author` in the
+consuming repo, then exhaust `gh api --paginate repos/{owner}/{repo}/pulls/<n>/files`.
+Require the file-record count to equal `changedFiles`; refuse on a mismatch,
+including the REST endpoint's file cap. Re-read state/head and retry the read
+if the head moved; refuse if a stable complete snapshot cannot be established.
+Include both `filename` and `previous_filename` for renames when comparing paths.
+`gh pr view --json files` alone is not completeness evidence.
+Never infer acceptance from a prior run,
+tracker comment, PR title or graph decision.
+
+Its only effect is the active-work file comparison under **Selecting the
+tracks**: retain each candidate's exact overlapping files, but allow those
+overlaps with the named PR. It never waives blocking relations or dependency
+paths (criteria 1–2), an unmerged foundation (criterion 3), files shared by two
+candidates in the same batch (criterion 4), the scope gate or graph conditions.
+A candidate needing code from an accepted PR is still sequenced. A candidate
+whose own issue already has a live branch or PR is still `already active`.
+
+Default mode (including `--parallel 1`) keeps its existing ranking and blocker
+checks: the flag computes and reports intersections without adding an active-work
+file-collision test for #1. The existing concurrency checks still govern any
+parallel kickoff. An unrelated accepted PR cannot make #1 less eligible.
+
+For overlap reporting, **candidates means the scope-gated pool**, including
+sequenced and already-active issues, not OUT issues. Establish their file scopes
+for reporting; an unknown scope is `unverified`, not proof of no intersection,
+and does not add a new default-mode blocking check. Record each known overlap
+even when another check excludes that candidate. Report a named PR as **unused**
+only when every gated candidate has a concrete scope and none intersects its
+complete diff; otherwise report its unused status as **unverified**, naming the
+unknown scopes. Keep this report even when the selection is empty. Give each PR
+a line for its overlaps with sequenced/already-active candidates, including PRs
+also overlapping selected tracks. The full evidence list may exceed one screen;
+never truncate it to meet the output's usual size target.
+
+Direct `/next` and Codex's A1-only `/wave plan` render this report. The Workflow
+path preserves per-track overlaps in `PLAN.risks`; its unchanged SELECT/RUN_A
+schemas do not retain unused-PR or excluded-candidate overlap reports, including
+EMPTY runs. State that limitation in the checkpoint handoff. These rules are
+prompt-level selection rules, not tool restrictions.
+
+### Rebase policy for accepted overlaps
+
+Engineering implementation starts from the default branch. Never base on an
+accepted PR's branch or rebase onto its head. Before `land` Step 7 (gates before
+push), fetch: if the accepted PR has merged, rebase onto the fetched default
+branch and resolve the listed files. If it is still OPEN, keep the PR based on
+the default branch and list its number and overlapping files under **Pending
+overlap** in the PR body. Whichever PR merges second rebases onto the default
+branch and re-runs the gates before its merge. If it closes unmerged, the active overlap is gone.
+PLAN_ONLY records overlap as a plan risk and stops without a rebase; human
+actions touch no files and receive no rebase instruction.
 
 ## Configuration — read `.agents/stack.yml` first
 
@@ -244,7 +312,10 @@ scope/lifecycle guards pass; it ends at a plan, with no code edits or PR. Name t
 unmet build event and source, and re-check it before any later implementation.
 READY_TO_BUILD gets the existing implementation kickoff, as does engineering
 work without an adopted graph. Later merge/release
-conditions never waive the scope or parallel-independence bar.
+conditions never waive the scope or parallel-independence bar. The sole file
+exception is overlap with active work that the human named on the command line
+with `--accept-overlap`; the scope gate, graph conditions and independence
+between selected candidates still hold.
 
 PLAN_ONLY does not count toward N in `--parallel`. List it under Planning only,
 outside the selected implementation batch. For `/wave` selection, put these
@@ -294,11 +365,12 @@ do not invent durations or a computed critical path. These rules are prompt-leve
    actually applied (trap 1). If any of those inputs is missing, fail closed per
    "Reaching Linear" rather than ranking on what arrived.
 
-   **Under `--parallel`, this field set is not sufficient** — criterion 4 of the
-   concurrency bar needs `description`, `parent`, `children`, and branch/PR
+   **Under `--parallel`, this field set is not sufficient**
+   — criterion 4 of the concurrency bar needs `description`, `parent`, `children`, and branch/PR
    evidence per candidate, which the base query above does not request. Fetch them
-   before computing a batch, and fail closed if they are unavailable. Default mode
-   does not need them, which is why they are not in the base query.
+   before selection, and fail closed if they are unavailable. Default mode does
+   not add this selection requirement. With `--accept-overlap`, fetch concrete
+   scopes for overlap reporting; mark missing scopes unverified as defined above.
 3. **Gate each candidate against the contract.** An issue that does not trace to a
    line in its resolved milestone's IN list is not that milestone's next step
    regardless of its tracker priority. **When tracker priority and contract scope
@@ -396,10 +468,24 @@ linked branches, local worktrees, and available session/ownership evidence, even
 when their issues lie outside the requested projects. Remove already active issues
 from the fresh-track pool; report resume/review instructions separately. Treat
 active work as a fixed concurrency constraint: a new track must also have no
-blocking dependency, shared file, or unmerged foundation with it. Fetch real diffs
+blocking dependency, unaccepted shared file, or unmerged foundation with it.
+Fetch real diffs
 and establish concrete scopes; if relevant active scope or ownership cannot be
 verified, sequence the affected candidate instead of declaring it independent.
 Do not use assignee or In Progress alone as proof of a live session.
+
+For each candidate and each accepted PR, intersect the candidate's concrete
+file scope with that PR's live diff and record the exact overlapping paths.
+Exclude only that candidate/accepted-PR intersection from the active-work file
+collision test. Do not remove accepted paths from candidate scopes or globally
+subtract them from active work: the same file in an unaccepted PR or other
+active work still sequences the candidate. Linked branch/worktree scope is
+covered only where verified as belonging to the accepted PR's live diff;
+additional or unverified active scope keeps the existing fail-closed rule.
+Default mode uses these intersections for reporting and for its existing
+parallel-kickoff checks; it adds no active-work file bar for #1. Criteria 1–3
+remain unchanged against accepted PRs, and criterion 4
+still forbids all file overlap between candidates selected in the same batch.
 
 From the gated, unblocked, inactive candidates, select the **largest mutually-independent
 set of size ≤ N** — maximum cardinality, not merely a set nothing can be added
@@ -485,6 +571,11 @@ still means one paragraph per issue. Additionally:
   agent sessions in one working directory is the concurrency hazard this mode
   exists to manage, not to create. A fresh worktree may need the repo's install
   step re-run before its checks pass.
+- **With the flag, each engineering track carries its actual accepted overlaps
+  in its kickoff:** PR number, title, author and exact overlapping files. For
+  READY_TO_BUILD or graphless implementation, include the **Rebase policy for
+  accepted overlaps** above. PLAN_ONLY lists risks without a rebase step;
+  human actions omit this clause. No overlap means no extra kickoff instruction.
 - **A non-engineering track keeps its human execution kickoff and gets no git
   artifacts.** Step 6 of the Procedure holds here unchanged: if the binding
   constraint is "nobody has asked the customer who gets logins," that is real work
@@ -540,6 +631,11 @@ Code, Codex, whichever host they drive). This handoff follows the readiness stat
   `/dispatch-implementation <id> --plan-only`, honoring its scope/workspace rules.
   Produce the acceptance-cited plan and stop. No implementation or PR; build waits
   for <event, unmet condition, source>." Do not invent scope.
+- With the flag and actual file overlap, carry this engineering issue's PR
+  number, title, author and exact overlapping files in the paragraph. Include
+  the **Rebase policy for accepted overlaps** for READY_TO_BUILD or graphless
+  implementation. PLAN_ONLY carries plan risks without a rebase step; human
+  actions omit this clause. Apply the same rule to every parallel kickoff.
 - If #1 is already genuinely active, tell the agent to resume the named branch or
   PR instead of creating a duplicate session. If #1 is non-engineering, write an
   execution kickoff for the human action; do not manufacture an agent task or a
@@ -561,7 +657,15 @@ under `--parallel` the batch *is* the answer and there is no #1.
 
 ## Output
 
-Short. The whole point is that it fits in one screen.
+Keep the recommendation short, normally one screen. The full accepted-overlap
+evidence list is the explicit exception; preserve every entry.
+
+With the flag, the **Accepted overlaps** list names every selected engineering
+track (and each default-mode parallel kickoff), with each PR's number, title,
+author and exact overlapping files; write `none` when its scope is verified and
+does not overlap, or `unverified` for an unknown scope. Include unused/unverified
+accepted PRs and overlaps with sequenced/already-active candidates, even when no
+track is selected. Omit this list when the flag is absent and omit human actions.
 
 Every milestone-dependent field below is **derived from the issue's resolved milestone**,
 never written literally. Under an explicit milestone argument the gate line
@@ -585,6 +689,11 @@ unblocks or de-risks.>
 **Blocked by:** <nothing / what, and whether that is also worth doing first>
 
 **First action:** <one concrete thing doable in under 30 minutes>
+
+**Accepted overlaps** (omit when `--accept-overlap` is absent):
+- `<selected/kickoff issue id>` — PR #<number> — <title> — @<author>: <exact overlapping files; implementation rebase policy / PLAN_ONLY risk> (or `none` / `unverified`)
+- PR #<number> — <title> — @<author>: <sequenced/already-active candidate ids and exact overlapping files, even if also selected elsewhere>
+- PR #<number> — <title> — @<author>: unused — no gated-candidate overlap, all scopes verified (or unused status unverified — <unknown scope ids>)
 
 **Kickoff:** <implementation paragraph for READY_TO_BUILD or graphless engineering; plan-only paragraph
 with unmet build condition for PLAN_ONLY; human action when non-engineering>
@@ -657,6 +766,11 @@ Readiness: READY_TO_BUILD · Graph: <path, sha256 revision, condition source; om
   <plan-only kickoff using /dispatch-implementation --plan-only; stop at plan>
 
 **Already active:** <issue, project, milestone, branch/PR, resume or review action>
+
+**Accepted overlaps** (omit when `--accept-overlap` is absent):
+- `<selected engineering track id>` — PR #<number> — <title> — @<author>: <exact overlapping files; implementation rebase policy> (or `none` / `unverified`)
+- PR #<number> — <title> — @<author>: <sequenced/already-active candidate ids and exact overlapping files, even if also selected elsewhere>
+- PR #<number> — <title> — @<author>: unused — no gated-candidate overlap, all scopes verified (or unused status unverified — <unknown scope ids>)
 
 **Integration order:** <which track's PR should land first, and why; "independent,
 any order" is a valid answer>
