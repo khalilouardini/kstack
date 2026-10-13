@@ -72,8 +72,13 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
 ## Procedure
 
 1. Parse the stage and flags. For plan, accept the milestone, repeated `--project`,
-   `--parallel` and repeated `--accept-overlap <PR#>`; require each overlap value
-   and let `/next` validate the PR before selection. For build, accept only
+   `--parallel` and repeated `--accept-overlap <PR#>`. Before constructing args or
+   starting Workflow, validate each value with `^[1-9][0-9]*$` and verify its PR
+   is OPEN in the consuming repository, with complete live-diff evidence, using
+   `next`'s **Accepted file overlaps** procedure. Otherwise refuse and quote the
+   value (or `<missing>`); do not report EMPTY. Deduplicate this read-only
+   preflight while preserving all selection tokens. `/next` checks again in A1.
+   For build, accept only
    `--approve` and reject `--accept-overlap` as unknown. Reject other unknown flags,
    nonpositive N, absent build approval, or an approval list containing unknown/stopped issues. N defaults
    to `/next`'s documented 3; announce the resolved count. Resolve repo root and
@@ -92,6 +97,14 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    `["any", "--project", "Project name", "--parallel", "3", "--accept-overlap", "479", "--accept-overlap", "470"]`.
    Pass every overlap flag and value occurrence unchanged, preserving order and
    repeats; `/next` owns deduplication and validation.
+   When flags are present, also pass `accepted_prs`, the deduplicated preflight
+   snapshots: `{number, title, author, state, head_sha, changed_files, files}`;
+   `author` is the login string, `head_sha` is `headRefOid`, and `changed_files`
+   is `changedFiles`. `files` keeps one entry per REST file record, retaining only
+   `filename` and, for renames, `previous_filename`. These are transient caller
+   args, not new record fields. A4 uses
+   their intersections with each track's `file_scope` for its read-only preflight
+   before dispatch §1; a merged or closed PR does not stop unrelated tracks.
 4. For build, obtain the exact returned Run A record from the human's checkpoint
    handoff and pass it as `args.plan_record`, plus `args.approve` (`"all"` or an
    issue-id array). Validate against RUN_A, including unique ids, plan/track
@@ -174,6 +187,10 @@ Return RUN_A or WAVE_REPORT as defined in the records reference, with run ids,
 approval list, final state/evidence per track, seam table, every open question and
 next human action. Checked questions carry verified/stale plus sibling-tip
 citations; unchecked questions remain explicitly unverified for the human.
+With accepted-overlap flags, the unchanged Workflow records keep each track's
+overlaps in `PLAN.risks`. SELECT/RUN_A do not retain `/next`'s unused-PR or
+excluded-candidate overlap reports, including EMPTY runs; say so explicitly.
+Direct `/next` and Codex's A1-only output retain those reports.
 With N=3, Run A normally uses 6 agents (3+N with contract), or 5 without A3;
 Run B uses 7 (2N+1 with B2), or 6 without B2, before stopped-track reductions.
 There is no implicit retry past terminal review verdicts.

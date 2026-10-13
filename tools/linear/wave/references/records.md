@@ -12,6 +12,13 @@ the two-stage wave's approval path receives implementation-eligible work only. P
 Run ids are caller-supplied Workflow invocation ids; the tool's actual run id is
 attached by the invoking skill after return if the tool allocates it itself.
 
+Accepted-overlap flags use transient caller `args.accepted_prs` snapshots, not
+new record fields. A4 carries relevant overlaps and current PR states in the
+existing PLAN.risks strings; Run B receives them in the approved plan. SELECT
+and RUN_A do not retain `/next`'s unused-PR or excluded-candidate overlap report,
+including EMPTY runs. The Workflow checkpoint must state this limitation;
+direct `/next` and Codex's A1-only output retain the full report.
+
 Contract files are JSON lists of {literal, files}; SHARED_LITERAL additionally
 records the participating issue ids and why agreement is required. Write
 <contract_dir>/<wave-id>.json and a test using the consuming repo's own runner:

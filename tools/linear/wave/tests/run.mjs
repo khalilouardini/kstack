@@ -54,6 +54,12 @@ async function run(stage, mutate=()=>{}, source=executable) {
 }
 const seamTable=f=>f.tracks.flatMap(t=>f.literals.flatMap(e=>e.files.map(file=>({literal:e.literal,branch:t.branch,file,state:'UNCHANGED',evidence:'unchanged'}))));
 const stopped=(f)=>{const b=f.responses['B1 build T-1'];b.state='STOPPED';b.pr=null;b.head_sha=null;b.stop_reason='gate failed';b.evidence=['test exit 1'];};
+const overlapSelection=['any','--project','Project name','--parallel','3','--accept-overlap','479','--accept-overlap','470','--accept-overlap','479'];
+const overlapPR=(number,file)=>({number,title:'Accepted PR '+number,author:'maintainer',
+  state:'OPEN',head_sha:'head-'+number,changed_files:1,files:[{filename:file}]});
+const overlapArgs=(_f,a)=>{a.selection=clone(overlapSelection);
+  a.accepted_prs=[overlapPR(479,'file1.txt'),overlapPR(470,'file2.txt')];};
+const promptOverlaps=p=>JSON.parse(p.match(/Relevant accepted overlaps from caller preflight: (\[[^\n]*\])\./)[1]);
 const tests=[
  async()=>{const r=await run('plan',f=>{f.responses['A1 select'].tracks=[];});assert.equal(r.result.state,'EMPTY');assert.equal(r.calls.length,1);},
  async()=>{const r=await run('plan');assert.equal(r.result.plans.length,3);assert.equal(r.result.state,'AWAITING_APPROVAL');assert.ok(!r.calls.some(c=>c.label.startsWith('A3')));},
@@ -77,20 +83,54 @@ const tests=[
  async()=>{const r=await run('build');assert.equal(r.maxReview,1);for(let i=1;i<3;i++)assert.ok(r.events.indexOf('end B3 review T-'+i)<r.events.indexOf('start B3 review T-'+(i+1)));},
  async()=>{const r=await run('plan',f=>{f.responses['A1 select'].tracks=[];f.responses['A1 select'].sequenced=['T-1 PLAN_ONLY: build waits for contract merge (source: fixture)'];});assert.equal(r.result.state,'EMPTY');assert.equal(r.result.plans.length,0);assert.equal(r.result.build_command,null);assert.equal(r.calls.length,1);assert.match(r.calls[0].prompt,/PLAN_ONLY candidates must go in sequenced/);assert.match(r.result.sequenced[0],/build waits for contract merge/);},
  async()=>{
-   const selection=['any','--project','Project name','--parallel','3','--accept-overlap','479','--accept-overlap','470','--accept-overlap','479'];
-   const r=await run('plan',(_f,a)=>{a.selection=clone(selection);});
+   const risk='PR #479 — Accepted PR 479 — @maintainer: file1.txt; Pending overlap; rebase onto default branch after merge.';
+   const r=await run('plan',(f,a)=>{overlapArgs(f,a);f.responses['A4 plan T-1'].risks=[risk];});
    const a1=r.calls.find(c=>c.label==='A1 select');
    const tokens=JSON.parse(a1.prompt.match(/Run \/next with argument tokens (\[[^\n]*\]) in parallel mode\./)[1]);
-   assert.deepEqual(tokens,selection);
+   assert.deepEqual(tokens,overlapSelection);
+   assert.match(a1.prompt,/Pass every token unchanged, including repeated --accept-overlap flags and values/);
    const plans=r.calls.filter(c=>c.label.startsWith('A4 plan '));
    assert.equal(plans.length,fixture.tracks.length);
+   assert.deepEqual(promptOverlaps(plans[0].prompt),[{number:479,title:'Accepted PR 479',author:'maintainer',head_sha:'head-479',files:['file1.txt']}]);
+   assert.deepEqual(promptOverlaps(plans[1].prompt).map(p=>p.number),[470]);
+   assert.deepEqual(promptOverlaps(plans[2].prompt),[]);
    for(const p of plans){
-     assert.ok(p.prompt.includes('selection tokens '+JSON.stringify(selection)));
-     assert.match(p.prompt,/Re-fetch those PRs and their live diffs/);
      assert.match(p.prompt,/Under risks, list every accepted overlap\s+that touches this plan's files/);
-     assert.match(p.prompt,/PR number, title, author, exact overlapping\s+files/);
-     assert.match(p.prompt,/rebase over that work and resolve overlaps/);
+     assert.match(p.prompt,/PR number, title, author and exact overlapping files/);
+     assert.match(p.prompt,/Re-fetch only relevant PRs'/);
+     assert.match(p.prompt,/never use a stale snapshot/);
+     assert.ok(p.prompt.indexOf('Before dispatch §1')<p.prompt.indexOf('Read /stack/dispatch'));
+     assert.match(p.prompt,/return STOPPED before any dispatch write/);
+     assert.match(p.prompt,/For MERGED, record the\s+merge commit and continue/);
+     assert.match(p.prompt,/For CLOSED unmerged, record that the active overlap is gone\s+and continue/);
+     assert.match(p.prompt,/never base on an accepted PR's branch or rebase onto\s+its head/);
+     assert.match(p.prompt,/Before land Step 7, fetch/);
+     assert.match(p.prompt,/Pending overlap/);
    }
+   assert.deepEqual(r.result.plans[0].risks,[risk]);
+   const build=await run('build',(_f,a)=>{a.plan_record=r.result;});
+   const b1=build.calls.find(c=>c.label==='B1 build T-1');
+   const approvedPlan=JSON.parse(b1.prompt.match(/Approved plan: (\{[^\n]*\})\./)[1]);
+   assert.deepEqual(approvedPlan.risks,[risk]);
+ },
+ async()=>{const r=await run('plan');for(const p of r.calls.filter(c=>c.label.startsWith('A4 plan '))){assert.ok(!p.prompt.includes('Relevant accepted overlaps from caller preflight:'));assert.ok(!p.prompt.includes('accepted overlap'));assert.ok(!p.prompt.includes('Pending overlap'));assert.ok(!p.prompt.includes('Before dispatch §1'));}},
+ async()=>{
+   for(const value of ['0','-1','1.5','abc','#479','0479',undefined]){
+     const r=await run('plan',(_f,a)=>{a.selection=['any','--parallel','3','--accept-overlap',...(value===undefined?[]:[value])];});
+     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+     assert.ok(r.result.stop_reason.includes(JSON.stringify(value===undefined?'<missing>':value)));
+   }
+   for(const state of ['MERGED','CLOSED',null]){
+     const r=await run('plan',(_f,a)=>{a.selection=['any','--parallel','3','--accept-overlap','479'];a.accepted_prs=state?[{...overlapPR(479,'file1.txt'),state}]:[];});
+     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);assert.match(r.result.stop_reason,/"479"/);
+   }
+ },
+ async()=>{
+   const partial=await run('plan',(f,a)=>{overlapArgs(f,a);a.accepted_prs[0].changed_files=2;});
+   assert.equal(partial.result.state,'STOPPED');assert.equal(partial.calls.length,0);assert.match(partial.result.stop_reason,/"479".*incomplete/);
+   const renamed=await run('plan',(f,a)=>{overlapArgs(f,a);a.accepted_prs[0].files=[{filename:'renamed.txt',previous_filename:'file1.txt'}];});
+   const plan=renamed.calls.find(c=>c.label==='A4 plan T-1');
+   assert.deepEqual(promptOverlaps(plan.prompt)[0].files,['file1.txt']);
  }
 ];
 function seamIntegration(){

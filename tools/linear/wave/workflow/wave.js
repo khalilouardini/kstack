@@ -1365,6 +1365,27 @@ if (!cfg.max_review_rounds) log('wave.max_review_rounds default: 3 (documented b
 if (!cfg.review_concurrency) log('wave.review_concurrency default: 1 (shared reviewer quota)');
 
 if (args.stage === 'plan') {
+  const accepted = new Map();
+  const tokens = args.selection || [];
+  for (let i=0;i<tokens.length;i++) if (tokens[i]==='--accept-overlap') {
+    const value=tokens[++i];
+    if (value===undefined || String(value).startsWith('--'))
+      return refuse('--accept-overlap "<missing>": requires a positive PR number');
+    if (!/^[1-9][0-9]*$/.test(value) || !Number.isSafeInteger(Number(value)))
+      return refuse(`--accept-overlap ${JSON.stringify(value)}: requires a positive PR number`);
+    const number=Number(value);
+    if (accepted.has(number)) continue;
+    const pr=Array.isArray(args.accepted_prs) ? args.accepted_prs.find(p=>p.number===number) : null;
+    if (!pr || pr.state!=='OPEN')
+      return refuse(`--accept-overlap ${JSON.stringify(value)}: missing OPEN preflight evidence`);
+    if ([pr.title,pr.author,pr.head_sha].some(v=>typeof v!=='string' || !v) ||
+        !Number.isInteger(pr.changed_files) ||
+        !Array.isArray(pr.files) || pr.files.length!==pr.changed_files ||
+        pr.files.some(f=>typeof f.filename!=='string' || !f.filename ||
+          (f.previous_filename!==undefined && typeof f.previous_filename!=='string')))
+      return refuse(`--accept-overlap ${JSON.stringify(value)}: incomplete preflight diff or metadata`);
+    accepted.set(number,pr);
+  }
   phase('Select');
   const selected = await call('A1 select', `${read(args.paths.next, 'selection is read-only; no adaptation')}
 Run /next with argument tokens ${JSON.stringify(args.selection)} in parallel mode.
@@ -1412,16 +1433,38 @@ Return its absolute file path, branch and PR. Do not implement any selected issu
   }
   phase('Plan');
   const plans=await pipeline(selected.tracks, async (_prev,t) => {
-    const p=await call(`A4 plan ${t.issue_id}`, `${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
+    const overlaps=[...accepted.values()].map(pr=>({number:pr.number,title:pr.title,
+      author:pr.author,head_sha:pr.head_sha,
+      files:[...new Set(pr.files.flatMap(f=>[f.filename,f.previous_filename].filter(Boolean)))]
+        .filter(file=>t.file_scope.includes(file))})).filter(pr=>pr.files.length);
+    const overlapPrompt=accepted.size ? `Before dispatch §1 or any workspace/tracker write,
+perform a read-only overlap preflight for this track's verified file scope.
+Relevant accepted overlaps from caller preflight: ${JSON.stringify(overlaps)}.
+The selection-time OPEN gate has passed; do not reapply it to later state changes.
+Check current head/state for the caller's accepted_prs snapshots. If a head moved,
+refresh its complete diff using next's Accepted file overlaps procedure and
+recompute intersections; never use a stale snapshot. Re-fetch only relevant PRs'
+full diffs when the head is unchanged. An unrelated accepted PR merging or
+closing does not stop this track. If scope-relevant diff evidence cannot be verified,
+return STOPPED before any dispatch write. Establish plan files before dispatch;
+any scope expansion requires repeating the overlap preflight before writes.
+Under risks, list every accepted overlap that touches this plan's files, with
+PR number, title, author and exact overlapping files. For MERGED, record the
+merge commit and continue; rebase onto ${args.default_branch} before land Step 7
+(gates before push). For CLOSED unmerged, record that the active overlap is gone
+and continue. For OPEN, record the Pending overlap PR-body requirement: branch
+from the default branch, never base on an accepted PR's branch or rebase onto
+its head. Before land Step 7, fetch; if it has merged, rebase onto the fetched
+default branch and resolve the files. Otherwise keep the PR based on the default
+branch and list the PR/files under Pending overlap. Whichever PR merges second
+rebases onto the default branch and re-runs the gates before its merge. This is planning only:
+record these future build actions as risks; do not rebase during A4.
+No intersection means no overlap risk or rebase instruction for this track.
+` : '';
+    const p=await call(`A4 plan ${t.issue_id}`, `${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
 Dispatch exact issue ${t.issue_id} with --plan-only. Proposed track: ${JSON.stringify(t)}.
 Contract: ${JSON.stringify(record.contract)}. Return criteria citations, files, tests,
-risks, status read-back and verified absolute worktree. No implementation permission.
-Read --accept-overlap PRs from selection tokens ${JSON.stringify(args.selection)}.
-Re-fetch those PRs and their live diffs. Under risks, list every accepted overlap
-that touches this plan's files, with PR number, title, author, exact overlapping
-files and the instruction to rebase over that work and resolve overlaps before
-final validation. If a named PR is no longer OPEN or its diff cannot be verified,
-return STOPPED with evidence. Keep the existing record schemas unchanged.`, schemas.PLAN, 'Plan');
+risks, status read-back and verified absolute worktree. No implementation permission.`, schemas.PLAN, 'Plan');
     if (!p || p.issue_id !== t.issue_id || !p.worktree.startsWith('/') || !p.branch) return stoppedPlan(t,'A4 missing or wrong issue record');
     if (p.state==='STOPPED') log(`${t.issue_id}: STOPPED ${p.stop_reason}`);
     return p;
