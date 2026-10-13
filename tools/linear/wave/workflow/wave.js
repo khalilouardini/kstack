@@ -1471,6 +1471,11 @@ risks, status read-back and verified absolute worktree. No implementation permis
   });
   record.plans=selected.tracks.map((t,i)=>plans[i] || stoppedPlan(t,'A4 pipeline dropped track'));
   record.tracks=selected.tracks.map((t,i)=>({...t,worktree:record.plans[i].worktree,branch:record.plans[i].branch}));
+  if (!record.plans.some(p=>p.state==='PLANNED')) {
+    record.stop_reason='no PLANNED track; every A4 plan stopped';
+    record.evidence=record.plans.map(p=>`${p.issue_id}: ${p.stop_reason}`);
+    log(`Wave STOPPED: ${record.stop_reason}`); return record;
+  }
   record.state='AWAITING_APPROVAL';
   record.build_command='/wave build --approve all';
   return record;

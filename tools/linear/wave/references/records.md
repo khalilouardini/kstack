@@ -9,6 +9,9 @@ worktree in selection are proposed names/absolute paths; only dispatch read-back
 proves their existence. A1 excludes PLAN_ONLY from TRACK/SELECT.tracks and lists
 it in sequenced with the unmet condition/source. It does not count toward N;
 the two-stage wave's approval path receives implementation-eligible work only. PLAN.worktree must match the recovered TRACK.worktree.
+RUN_A is AWAITING_APPROVAL only when at least one PLAN is PLANNED; if every A4
+plan stopped, it is STOPPED with build_command null and `<issue_id>: <stop_reason>`
+evidence per plan.
 Run ids are caller-supplied Workflow invocation ids; the tool's actual run id is
 attached by the invoking skill after return if the tool allocates it itself.
 
