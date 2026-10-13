@@ -1368,6 +1368,8 @@ if (args.stage === 'plan') {
   phase('Select');
   const selected = await call('A1 select', `${read(args.paths.next, 'selection is read-only; no adaptation')}
 Run /next with argument tokens ${JSON.stringify(args.selection)} in parallel mode.
+Pass every token unchanged, including repeated --accept-overlap flags and values;
+/next owns their validation and deduplication.
 PLAN_ONLY candidates must go in sequenced with the unmet build condition and source,
 never tracks. They do not count toward N and must not reach --approve all.
 Return all implementation-eligible tracks, sequenced and already_active entries. TRACK branch/worktree are
@@ -1413,7 +1415,13 @@ Return its absolute file path, branch and PR. Do not implement any selected issu
     const p=await call(`A4 plan ${t.issue_id}`, `${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
 Dispatch exact issue ${t.issue_id} with --plan-only. Proposed track: ${JSON.stringify(t)}.
 Contract: ${JSON.stringify(record.contract)}. Return criteria citations, files, tests,
-risks, status read-back and verified absolute worktree. No implementation permission.`, schemas.PLAN, 'Plan');
+risks, status read-back and verified absolute worktree. No implementation permission.
+Read --accept-overlap PRs from selection tokens ${JSON.stringify(args.selection)}.
+Re-fetch those PRs and their live diffs. Under risks, list every accepted overlap
+that touches this plan's files, with PR number, title, author, exact overlapping
+files and the instruction to rebase over that work and resolve overlaps before
+final validation. If a named PR is no longer OPEN or its diff cannot be verified,
+return STOPPED with evidence. Keep the existing record schemas unchanged.`, schemas.PLAN, 'Plan');
     if (!p || p.issue_id !== t.issue_id || !p.worktree.startsWith('/') || !p.branch) return stoppedPlan(t,'A4 missing or wrong issue record');
     if (p.state==='STOPPED') log(`${t.issue_id}: STOPPED ${p.stop_reason}`);
     return p;

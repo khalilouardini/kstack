@@ -75,7 +75,23 @@ const tests=[
  async()=>{const forbidden=/gh\s+pr\s+merge|--merge/;assert.ok(!forbidden.test(script));for(const stage of ['plan','build']){const r=await run(stage,(f,a)=>{if(stage==='plan')f.responses['A2 shared-literal scan'].literals=f.literals;else {a.plan_record.contract=f.contract;a.plan_record.literals=f.literals;f.responses['B2 seam check'].table=seamTable(f);}});for(const c of r.calls)assert.ok(!forbidden.test(c.prompt),c.label);}},
  async()=>{const doc=readFileSync(join(dir,'../references/records.md'),'utf8');const canonical=JSON.parse(doc.match(/```json\n([\s\S]*?)\n```/)[1]);assert.deepEqual(schemas,canonical);for(const name of ['TRACK','SHARED_LITERAL','PLAN','TRACK_RESULT','REVIEW_RESULT','WAVE_REPORT'])assert.ok(schemas[name]);},
  async()=>{const r=await run('build');assert.equal(r.maxReview,1);for(let i=1;i<3;i++)assert.ok(r.events.indexOf('end B3 review T-'+i)<r.events.indexOf('start B3 review T-'+(i+1)));},
- async()=>{const r=await run('plan',f=>{f.responses['A1 select'].tracks=[];f.responses['A1 select'].sequenced=['T-1 PLAN_ONLY: build waits for contract merge (source: fixture)'];});assert.equal(r.result.state,'EMPTY');assert.equal(r.result.plans.length,0);assert.equal(r.result.build_command,null);assert.equal(r.calls.length,1);assert.match(r.calls[0].prompt,/PLAN_ONLY candidates must go in sequenced/);assert.match(r.result.sequenced[0],/build waits for contract merge/);}
+ async()=>{const r=await run('plan',f=>{f.responses['A1 select'].tracks=[];f.responses['A1 select'].sequenced=['T-1 PLAN_ONLY: build waits for contract merge (source: fixture)'];});assert.equal(r.result.state,'EMPTY');assert.equal(r.result.plans.length,0);assert.equal(r.result.build_command,null);assert.equal(r.calls.length,1);assert.match(r.calls[0].prompt,/PLAN_ONLY candidates must go in sequenced/);assert.match(r.result.sequenced[0],/build waits for contract merge/);},
+ async()=>{
+   const selection=['any','--project','Project name','--parallel','3','--accept-overlap','479','--accept-overlap','470','--accept-overlap','479'];
+   const r=await run('plan',(_f,a)=>{a.selection=clone(selection);});
+   const a1=r.calls.find(c=>c.label==='A1 select');
+   const tokens=JSON.parse(a1.prompt.match(/Run \/next with argument tokens (\[[^\n]*\]) in parallel mode\./)[1]);
+   assert.deepEqual(tokens,selection);
+   const plans=r.calls.filter(c=>c.label.startsWith('A4 plan '));
+   assert.equal(plans.length,fixture.tracks.length);
+   for(const p of plans){
+     assert.ok(p.prompt.includes('selection tokens '+JSON.stringify(selection)));
+     assert.match(p.prompt,/Re-fetch those PRs and their live diffs/);
+     assert.match(p.prompt,/Under risks, list every accepted overlap\s+that touches this plan's files/);
+     assert.match(p.prompt,/PR number, title, author, exact overlapping\s+files/);
+     assert.match(p.prompt,/rebase over that work and resolve overlaps/);
+   }
+ }
 ];
 function seamIntegration(){
  const temp=mkdtempSync(join(tmpdir(),'wave-seam-'));

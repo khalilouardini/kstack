@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.2.0
+version: 0.3.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -12,7 +12,7 @@ A wave is the set of mutually independent issues selected by `/next --parallel`.
 Build and human-merge this wave before selecting the next one. Invoke:
 
 ```text
-/wave plan [<milestone-id>|any] [--project "<p>"]... [--parallel N]
+/wave plan [<milestone-id>|any] [--project "<p>"]... [--parallel N] [--accept-overlap <PR#>]...
 /wave build --approve <comma-separated-issue-ids|all>
 ```
 
@@ -21,6 +21,10 @@ as required by that tool's user opt-in rule. No Workflow execution is implicit
 in an ordinary `/next` invocation. Project filters depend on the canonical
 `next` supporting repeatable `--project`; if it does not, refuse that option
 and name the dependency. Do not approximate selection rules.
+
+Plan accepts repeatable `--accept-overlap <PR#>` and delegates its validation
+and narrow file-overlap exception to canonical `next`. Build accepts only
+`--approve`; `--accept-overlap` on build is an unknown flag and must be rejected.
 
 ## Project-level orchestration design
 
@@ -56,7 +60,8 @@ Read every composed procedure by physical path, never copy its rules here.
 
 Read `hosts/HOSTS.md`. Claude Code supplies the Workflow tool. On Codex, run
 A1 only: read `tools/linear/next/SKILL.md` and follow it top to bottom in parallel
-mode with the supplied milestone/project/count tokens. PLAN_ONLY candidates
+mode with the supplied milestone/project/count tokens and every
+`--accept-overlap <PR#>` occurrence unchanged. PLAN_ONLY candidates
 must go into SELECT.sequenced with their unmet condition/source, never TRACK.
 They do not count toward N and cannot reach `--approve all`. Render that selection
 and say **the graph did not run**; no dispatch, tracker write, contract or build.
@@ -66,8 +71,11 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
 
 ## Procedure
 
-1. Parse the stage and flags. Reject unknown flags, nonpositive N, absent build
-   approval, or an approval list containing unknown/stopped issues. N defaults
+1. Parse the stage and flags. For plan, accept the milestone, repeated `--project`,
+   `--parallel` and repeated `--accept-overlap <PR#>`; require each overlap value
+   and let `/next` validate the PR before selection. For build, accept only
+   `--approve` and reject `--accept-overlap` as unknown. Reject other unknown flags,
+   nonpositive N, absent build approval, or an approval list containing unknown/stopped issues. N defaults
    to `/next`'s documented 3; announce the resolved count. Resolve repo root and
    fetched default branch; use the remote-tracking ref, not a guessed `main`.
 2. Read `tools/linear/wave/references/records.md`. Resolve the physical installed
@@ -81,7 +89,9 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    commands and physical paths explicitly; never include tokens or secrets in args.
    Pass these settings rather than asking the script to infer
    them. For plan, `selection` is an array of tokens, e.g.
-   `["any", "--project", "Project name", "--parallel", "3"]`.
+   `["any", "--project", "Project name", "--parallel", "3", "--accept-overlap", "479", "--accept-overlap", "470"]`.
+   Pass every overlap flag and value occurrence unchanged, preserving order and
+   repeats; `/next` owns deduplication and validation.
 4. For build, obtain the exact returned Run A record from the human's checkpoint
    handoff and pass it as `args.plan_record`, plus `args.approve` (`"all"` or an
    issue-id array). Validate against RUN_A, including unique ids, plan/track

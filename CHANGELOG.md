@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Add repeatable `--accept-overlap <PR#>` to `/next` and `/wave plan`: humans may
+accept file overlap with named open PRs, recorded in kickoffs and plan risks for
+rebasing, while scope, graph, dependency, foundation and within-batch checks hold.
+
 Require `/linear-roadmap` to create or update the consuming product’s scope
 contract when needed, covering project purpose, boundaries, acceptance gates and
 product impact. Preserve approved scope and mark unauthorized changes as drafts.
