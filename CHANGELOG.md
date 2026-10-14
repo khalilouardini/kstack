@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+`/summarize-change` 0.2.0 briefs a change by its intent instead of its
+behavior. The six parts are now intent with its source, approach and the system
+constraints it touches, diff vs intent (delivered / beyond intent / short of
+intent), sensitive vs mechanical ranges, blast radius, and decision needed.
+Intent comes from the tracker issue, the `/spec` file, the PR body, then
+commits, in that order; the diff still decides what the code does. An intent
+inferred from the diff alone is labelled as inferred.
+
 Add repeatable `--accept-overlap <PR#>` to `/next` and `/wave plan`: humans may
 accept file overlap with named open PRs, recorded in kickoffs and plan risks for
 rebasing onto the default branch after a merge, while scope, graph, dependency,
