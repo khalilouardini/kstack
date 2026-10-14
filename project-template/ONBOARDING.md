@@ -47,6 +47,7 @@ skills that need it and leaves the rest working.
 | `review_gate.skill_path` + `review_gate.scope` | stack review skills defer to your project's own review gate on the paths it claims. |
 | `workspace_contract` | `/dispatch-implementation`, `/linear-steward`, `/linear-feature-intake`, `/linear-release-audit` need the tracker's status and mutation rules. Without it they refuse writes. |
 | `issue_prefix` | `/session-titles` labels by issue key, and `/next` resolves issue references. |
+| `issue_graph.config` | `/issue-graph open` and `status` use an existing local viewer; `refresh` also needs the indexed roadmap and fresh Linear reads. A saved host-local binding under `${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/issue-graph.json` also works. See [the binding format](../tools/linear/issue-graph/references/binding.md). |
 | `protected_branches` | `/triage` stops proposing CLOSE on branches that carry unextracted work. |
 | `role_appendix_dir` | roles answer with your traps, factories, and component inventory instead of asking for them. |
 | `spec_output_dir` | `/spec` writes where you want instead of asking. |

@@ -1,6 +1,6 @@
 ---
 name: issue-graph
-version: 0.1.0
+version: 0.1.1
 description: Open, inspect or refresh a local issue-graph visualization from the indexed roadmap and fresh Linear ticket data. Use when asked to "launch the issue graph", "open the roadmap visualization", "refresh the issue graph", or "/issue-graph open|status|refresh [project]". Does not change the roadmap or tracker. (kstack)
 ---
 

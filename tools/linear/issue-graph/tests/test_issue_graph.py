@@ -1,6 +1,8 @@
 import copy
+import contextlib
 import importlib.machinery
 import importlib.util
+import io
 import json
 import sqlite3
 import tempfile
@@ -102,6 +104,33 @@ class ProjectionTests(unittest.TestCase):
         self.assertIn("VIEW-unit", {i["identifier"] for i in items})
         self.assertIn("VIEW-second_unit", {i["identifier"] for i in items})
 
+    def test_unlinked_draft_units_keep_their_kind_and_project(self):
+        source = json.loads((graph.STACK_ROOT / "project-template/orchestration.json").read_text())
+        sample = {"complete": True, "observed_at": NOW, "issues": []}
+        items, _ = graph.project_snapshot(source, provenance(), "example", sample)
+        units = [i for i in items if i["raw"]["manifestNode"]["kind"] == "unit"]
+        self.assertEqual({i["raw"]["manifestNode"]["id"] for i in units}, {"contract", "api", "ui"})
+        for item in units:
+            self.assertTrue(item["identifier"].startswith("PROPOSED-"))
+            self.assertEqual(item["state"], {"name": "Proposed unit — unverified", "type": "triage"})
+            self.assertEqual(item["labels"][0]["id"], "proposed-unit")
+            self.assertEqual(item["project"]["name"], source["projects"][0]["title"])
+            self.assertIsNone(item["raw"]["linkedIssue"])
+        for item in items:
+            if item["raw"]["manifestNode"]["kind"] in {"human", "evidence", "release"}:
+                self.assertTrue(item["identifier"].startswith("GATE-"))
+                self.assertEqual(item["labels"][0]["id"], "checkpoint")
+
+    def test_unlinked_external_is_a_prerequisite_in_its_own_project(self):
+        source = record()
+        source["nodes"].append(node("unknown_external", "external", "beta"))
+        items, _ = graph.project_snapshot(source, provenance(), "beta", evidence())
+        item = next(i for i in items if i["raw"]["manifestNode"]["id"] == "unknown_external")
+        self.assertEqual(item["identifier"], "EXTERNAL-unknown_external")
+        self.assertEqual(item["labels"][0]["id"], "external-prerequisite")
+        self.assertEqual(item["project"]["name"], "Beta")
+        self.assertEqual(item["state"], {"name": "External prerequisite — unverified", "type": "triage"})
+
     def test_missing_or_incomplete_evidence_is_refused(self):
         for sample in [{"complete": False}, dict(evidence(), issues=[issue(A, "EXAMPLE-1")])]:
             with self.subTest(sample=sample), self.assertRaises(ValueError):
@@ -137,7 +166,7 @@ class CacheTests(unittest.TestCase):
         routes.mkdir(parents=True)
         (routes / "graph.js").write_text("MVP_SNAPSHOT_MODE")
         (routes / "issue.js").write_text("snapshotDescription")
-        with sqlite3.connect(self.database) as db:
+        with contextlib.closing(sqlite3.connect(self.database)) as db, db:
             db.executescript("""
                 CREATE TABLE issue_cache(identifier TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at INTEGER NOT NULL);
                 CREATE TABLE label_cache(id TEXT PRIMARY KEY, payload TEXT NOT NULL);
@@ -158,9 +187,9 @@ class CacheTests(unittest.TestCase):
         first = graph.replace_cache(self.cfg, items, meta)
         second = graph.replace_cache(self.cfg, items, meta)
         self.assertNotEqual(first, second)
-        with sqlite3.connect(first) as db:
+        with contextlib.closing(sqlite3.connect(first)) as db, db:
             self.assertEqual(db.execute("SELECT identifier FROM issue_cache").fetchall(), [("REMOVED",)])
-        with sqlite3.connect(self.database) as db:
+        with contextlib.closing(sqlite3.connect(self.database)) as db, db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM issue_cache").fetchone()[0], len(items))
             self.assertEqual(db.execute("SELECT * FROM saved_view").fetchall(), [("My custom view",)])
             self.assertEqual(db.execute("SELECT * FROM annotation").fetchall(), [("Keep this note",)])
@@ -169,12 +198,12 @@ class CacheTests(unittest.TestCase):
         self.assertEqual(other.read_bytes(), b"other workspace untouched")
 
     def test_write_error_rolls_back_issue_and_label_caches(self):
-        with sqlite3.connect(self.database) as db:
+        with contextlib.closing(sqlite3.connect(self.database)) as db, db:
             db.execute("CREATE TRIGGER refuse_import BEFORE INSERT ON issue_cache BEGIN SELECT RAISE(ABORT,'failed import'); END")
         items, meta = graph.project_snapshot(record(), provenance(), "alpha", evidence())
         with self.assertRaises(sqlite3.IntegrityError):
             graph.replace_cache(self.cfg, items, meta)
-        with sqlite3.connect(self.database) as db:
+        with contextlib.closing(sqlite3.connect(self.database)) as db, db:
             self.assertEqual(db.execute("SELECT identifier FROM issue_cache").fetchall(), [("REMOVED",)])
             self.assertEqual(db.execute("SELECT COUNT(*) FROM cache_meta WHERE key=?",
                                         (graph.META_KEY,)).fetchone()[0], 0)
@@ -188,8 +217,14 @@ class CacheTests(unittest.TestCase):
             graph.replace_cache(self.cfg, items, meta)
         self.assertEqual(graph.cached(self.cfg)[0], {"REMOVED"})
 
+    def test_viewer_database_is_closed_after_context_exit(self):
+        with graph.connect(self.database, readonly=True) as db:
+            self.assertEqual(db.execute("SELECT identifier FROM issue_cache").fetchall(), [("REMOVED",)])
+        with self.assertRaises(sqlite3.ProgrammingError):
+            db.execute("SELECT identifier FROM issue_cache")
+
     def test_binding_rejects_unknown_workspace_and_remote_url(self):
-        with sqlite3.connect(self.root / "data/workspaces.db") as db:
+        with contextlib.closing(sqlite3.connect(self.root / "data/workspaces.db")) as db, db:
             db.execute("CREATE TABLE workspace(id TEXT, api_key TEXT, webhook_secret TEXT)")
             db.execute("INSERT INTO workspace VALUES('alpha',NULL,NULL)")
         binding = dict(schema_version=1, viewer_root=str(self.root),
@@ -214,6 +249,33 @@ class CacheTests(unittest.TestCase):
              patch.object(graph.sys, "argv", argv), patch("builtins.print"):
             self.assertEqual(graph.main(), 0)
             start.assert_not_called()
+
+    def test_shared_workspace_does_not_report_other_project_as_current(self):
+        with contextlib.closing(sqlite3.connect(self.root / "data/workspaces.db")) as db, db:
+            db.execute("CREATE TABLE workspace(id TEXT, api_key TEXT, webhook_secret TEXT)")
+            db.execute("INSERT INTO workspace VALUES('alpha',NULL,NULL)")
+        binding = dict(schema_version=1, viewer_root=str(self.root),
+                       url="http://127.0.0.1:31415", service=None,
+                       projects={"alpha": {"workspace": "alpha"}, "beta": {"workspace": "alpha"}})
+        path = self.root / "binding.json"
+        path.write_text(json.dumps(binding))
+        meta = dict(provenance(), project="alpha")
+        with contextlib.closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("INSERT INTO cache_meta VALUES(?,?)", (graph.META_KEY, json.dumps(meta)))
+        health = {"running": True, "identifiers": ["REMOVED"]}
+        for action in ["status", "open"]:
+            for project in ["alpha", "beta"]:
+                with self.subTest(action=action, project=project):
+                    argv = ["issue-graph", action, "--config", str(path),
+                            "--project", project, "--repo", str(self.root)]
+                    output = io.StringIO()
+                    with patch.object(graph, "api_status", return_value=health), \
+                         patch.object(graph, "load_roadmap", return_value=(record(), provenance())), \
+                         patch.object(graph.sys, "argv", argv), contextlib.redirect_stdout(output):
+                        self.assertEqual(graph.main(), 0)
+                    result = json.loads(output.getvalue())
+                    self.assertEqual(result["provenance"]["project"], "alpha")
+                    self.assertEqual(result["state"], "CURRENT" if project == "alpha" else "STALE")
 
 
 class ManifestTests(unittest.TestCase):

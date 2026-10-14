@@ -48,7 +48,11 @@ Unit/external/contextual issue cards use their actual issue key when unique.
 Human, evidence and release cards use stable `GATE-<manifest-node-id>` keys and
 an unverified triage state even when they link to a completed ticket. If a ticket
 has several unit representations, stable `VIEW-<node-id>` keys avoid collapsing
-them. Each detail retains the original UUID/key, manifest node kind, acceptance,
+them. Unlinked units use `PROPOSED-<node-id>` and a Proposed unit label; unlinked
+external prerequisites use `EXTERNAL-<node-id>` and an External prerequisite
+label. Both stay unverified and retain their actual roadmap project instead of
+being grouped with checkpoints. Each detail retains the original UUID/key when
+linked, manifest node kind, acceptance,
 source, project admission, incoming/outgoing events and their sources.
 
 The viewer's generic Blocks/Blocked by counts project event-specific conditions

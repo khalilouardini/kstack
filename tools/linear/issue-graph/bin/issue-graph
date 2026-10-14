@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
@@ -79,11 +80,16 @@ def load_binding(path, key):
     return cfg
 
 
+@contextmanager
 def connect(path, readonly=False):
     if not path.is_file():
         raise ValueError(f"viewer database missing: {path}")
-    return sqlite3.connect(path.as_uri() + ("?mode=ro" if readonly else "?mode=rw"),
-                           uri=True, timeout=10)
+    db = sqlite3.connect(path.as_uri() + ("?mode=ro" if readonly else "?mode=rw"),
+                         uri=True, timeout=10)
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def load_roadmap(repo):
@@ -189,15 +195,29 @@ def project_snapshot(record, provenance, key, evidence):
             identifier = (linked["identifier"] if counts[node["issue_ref"]] == 1
                           else "VIEW-" + node["id"])
         else:
-            identifier = "GATE-" + node["id"]
+            if node["kind"] in {"human", "evidence", "release"}:
+                prefix, label_id, label_name, state_name = (
+                    "GATE-", "checkpoint", "Roadmap checkpoint", "Checkpoint — unverified")
+                project = {"id": "gates-" + key, "name": "Roadmap checkpoints"}
+            else:
+                prefix, label_id, label_name, state_name = {
+                    "unit": ("PROPOSED-", "proposed-unit", "Proposed unit", "Proposed unit — unverified"),
+                    "external": ("EXTERNAL-", "external-prerequisite", "External prerequisite",
+                                 "External prerequisite — unverified"),
+                    "group": ("CONTEXT-", "roadmap-context", "Roadmap context", "Context — unverified"),
+                }[node["kind"]]
+                owner_project = projects[node["project"]]
+                project = {"id": owner_project.get("linear_id") or "roadmap-" + node["project"],
+                           "name": owner_project["title"]}
+            identifier = prefix + node["id"]
             item = {
                 "id": identifier, "title": node["title"],
                 "url": linked["url"] if linked else "", "priority": 0,
-                "state": {"name": "Checkpoint — unverified", "type": "triage"},
+                "state": {"name": state_name, "type": "triage"},
                 "assignee": None,
-                "labels": [{"id": "checkpoint", "name": "Roadmap checkpoint",
+                "labels": [{"id": label_id, "name": label_name,
                             "color": "#a78bfa", "group": None}],
-                "project": {"id": "gates-" + key, "name": "Roadmap checkpoints"},
+                "project": project,
                 "createdAt": evidence["observed_at"], "updatedAt": evidence["observed_at"],
                 "completedAt": None,
             }
@@ -278,7 +298,7 @@ def replace_cache(cfg, issues, provenance):
         fd, name = tempfile.mkstemp(prefix=cfg["workspace"] + "-", suffix=".db", dir=backup_dir)
         os.close(fd)
         backup = Path(name)
-        with sqlite3.connect(backup) as dest:
+        with closing(sqlite3.connect(backup)) as dest:
             db.backup(dest)
         now = int(time.time() * 1000)
         with db:
@@ -373,8 +393,10 @@ def main():
             try:
                 _, current = load_roadmap(args.repo)
                 if previous:
-                    result["state"] = ("CURRENT" if all(previous.get(k) == current[k]
-                                       for k in ("manifest_digest", "index_digest")) else "STALE")
+                    matches = (previous.get("project") == args.project
+                               and all(previous.get(k) == current[k]
+                                       for k in ("manifest_digest", "index_digest")))
+                    result["state"] = "CURRENT" if matches else "STALE"
             except (OSError, ValueError, KeyError, TypeError) as error:
                 result["roadmap_error"] = str(error)
             if health["running"] and set(health["identifiers"]) != previous_ids:
