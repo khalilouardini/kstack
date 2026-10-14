@@ -1,5 +1,33 @@
 [
   {
+    "number": 18,
+    "name": "uncovered projects excluded before execution"
+  },
+  {
+    "number": 19,
+    "name": "graph bypass malformed values refuse"
+  },
+  {
+    "number": 20,
+    "name": "graph bypass binding and fresh build consent"
+  },
+  {
+    "number": 21,
+    "name": "uncovered tracks cannot enter execution"
+  },
+  {
+    "number": 22,
+    "name": "project-less tracks are exempt"
+  },
+  {
+    "number": 23,
+    "name": "uncovered projects do not block covered tracks"
+  },
+  {
+    "number": 24,
+    "name": "publication freshness and SHA evidence"
+  },
+  {
     "number": 1,
     "name": "empty selection"
   },

@@ -1364,17 +1364,92 @@ if (!Number.isInteger(concurrency) || concurrency < 1) return refuse('wave.revie
 if (!cfg.max_review_rounds) log('wave.max_review_rounds default: 3 (documented bounded review evidence)');
 if (!cfg.review_concurrency) log('wave.review_concurrency default: 1 (shared reviewer quota)');
 
-if (args.stage === 'plan') {
-  const accepted = new Map();
-  const tokens = args.selection || [];
-  for (let i=0;i<tokens.length;i++) if (tokens[i]==='--accept-overlap') {
+// Both PR flags share syntax and deduplication; forwarding keeps every occurrence.
+const parsePrFlags=(tokens, flag, only=false) => {
+  if (!Array.isArray(tokens)) return {error:`${flag}: flags must be argument tokens`};
+  const flags=[], numbers=new Set();
+  for (let i=0;i<tokens.length;i++) {
+    if (tokens[i]!==flag) {
+      if (only) return {error:`graph_update_flags accepts only ${flag} pairs`};
+      continue;
+    }
     const value=tokens[++i];
     if (value===undefined || String(value).startsWith('--'))
-      return refuse('--accept-overlap "<missing>": requires a positive PR number');
+      return {error:`${flag} "<missing>": requires a positive PR number`};
     if (!/^[1-9][0-9]*$/.test(value) || !Number.isSafeInteger(Number(value)))
-      return refuse(`--accept-overlap ${JSON.stringify(value)}: requires a positive PR number`);
-    const number=Number(value);
-    if (accepted.has(number)) continue;
+      return {error:`${flag} ${JSON.stringify(value)}: requires a positive PR number`};
+    flags.push(flag,value); numbers.add(Number(value));
+  }
+  return {flags,numbers};
+};
+// Caller observations are required before selection/build; nodes compare live
+// SHAs with these pins before writes. Build never inherits plan-time flags.
+const graphFlag='--accept-graph-update';
+const graphTokens=args.stage==='plan' ? (args.selection || []) : (args.graph_update_flags || []);
+const parsedGraph=parsePrFlags(graphTokens,graphFlag,args.stage==='build');
+if (parsedGraph.error) return refuse(parsedGraph.error);
+const graphFlags=parsedGraph.flags;
+const graphUpdates=new Map();
+for (const number of parsedGraph.numbers) {
+  const pr=Array.isArray(args.accepted_graph_updates) ? args.accepted_graph_updates.find(p=>p.number===number) : null;
+  if (!pr || pr.state!=='OPEN' || pr.base!=='main' || pr.coverage_exit!==0 ||
+      !/^[0-9a-f]{40}$/.test(pr.head_sha || '') ||
+      typeof pr.url!=='string' || !pr.url || !Array.isArray(pr.project_ids) || !pr.project_ids.length)
+    return refuse(`${graphFlag} ${JSON.stringify(String(number))}: missing verified OPEN graph-update coverage`);
+  graphUpdates.set(number,pr);
+}
+const publication=args.graph_publication;
+const validUTC=value => typeof value==='string' &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value) &&
+  Number.isFinite(Date.parse(value)) && new Date(value).toISOString().replace('.000Z','Z')===value.replace('.000Z','Z');
+if (!publication || !Array.isArray(publication.projects))
+  return refuse('graph publication: project coverage evidence required; use an empty projects array for project-less work');
+if (publication.projects.length && (!/^[0-9a-f]{40}$/.test(publication.main_sha || '') ||
+    !validUTC(publication.checked_at) || !/^\d{4}-\d{2}-\d{2}$/.test(args.date || '') ||
+    publication.checked_at.slice(0,10)!==args.date))
+  return refuse('graph publication: fresh main and complete project coverage evidence required for the invocation date');
+const projectUUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+const coveredProjects=new Set();
+const excludedProjects=[];
+for (const p of publication.projects) {
+  if (!p || typeof p.project_id!=='string' || !projectUUID.test(p.project_id) || coveredProjects.has(p.project_id) ||
+      typeof p.project_name!=='string' || !p.project_name ||
+      typeof p.view_path!=='string' || !p.view_path || p.view_path.startsWith('/') || p.view_path.split('/').includes('..') ||
+      !['CURRENT','ACCEPTED_UPDATE','UPDATE_REQUIRED','UNKNOWN'].includes(p.state))
+    return refuse('graph publication: invalid or duplicate project evidence');
+  coveredProjects.add(p.project_id);
+  if (p.state==='CURRENT') continue;
+  const pr=graphUpdates.get(p.pr_number);
+  if (p.state==='ACCEPTED_UPDATE' && pr) {
+    if (p.head_sha!==pr.head_sha || !pr.project_ids.includes(p.project_id))
+      return refuse(`graph publication: ${p.project_name} does not match the verified graph-update head/project`);
+  } else excludedProjects.push(p);
+}
+const publicationCovers=track => {
+  if (track.project===null) return true;
+  const matches=publication.projects.filter(p=>p.project_id===track.project || p.project_name===track.project);
+  return matches.length===1 && !excludedProjects.includes(matches[0]);
+};
+const graphEvidence='Graph publication evidence: '+JSON.stringify(publication);
+const graphPrompt=`For work linked to a Linear project, before selection or execution recheck the canonical graph publication gate
+against fresh main and the complete live Linear project ticket lists.
+Validated graph publication evidence: ${JSON.stringify(publication)}.
+Validated accepted PR snapshots: ${JSON.stringify([...graphUpdates.values()])}.
+Require live main SHA to equal the validated main_sha, and each accepted PR head
+SHA to equal its validated head_sha. If either moved, return STOPPED before any
+write and require fresh condition analysis/plan approval; never silently use a new head.
+Explicit graph bypass tokens from THIS invocation: ${JSON.stringify(graphFlags)}.
+Forward only these tokens to composed dispatch/land/review-comments/pr-loop procedures.
+Do not inherit a bypass from an earlier plan or approval. Revalidate full coverage;
+other scope, dependency and approval gates still apply. Record these SHA pins in
+plan risks and execution evidence. Project-less tracks are exempt.\n`;
+
+if (args.stage === 'plan') {
+  const accepted = new Map();
+  const parsedOverlap=parsePrFlags(args.selection || [],'--accept-overlap');
+  if (parsedOverlap.error) return refuse(parsedOverlap.error);
+  for (const number of parsedOverlap.numbers) {
+    const value=String(number);
     const pr=Array.isArray(args.accepted_prs) ? args.accepted_prs.find(p=>p.number===number) : null;
     if (!pr || pr.state!=='OPEN')
       return refuse(`--accept-overlap ${JSON.stringify(value)}: missing OPEN preflight evidence`);
@@ -1387,10 +1462,12 @@ if (args.stage === 'plan') {
     accepted.set(number,pr);
   }
   phase('Select');
-  const selected = await call('A1 select', `${read(args.paths.next, 'selection is read-only; no adaptation')}
+  const selected = await call('A1 select', `${graphPrompt}Excluded projects (do not select their tracks): ${JSON.stringify(excludedProjects)}.
+${read(args.paths.next, 'selection is read-only; no adaptation')}
 Run /next with argument tokens ${JSON.stringify(args.selection)} in parallel mode.
 Pass every token unchanged, including repeated --accept-overlap flags and values;
 /next owns their validation and deduplication.
+Also preserve every --accept-graph-update occurrence and apply its publication gate.
 PLAN_ONLY candidates must go in sequenced with the unmet build condition and source,
 never tracks. They do not count toward N and must not reach --approve all.
 Return all implementation-eligible tracks, sequenced and already_active entries. TRACK branch/worktree are
@@ -1398,26 +1475,30 @@ proposals only. Select no more than requested; explicitly report every excluded 
   const record = {state:'STOPPED', run_id:args.run_id, wave_id:args.wave_id,
     tracks:selected?.tracks || [], plans:[], contract:null, literals:[],
     sequenced:selected?.sequenced || [], already_active:selected?.already_active || [],
-    build_command:null, stop_reason:null, evidence:[]};
-  if (!selected) { record.stop_reason='A1 returned no record'; record.evidence=[record.stop_reason]; return record; }
+    build_command:null, stop_reason:null, evidence:[graphEvidence]};
+  if (!selected) { record.stop_reason='A1 returned no record'; record.evidence.push(record.stop_reason); return record; }
   for (const id of [...selected.sequenced, ...selected.already_active]) log(`A1 skipped: ${id}`);
   if (!selected.tracks.length) { record.state='EMPTY'; return record; }
+  if (selected.tracks.some(t=>!publicationCovers(t))) {
+    record.stop_reason='graph publication: a selected track has no unambiguous covered project';
+    record.evidence.push(record.stop_reason); return record;
+  }
   if (new Set(selected.tracks.map(t=>t.issue_id)).size !== selected.tracks.length) {
-    record.stop_reason='A1 returned duplicate issue ids'; record.evidence=[record.stop_reason]; return record;
+    record.stop_reason='A1 returned duplicate issue ids'; record.evidence.push(record.stop_reason); return record;
   }
   const scan = await call('A2 shared-literal scan', `${read(args.paths.wave, 'scan only; do not dispatch or implement')}
 Read every issue description and file scope in ${JSON.stringify(selected.tracks)}.
 List every literal two or more tracks must agree on: status tokens, schema fields,
 config keys, paths, marker comments. Return literals with files, participating ids, why.`, schemas.SCAN, 'Select');
-  if (!scan) { record.stop_reason='A2 returned no record'; record.evidence=[record.stop_reason]; return record; }
+  if (!scan) { record.stop_reason='A2 returned no record'; record.evidence.push(record.stop_reason); return record; }
   record.literals=scan.literals;
   if (scan.literals.length) {
     if (!cfg.contract_dir) {
       record.stop_reason='wave.contract_dir is required for shared literals';
-      record.evidence=['A2 found shared literals',JSON.stringify(scan.literals)];
+      record.evidence.push('A2 found shared literals',JSON.stringify(scan.literals));
       log(record.stop_reason); return record;
     }
-    record.contract=await call('A3 contract', `${read(args.paths.wave, 'contract preparation only')}
+    record.contract=await call('A3 contract', `${graphPrompt}${read(args.paths.wave, 'contract preparation only')}
 ${read(args.paths.land, 'headless land returns STOPPED instead of waiting')}
 In its own dedicated branch and worktree, write ${cfg.contract_dir}/${args.wave_id}.json
 as the JSON list of {literal, files} from ${JSON.stringify(scan.literals)} plus a
@@ -1428,7 +1509,7 @@ Return its absolute file path, branch and PR. Do not implement any selected issu
     }
     if (!record.contract || record.contract.state === 'STOPPED') {
       record.stop_reason=record.contract?.stop_reason || 'A3 returned no record';
-      record.evidence=record.contract?.evidence || [record.stop_reason]; log(record.stop_reason); return record;
+      record.evidence.push(...(record.contract?.evidence || [record.stop_reason])); log(record.stop_reason); return record;
     }
   }
   phase('Plan');
@@ -1461,8 +1542,8 @@ rebases onto the default branch and re-runs the gates before its merge. This is 
 record these future build actions as risks; do not rebase during A4.
 No intersection means no overlap risk or rebase instruction for this track.
 ` : '';
-    const p=await call(`A4 plan ${t.issue_id}`, `${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
-Dispatch exact issue ${t.issue_id} with --plan-only. Proposed track: ${JSON.stringify(t)}.
+    const p=await call(`A4 plan ${t.issue_id}`, `${graphPrompt}${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
+Dispatch exact issue ${t.issue_id} with --plan-only ${graphFlags.join(' ')}. Proposed track: ${JSON.stringify(t)}.
 Contract: ${JSON.stringify(record.contract)}. Return criteria citations, files, tests,
 risks, status read-back and verified absolute worktree. No implementation permission.`, schemas.PLAN, 'Plan');
     if (!p || p.issue_id !== t.issue_id || !p.worktree.startsWith('/') || !p.branch) return stoppedPlan(t,'A4 missing or wrong issue record');
@@ -1473,7 +1554,7 @@ risks, status read-back and verified absolute worktree. No implementation permis
   record.tracks=selected.tracks.map((t,i)=>({...t,worktree:record.plans[i].worktree,branch:record.plans[i].branch}));
   if (!record.plans.some(p=>p.state==='PLANNED')) {
     record.stop_reason='no PLANNED track; every A4 plan stopped';
-    record.evidence=record.plans.map(p=>`${p.issue_id}: ${p.stop_reason}`);
+    record.evidence.push(...record.plans.map(p=>`${p.issue_id}: ${p.stop_reason}`));
     log(`Wave STOPPED: ${record.stop_reason}`); return record;
   }
   record.state='AWAITING_APPROVAL';
@@ -1487,14 +1568,27 @@ const ids=args.approve === 'all' ? a.plans.filter(p=>p.state==='PLANNED').map(p=
 if (!Array.isArray(ids) || !ids.length || ids.some(id=>!a.plans.some(p=>p.issue_id===id && p.state==='PLANNED')))
   return refuse('approve must name existing PLANNED issues, or all');
 const approved=a.tracks.filter(t=>ids.includes(t.issue_id));
+if (approved.some(t=>!publicationCovers(t))) return refuse('graph publication: an approved track has no unambiguous covered project');
+// Run B must implement the graph used for Run A condition analysis, not a newer head.
+const priorEvidence=a.evidence?.find(e=>e.startsWith('Graph publication evidence: '));
+let priorPublication;
+try { priorPublication=priorEvidence && JSON.parse(priorEvidence.slice('Graph publication evidence: '.length)); }
+catch { return refuse('graph publication: invalid Run A SHA evidence'); }
+for (const t of approved.filter(t=>t.project!==null)) {
+  const now=publication.projects.find(p=>p.project_id===t.project || p.project_name===t.project);
+  const prior=Array.isArray(priorPublication?.projects) && priorPublication.projects.find(p=>p.project_id===now.project_id);
+  if (!prior || priorPublication.main_sha!==publication.main_sha ||
+      prior.state!==now.state || prior.pr_number!==now.pr_number || prior.head_sha!==now.head_sha)
+    return refuse(`graph publication: ${t.project} changed since Run A; repeat condition analysis and plan approval`);
+}
 const report={state:'COMPLETE',run_ids:[a.run_id,args.run_id],wave_id:a.wave_id,
   approved:ids,tracks:[],seam_check:{state:'NOT_RUN',table:[],reason:'A2 found no shared literals'},
-  open_questions:[],unverified_questions:[],stop_reason:null,evidence:[]};
+  open_questions:[],unverified_questions:[],stop_reason:null,evidence:[graphEvidence]};
 for (const t of a.tracks) if (!ids.includes(t.issue_id)) log(`${t.issue_id}: skipped; not approved`);
 phase('Build');
 const built=await pipeline(approved, async (_prev,t) => {
   const plan=a.plans.find(p=>p.issue_id===t.issue_id);
-  const r=await call(`B1 build ${t.issue_id}`, `${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
+  const r=await call(`B1 build ${t.issue_id}`, `${graphPrompt}${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
 ${read(args.paths.land, 'headless land returns STOPPED with evidence instead of waiting')}
 Human approval: ${JSON.stringify(ids)} for wave ${a.wave_id}. Approved plan: ${JSON.stringify(plan)}.
 Use the existing dispatch worktree ${t.worktree}, branch ${t.branch}. Read back the
@@ -1555,8 +1649,8 @@ const reviews={};
 for (let offset=0;offset<eligible.length;offset+=concurrency) {
   await pipeline(eligible.slice(offset,offset+concurrency), async (_prev,t) => {
     const r=results[approved.indexOf(t)];
-    const reviewed=await call(`B3 review ${t.issue_id}`, `${read(args.paths.pr_loop, 'no adaptation: parse existing final verdict report; BLOCKED asks nothing')}
-Run /pr-loop ${r.pr} --max-rounds ${rounds} in ${t.worktree}.
+    const reviewed=await call(`B3 review ${t.issue_id}`, `${graphPrompt}${read(args.paths.pr_loop, 'no adaptation: parse existing final verdict report; BLOCKED asks nothing')}
+Run /pr-loop ${r.pr} --max-rounds ${rounds} ${graphFlags.join(' ')} in ${t.worktree}.
 Never exceed the round cap or retry a terminal verdict. Parse the existing verdict
 report into REVIEW_RESULT, including routing evidence. Verify this track's questions
 against every sibling branch tip: ${JSON.stringify(a.tracks)}; results: ${JSON.stringify(results)}.

@@ -36,6 +36,17 @@ human decisions. A matching pin proves source identity, not human PR approval.
 bytes, including uncommitted drafts. This digest is the revision `/next` cites.
 Plain `validate`/`render` are structural draft tools and do not check the index pin.
 
+## Publication before execution
+
+The [publication gate](publication-gate.md) adds a fresh-main ticket coverage
+check to roadmap and all Linear-linked execution transitions. Local indexed
+validity is not proof that a graph is published. Missing/incomplete project
+views or manifest membership require a graph update PR; execution waits for its
+coverage on main or an explicit --accept-graph-update PR under that contract.
+The bypass uses the pending validated graph and preserves all source, scope,
+condition and approval checks. This Git PR step is separate from publishing a
+Linear document, which remains the human maintainer's manual action below.
+
 ## Manifest fields
 
 - `schema_version`: 1; `title`: required display title.
@@ -59,7 +70,8 @@ Plain `validate`/`render` are structural draft tools and do not check the index 
   Recorded units require it and a project UUID; validation checks shape/uniqueness,
   not existence. The same UUID identifies one executable unit. Human/evidence,
   release and external nodes may link its issue for context; `/next` maps an
-  implementation candidate only to kind `unit`. Groups must have `issue_ref: null`.
+  implementation candidate only to kind `unit`. Groups may reference parent/meta
+  tickets for coverage and context only; they still have no executable events.
 - `edges`: required source node/event, target node/event, type and source citation.
   Unknown fields are rejected. Nonblank string patterns are part of the schema.
   Draft template citations/checks use `TODO:`. Recorded project scope, node sources,

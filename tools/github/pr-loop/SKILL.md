@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.4.1
+version: 0.5.0
 description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED; each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, repeat-finding ledger, head-SHA marker, and pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
 ---
 
@@ -11,9 +11,20 @@ description: Drive an unattended reviewer↔implementer loop on one open PR to C
 One open PR needs review rounds driven to a stop condition without a human in
 the seat: review → fix → reply → re-review, until the PR is clean, a
 disagreement blocks it, or the round budget runs out. Invoke as
-`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--model M] [--effort E] [--fast]`. Not for reviewing a
+`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--model M] [--effort E] [--fast] [--accept-graph-update <PR#>]...`. Not for reviewing a
 human-authored PR, not for deciding contested design questions, and not for
 approving — see "What this skill is NOT for".
+
+## Graph publication admission
+
+For Linear-linked implementation, follow
+`tools/linear/linear-roadmap/references/publication-gate.md` from the physical
+stack root before implementer edits or merge work. Validate repeatable
+--accept-graph-update PR values from this invocation and forward them explicitly
+into each review-comments/land invocation; those skills recheck live coverage.
+A publication gap blocks implementation rounds, even on an already-open PR.
+Read-only review can still run and report the block. Existing scope, review and
+merge requirements are unaffected; a graph-only repair uses the shared exception.
 
 ## Configuration — read `.agents/stack.yml` first
 
@@ -392,7 +403,9 @@ or posts nothing, do not retry blindly — record it and exit `BLOCKED`.
 
 **4. Implement and reply.** Re-run the branch-binding block first — the head moved if the
 previous round pushed — and the pre-push guard immediately before the push,
-which is a different check. Then: read `../review-comments/SKILL.md` with the
+which is a different check. Pass any explicitly supplied --accept-graph-update
+flags to the implementer; never infer them from prior rounds. Then: read
+`../review-comments/SKILL.md` with the
 Read tool and follow it top to bottom, **skipping the section "The confirm gate
 — draft, do not post"**; if it is unreadable, say so and stop. That skipped
 section is the **one documented override**: it assumes an interactive run, and

@@ -134,8 +134,6 @@ def validate(record):
             no_placeholder(n['source'], n['id'] + '.source')
             for criterion in n['acceptance']:
                 no_placeholder(criterion, n['id'] + '.acceptance')
-        if n['kind'] == 'group' and n['issue_ref'] is not None:
-            raise ValueError(f'{n["id"]}: groups cannot carry issue_ref')
         if n['unit_of'] is not None:
             parent = nodes.get(n['unit_of'])
             if not parent or parent['kind'] != 'group' or parent['project'] != n['project']:

@@ -292,10 +292,13 @@ class RoadmapTests(unittest.TestCase):
         r['edges'].append(edge('api','plan','release','release','release_after'))
         self.invalid(r, 'release_after source must be')
 
-    def test_groups_cannot_alias_executable_issues(self):
+    def test_groups_can_reference_tickets_for_context_but_have_no_events(self):
         r = fixture()
         r['nodes'][1]['issue_ref'] = r['nodes'][2]['issue_ref']
-        self.invalid(r, 'groups cannot carry issue_ref')
+        API['validate'](r)
+        self.assertEqual(API['EVENTS']['group'], ())
+        r['edges'].append(edge('feature', 'build', 'api', 'plan', 'start_after'))
+        self.invalid(r, 'non-executable group')
 
     def test_recorded_sources_and_checks_reject_template_placeholders(self):
         for location in ('scope','node','edge','acceptance'):

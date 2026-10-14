@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+Require complete orchestration graph coverage on main for Linear project execution;
+`/linear-roadmap` publishes repairs through a PR, and repeatable
+`--accept-graph-update <PR#>` permits an explicitly accepted, validated pending graph.
+Wave preserves graph SHA evidence through planning, build and review; parent tickets
+may be groups for context without executable events.
+
 `/summarize-change` 0.2.0 briefs a change by its intent instead of its
 behavior. The six parts are now intent with its source, approach and the system
 constraints it touches, diff vs intent (delivered / beyond intent / short of
