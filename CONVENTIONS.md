@@ -67,6 +67,8 @@ review_model:                   # which model reviews, and how hard — pr-loop 
   escalate_above_files: <int|null>  # optional changed-file trigger
   escalate_paths: []                # fnmatch globs; any matching changed path triggers
   escalated_effort: <effort|null>
+ci:
+  checks: <required|all|none>   # PR checks /pr-loop needs green before CLEAN
 identities:
   maintainer: <gh-login|null>   # human owner: opens PRs, governs, merges
   reviewer: <gh-login|null>     # review agent; Codex by default
@@ -102,8 +104,8 @@ default is never silent.
 
 **Missing-key policy — never silently default.** A skill that needs a key and
 does not find it either asks the user (interactive judgment calls) or refuses
-with the exact key name (gates and identities always refuse — a gate that
-defaults open is not a gate).
+with the exact key name (gates, identities and `ci.checks` always refuse — a
+gate that defaults open is not a gate).
 
 `wave.max_review_rounds` missing/null defaults to 3, announced: observed later
 rounds addressed interactions among earlier fixes, so a bounded three-round run

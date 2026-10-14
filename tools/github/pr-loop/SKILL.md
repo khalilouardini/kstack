@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.5.0
+version: 0.6.0
 description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED; each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, repeat-finding ledger, head-SHA marker, and pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
 ---
 
@@ -11,7 +11,7 @@ description: Drive an unattended reviewer↔implementer loop on one open PR to C
 One open PR needs review rounds driven to a stop condition without a human in
 the seat: review → fix → reply → re-review, until the PR is clean, a
 disagreement blocks it, or the round budget runs out. Invoke as
-`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--model M] [--effort E] [--fast] [--accept-graph-update <PR#>]...`. Not for reviewing a
+`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--accept-graph-update <PR#>]...`. Not for reviewing a
 human-authored PR, not for deciding contested design questions, and not for
 approving — see "What this skill is NOT for".
 
@@ -47,6 +47,15 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 - **`gates.lint`, `gates.test`** — the implementer's pre-push gate,
   `<gates.lint> && <gates.test>`. Either missing or null → **refuse**, naming
   the exact key. A gate that defaults open is not a gate.
+- **`ci.checks`** — which of the PR's checks must be green at the reviewed head
+  before the loop may report `CLEAN` (step 3a). `required` → the base branch's
+  required status checks (`gh pr checks --required`); `all` → every check
+  GitHub reports on the head, for a repo that marks none as required; `none` →
+  no CI gate, for a repo with no CI, stated in the final report. Missing or null
+  → **refuse**, naming `ci.checks`: without it `CLEAN` would certify a head whose
+  CI nobody read. `required` on a base branch that requires nothing never turns
+  green — gh reports `no required checks reported` and the gate times out — so
+  such a repo sets `all`.
 - **`review_gate.skill_path`** — the project's "prove the bug" review skill,
   and **`review_gate.scope`**, the diff paths that trigger it. Non-null → the
   reviewer round is expected to run it over matching diffs, and preflight
@@ -100,6 +109,9 @@ MAX_ROUNDS=5; N=0                                        # --max-rounds override
 MAINTAINER="<identities.maintainer>"                    # from .agents/stack.yml
 REVIEWER="<identities.reviewer>"                        # Codex by default
 IMPLEMENTER="<identities.implementer>"                  # Claude by default
+CI_CHECKS="<ci.checks>"                                  # required | all | none
+CI_WAIT_MIN=30                                           # --ci-wait overrides: minutes step 3a
+                                                         # waits for pending checks
 
 codex --version                                          # the loop is not runnable without it
 MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
@@ -398,8 +410,48 @@ or posts nothing, do not retry blindly — record it and exit `BLOCKED`.
 `### Findings` list into `(priority, title, path)` triples. Classify:
 
 - any `P0`/`P1`/`P2` → there is work to do, continue to step 4.
-- only `P3`, or `No findings.` → exit `CLEAN`. **P3 is not worth another paid
-  round**; leave those threads open for the human.
+- only `P3`, or `No findings.` → run the CI gate (step 3a); exit `CLEAN` only
+  if it passes. **P3 is not worth another paid round**; leave those threads
+  open for the human.
+
+**3a. CI gate — before any `CLEAN`.** A finding-free review alone is not
+`CLEAN`. The implementer's pre-push gate is `<gates.test>`, which a project may scope to
+the tests a branch changed, so the full suite's verdict lives in CI. Read the
+checks on the reviewed head, waiting for pending ones:
+
+```bash
+CI=""; [ "$CI_CHECKS" = none ] && CI=skipped
+SCOPE=(); [ "$CI_CHECKS" = required ] && SCOPE=(--required)
+DEADLINE=$(( $(date +%s) + CI_WAIT_MIN * 60 ))
+while [ -z "$CI" ]; do
+  # --json exits 0 even when checks are pending or failing (gh 2.89.0), so read
+  # the buckets, never the exit code. No checks reported → empty file → wait.
+  GH_TOKEN="$MAINTAINER_TOKEN" gh pr checks "$PR" "${SCOPE[@]}" --json bucket,name \
+    --jq '.[] | "\(.bucket)\t\(.name)"' > "$SCRATCH/ci.tsv" 2> "$SCRATCH/ci.err" || true
+  NOW=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .headRefOid)
+  BUCKETS=$(cut -f1 "$SCRATCH/ci.tsv" | sort -u)
+  if   [ "$NOW" != "$HEAD" ];                                   then CI=moved
+  elif printf '%s\n' "$BUCKETS" | grep -qx -e fail -e cancel;   then CI=red
+  elif [ -n "$BUCKETS" ] && ! printf '%s\n' "$BUCKETS" | grep -qx pending; then CI=green
+  elif [ "$(date +%s)" -ge "$DEADLINE" ];                       then CI=timeout
+  else sleep 60
+  fi
+done
+```
+
+| `CI` | Verdict |
+|---|---|
+| `green` | `CLEAN`. A `skipping` check counts as passed, as GitHub counts a skipped required check. |
+| `skipped` | `CLEAN` (`ci.checks: none`); the report says no CI gate ran. |
+| `red` | `BLOCKED`, naming each `fail`/`cancel` check from `ci.tsv`. No implementer pass: a red check is not a review finding, and this loop's fixes answer findings. |
+| `timeout` | `BLOCKED`, naming the checks still `pending`. An empty `ci.tsv` means GitHub reported no matching checks — quote `ci.err`. `no required checks reported` is a `ci.checks` setting for the human to fix, not something to wait out. |
+| `moved` | Someone pushed while the gate waited. Never report `CLEAN` for code nobody reviewed: start the next round (step 1), which counts against `--max-rounds`. |
+
+The gate sees only checks that have registered on the head: `gh pr checks
+--required` lists required checks that have *reported*, not ones GitHub still
+expects. Step 3a runs after a Codex review, minutes after the last push, and
+GitHub registers check suites within seconds of a push. An empty list waits
+instead of passing.
 
 **4. Implement and reply.** Re-run the branch-binding block first — the head moved if the
 previous round pushed — and the pre-push guard immediately before the push,
@@ -486,8 +538,8 @@ Report one of these, always with the round count and what it cost:
 
 | Verdict | Condition | What you do |
 |---|---|---|
-| `CLEAN` | round produced no `P0`–`P2` findings | stop; merge only if `--merge` (below) |
-| `BLOCKED` | repeat finding, failing gate, or a design-pushback finding you should not decide alone | stop, summarize the disagreement, ask nothing — the human reads it later |
+| `CLEAN` | round produced no `P0`–`P2` findings **and** the step 3a CI gate passed at the reviewed head (or `ci.checks: none`) | stop; merge only if `--merge` (below) |
+| `BLOCKED` | repeat finding, failing gate, red or timed-out CI at a finding-free head, or a design-pushback finding you should not decide alone | stop, summarize the disagreement, ask nothing — the human reads it later |
 | `ROUNDS_EXHAUSTED` | hit `--max-rounds` | stop; list the still-open findings |
 
 Design pushback ("this approach is wrong") is **always** `BLOCKED`, never
@@ -505,6 +557,11 @@ round from an expensive one.
 Every verdict report also carries: the `--any-author` exception if it was used,
 and — when `review_gate.skill_path` is null — the one-line statement that rounds
 ran without a project review gate.
+
+A `CLEAN` or CI `BLOCKED` report also carries the step 3a result: `ci.checks`,
+the minutes waited, and each check's bucket at `$HEAD`. With `ci.checks: none`
+it carries, plainly: *"no CI gate configured (`ci.checks: none`) — `CLEAN`
+reflects review findings only."*
 
 ## Resuming after `ROUNDS_EXHAUSTED`
 
@@ -537,10 +594,12 @@ recorded in the ledger, and only the unreviewed delta is paid for.
   human reconciles the tree, which is the intended behaviour, not a free reread.
 
   What actually gets the free reread is an exit that leaves the tree **clean at
-  the reviewed head**: a run killed between step 2 and step 4, and the
-  `BLOCKED`s raised in step 3 before any edit — repeat finding, and design
-  pushback. The last two will re-block immediately on the ledger, so the case
-  worth planning around is the clean interruption.
+  the reviewed head**: a run killed between step 2 and step 4, the `BLOCKED`s
+  raised in step 3 before any edit — repeat finding, and design pushback — and a
+  CI `BLOCKED` from step 3a. Repeat finding and design pushback re-block
+  immediately on the ledger. A CI `BLOCKED` is the useful one: rerun once the
+  checks are green and step 3a reports `CLEAN` without paying for another Codex
+  review.
 - **The ledger (step 5) is what stays bounded.** `N` resets to `0` on every
   invocation and `ROUNDS_EXHAUSTED` is not sticky, so nothing in the round
   counter stops `/pr-loop 123 --max-rounds 1` from being run five times in a
@@ -619,6 +678,10 @@ outward step. Treat them as hard rules anyway.
 9. **All three identities are required.** No maintainer, reviewer, or implementer
    identity configured → refuse. An unattended loop does not silently reassign
    replies to the maintainer's account.
+10. **`CLEAN` reads CI as well as the review.** `No findings.` at a head whose
+    `ci.checks` are red, still pending after `--ci-wait`, or unreported is
+    `BLOCKED`, never `CLEAN`. `ci.checks: none` is the one exception, and the
+    report states it.
 
 ## What this skill is NOT for
 
