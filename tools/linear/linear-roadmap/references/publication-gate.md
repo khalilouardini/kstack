@@ -195,8 +195,11 @@ validation_exit 0, project_ids, `reviewed_head_sha` and `review_source`.
 UNKNOWN coverage/invalid indexed validation cannot authorize that pending graph.
 
 Supply `graph_admission` as an array of full helper reports for candidate groups.
-Only ELIGIBLE build candidates enter TRACK; an unrelated project's warning or an
-unselected candidate's block does not stop selected eligible work. Require exact
+Match candidates only inside validated build-transition reports in both runs;
+ignore plan-transition and invalid reports before checking match uniqueness.
+Validate stored Run A reports using Run A's publication SHA and UTC date, and
+current reports using Run B's SHA/date. Only ELIGIBLE build candidates enter TRACK;
+an unrelated project's warning or an unselected candidate's block does not stop selected eligible work. Require exact
 project/issue identity, main/graph pins, closure evidence and the bounded delta.
 Persist both coverage and admission reports in existing record.evidence; do not
 add RUN_A/WAVE_REPORT schema fields. A1 rechecks before selection, A3/A4 before
@@ -204,8 +207,13 @@ writes, B1 before implementation and B3 before implementer fixes. Run B obtains
 fresh reports and compares effective graph and relevant closure digests with Run
 A before building. Coverage counts and routine tracker timestamp/status changes alone do not
 invalidate approval; full fresh observations remain in the audit record. Relevant
-digests cover scope, ownership, acceptance, issue bodies, prerequisites and current
-prerequisite event evidence; future gate definitions stay protected by the graph
-digest. A changed coverage count alone does not invalidate approval;
+digests cover scope path/line/quote, node identity, ownership, acceptance, incoming
+prerequisites, issue id/identifier/description/url/prerequisites, and current event
+node_id/event/state. Event facts are sorted by node_id/event before hashing.
+Agent-written scope rationales and proof/event source explanations remain required
+and fully retained in evidence.request but are excluded from the factual digest;
+rewording them alone cannot invalidate approval. The calling skills still verify
+source truth on each transition. Future gate definitions stay protected by the
+graph digest. A changed coverage count alone does not invalidate approval;
 a changed graph, relevant closure or SHA requires reanalysis and plan approval.
 These caller observations are evidence, not durable human approval records.

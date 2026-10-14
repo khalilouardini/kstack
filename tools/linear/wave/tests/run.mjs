@@ -70,6 +70,32 @@ const overlapArgs=(_f,a)=>{a.selection=clone(overlapSelection);
 const promptOverlaps=p=>JSON.parse(p.match(/Relevant accepted overlaps from caller preflight: (\[[^\n]*\])\./)[1]);
 const tests=[
  async()=>{
+   const planned=await run('plan',(_f,a)=>{
+     a.graph_admission.push({...clone(a.graph_admission[0]),transition:'plan'});
+   });
+   assert.equal(planned.result.state,'AWAITING_APPROVAL',
+     'plan-transition reports cannot create ambiguous build candidates');
+   const built=await run('build',(_f,a)=>{a.plan_record=planned.result;});
+   assert.equal(built.result.state,'COMPLETE');
+ },
+ async()=>{
+   const planned=await run('plan',(_f,a)=>{
+     a.graph_admission.push({...clone(a.graph_admission[0]),checked_at:'2026-10-04T12:00:00Z'});
+   });
+   assert.equal(planned.result.state,'AWAITING_APPROVAL');
+   const built=await run('build',(_f,a)=>{a.plan_record=planned.result;});
+   assert.equal(built.result.state,'COMPLETE',
+     'Run B must discard the same invalid reports Run A discarded');
+   const nextDay=await run('build',(_f,a)=>{
+     a.plan_record=planned.result;a.date='2026-10-06';
+     a.graph_publication.checked_at='2026-10-06T12:00:00Z';
+     a.graph_admission[0].checked_at='2026-10-06T12:00:00Z';
+   });
+   assert.equal(nextDay.result.state,'COMPLETE',
+     'prior report validity uses Run A date while current validity uses Run B date');
+ },
+
+ async()=>{
    for(const stage of ['plan','build']) for(const change of ['missing','blocked','closure','digest','phase']) {
      const r=await run(stage,(_f,a)=>{
        const report=a.graph_admission[0],c=report.candidates[0];

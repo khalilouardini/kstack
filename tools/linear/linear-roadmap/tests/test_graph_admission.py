@@ -94,6 +94,39 @@ class AdmissionTests(unittest.TestCase):
         changed = self.audit()
         self.assertNotEqual(r['candidates'][0]['closure_evidence_digest'], changed['candidates'][0]['closure_evidence_digest'])
 
+    def test_reworded_proof_prose_preserves_factual_digest_and_full_record(self):
+        before = copy.deepcopy(self.audit())
+        for proof in self.request['nodes']:
+            proof['scope']['rationale'] = 'Same approved behavior, freshly explained'
+            proof['source'] = 'Fresh explanation of the same authoritative evidence'
+        for event in self.request['events']:
+            event['source'] = 'Same satisfied prerequisite, freshly explained'
+        after = self.audit()
+        self.assertEqual(before['candidates'][0]['closure_evidence_digest'],
+                         after['candidates'][0]['closure_evidence_digest'])
+        self.assertNotEqual(before['evidence']['request'], after['evidence']['request'])
+        self.assertEqual(after['evidence']['request'], self.request)
+        self.request['events'].reverse()
+        self.assertEqual(after['candidates'][0]['closure_evidence_digest'],
+                         self.audit()['candidates'][0]['closure_evidence_digest'])
+        next(e for e in self.request['events'] if e['node_id'] == 'scope')['state'] = 'UNKNOWN'
+        changed = self.audit()
+        self.assertEqual(changed['state'], 'BLOCKED')
+        self.assertNotEqual(after['candidates'][0]['closure_evidence_digest'],
+                            changed['candidates'][0]['closure_evidence_digest'])
+        complete_request = copy.deepcopy(self.request)
+        for field in ('rationale', 'proof_source', 'event_source'):
+            with self.subTest(required_prose=field):
+                self.request = copy.deepcopy(complete_request)
+                if field == 'rationale':
+                    self.request['nodes'][0]['scope']['rationale'] = ''
+                elif field == 'proof_source':
+                    self.request['nodes'][0]['source'] = ''
+                else:
+                    next(e for e in self.request['events'] if e['node_id'] == 'scope')['source'] = ''
+                with self.assertRaisesRegex(ValueError, 'complete cited evidence required'):
+                    self.audit()
+
     def test_selected_unmapped_requires_reconciliation(self):
         self.repair()
         with self.assertRaisesRegex(ValueError, 'repair evidence has no exact graph delta'):

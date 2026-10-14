@@ -190,11 +190,15 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
                            'mode': 'LOCAL_RECONCILIATION' if origin else 'PUBLISHED',
                            'node_id': node['id'], 'closure': sorted(closure),
                            'closure_evidence_digest': digest({
-                               'nodes': [proofs[k] for k in sorted(closure)],
+                               'nodes': [{'node_id': key,
+                                          'scope': {field: proofs[key]['scope'][field] for field in ('path', 'line', 'quote')},
+                                          'owner': proofs[key]['owner'], 'acceptance': proofs[key]['acceptance'],
+                                          'prerequisites': proofs[key]['prerequisites']} for key in sorted(closure)],
                                'issues': [{field: issues[nodes[k]['issue_ref']][1][field]
                                            for field in ('id', 'identifier', 'description', 'url', 'prerequisites')}
                                           for k in sorted(closure) if nodes[k]['issue_ref']],
-                               'events': [e for e in events if (e['node_id'], e['event']) in required]}),
+                               'events': [{'node_id': key, 'event': event, 'state': observed[(key, event)]['state']}
+                                          for key, event in sorted(required)]}),
                            'unmet': unmet})
     return {'schema_version': 1, 'main_sha': main_sha, 'graph_sha': sha, 'checked_at': snapshot['checked_at'],
             'transition': transition, 'coverage': coverage,

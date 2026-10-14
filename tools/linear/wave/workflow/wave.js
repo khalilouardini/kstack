@@ -1433,18 +1433,19 @@ for (const p of publication.projects) {
 const admissions=args.graph_admission || [];
 const shaDigest=value=>/^sha256:[0-9a-f]{64}$/.test(value || '');
 if (!Array.isArray(admissions)) return refuse('graph admission: audit reports must be an array');
-const validAdmissions=[];
-for (const r of admissions) {
-  if (!r || r.schema_version!==1 || r.main_sha!==publication.main_sha ||
-      !validUTC(r.checked_at) || r.checked_at.slice(0,10)!==args.date ||
-      !shaDigest(r.graph_digest) || !shaDigest(r.base_digest) || !shaDigest(r.issue_evidence_digest) ||
-      !['plan','build'].includes(r.transition) || !Array.isArray(r.candidates) ||
-      r.evidence?.issues?.complete!==true || !r.evidence?.request || !r.delta ||
-      !Array.isArray(r.delta.added_nodes) || r.delta.added_nodes.length>3 ||
-      !Array.isArray(r.delta.changed_edges) || r.delta.changed_edges.length)
-    continue; // An incomplete unrelated audit cannot freeze independently verified work.
-  validAdmissions.push(r);
-}
+// Apply the same build-report validation to live input and Run A's stored input.
+// Prior reports use their original invocation date, even when Run B is later.
+const validAdmissionReports=(reports,pins,date) => Array.isArray(reports) ? reports.filter(r=>
+  r && r.schema_version===1 && r.main_sha===pins?.main_sha &&
+  validUTC(r.checked_at) && r.checked_at.slice(0,10)===date &&
+  shaDigest(r.graph_digest) && shaDigest(r.base_digest) && shaDigest(r.issue_evidence_digest) &&
+  r.transition==='build' && Array.isArray(r.candidates) &&
+  r.evidence?.issues?.complete===true && r.evidence?.request && r.delta &&
+  Array.isArray(r.delta.added_nodes) && r.delta.added_nodes.length<=3 &&
+  Array.isArray(r.delta.changed_edges) && !r.delta.changed_edges.length
+) : [];
+// Incomplete unrelated reports and plan-only reports cannot shadow eligible builds.
+const validAdmissions=validAdmissionReports(admissions,publication,args.date);
 const candidateAdmission=track => {
   if (track.project===null) return {exempt:true};
   const projects=publication.projects.filter(p=>p.project_id===track.project || p.project_name===track.project);
@@ -1622,11 +1623,13 @@ for (const t of approved.filter(t=>t.project!==null)) {
 let priorAdmissions;
 try { priorAdmissions=JSON.parse(a.evidence?.find(e=>e.startsWith('Graph admission evidence: '))?.slice('Graph admission evidence: '.length)); }
 catch { return refuse('graph admission: missing Run A candidate evidence'); }
+const priorDate=validUTC(priorPublication?.checked_at) ? priorPublication.checked_at.slice(0,10) : null;
+const validPriorAdmissions=validAdmissionReports(priorAdmissions,priorPublication,priorDate);
 for (const t of approved.filter(t=>t.project!==null)) {
   const current=candidateAdmission(t);
-  const prior=Array.isArray(priorAdmissions) && priorAdmissions.flatMap(r=>Array.isArray(r?.candidates) ? r.candidates.map(c=>({r,c})) : [])
+  const prior=validPriorAdmissions.flatMap(r=>r.candidates.map(c=>({r,c})))
     .filter(({c})=>c && c.identifier===t.issue_id && c.project_id===current.candidate.project_id);
-  if (!prior || prior.length!==1 || prior[0].r.graph_digest!==current.report.graph_digest ||
+  if (prior.length!==1 || prior[0].r.graph_digest!==current.report.graph_digest ||
       prior[0].c.closure_evidence_digest!==current.candidate.closure_evidence_digest ||
       prior[0].c.mode!==current.candidate.mode)
     return refuse(`graph admission: ${t.issue_id} changed since Run A; repeat reconciliation and plan approval`);

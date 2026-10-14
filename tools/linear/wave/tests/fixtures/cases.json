@@ -1,5 +1,13 @@
 [
   {
+    "number": 28,
+    "name": "plan reports do not shadow build admission"
+  },
+  {
+    "number": 29,
+    "name": "Run B filters previously discarded audit reports"
+  },
+  {
     "number": 26,
     "name": "candidate closure evidence is required"
   },
