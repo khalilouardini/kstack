@@ -49,6 +49,61 @@ class CoverageTests(unittest.TestCase):
     def check(self, ref='main'):
         return API['check'](self.repo, ref, self.snapshot)
 
+    def publish_record(self, record):
+        orchestration = self.repo / 'orchestration'
+        orchestration.mkdir(exist_ok=True)
+        manifest = orchestration / 'reporting.json'
+        manifest.write_text(json.dumps(record))
+        (orchestration / 'index.json').write_text(json.dumps({
+            'schema_version': 1, 'source_revision': 'a' * 40,
+            'manifest': 'orchestration/reporting.json',
+        }))
+        rendered = subprocess.run(
+            ['python3', str(ROOT / 'bin/graph-record'), 'render', str(manifest)],
+            capture_output=True, text=True, check=True).stdout
+        path = self.repo / 'docs/MVP.md'
+        path.parent.mkdir(exist_ok=True)
+        path.write_text('```mermaid\n' + rendered + '```\n')
+
+    def test_render_cli_output_satisfies_uuid_and_view_coverage(self):
+        record = json.loads((ROOT / 'tests/fixtures/reporting.json').read_text())
+        self.publish_record(record)
+        self.commit()
+        self.assertEqual(self.check()['state'], 'CURRENT')
+
+    def test_manifest_membership_requires_its_rendered_node_in_view(self):
+        record = json.loads((ROOT / 'tests/fixtures/reporting.json').read_text())
+        self.publish_record(record)
+        path = self.repo / 'docs/MVP.md'
+        path.write_text(path.read_text().replace('    node_api["Report API"]\n', ''))
+        self.commit()
+        self.assertEqual(self.check()['projects'][0]['missing_view'], ['T-2'])
+
+    def test_parent_ticket_can_be_a_non_executable_rendered_group(self):
+        record = json.loads((ROOT / 'tests/fixtures/reporting.json').read_text())
+        parent = {'id': 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'identifier': 'T-4'}
+        record['nodes'][1]['issue_ref'] = parent['id']
+        self.snapshot['projects'][0]['issues'].append(parent)
+        self.publish_record(record)
+        self.commit()
+        self.assertEqual(self.check()['state'], 'CURRENT')
+        self.assertEqual(API['API']['EVENTS']['group'], ())
+
+    def test_mentions_inside_other_node_labels_do_not_count(self):
+        self.view([{'identifier': 'T-1: blocked by T-2'}, ISSUES[2]])
+        self.commit()
+        self.assertEqual(self.check()['projects'][0]['missing_view'], ['T-2'])
+
+    def test_mermaid_directives_frontmatter_and_inline_nodes(self):
+        path = self.repo / 'docs/MVP.md'
+        path.parent.mkdir(exist_ok=True)
+        for prefix in ('%%{init: {"theme": "dark"}}%%\n', '---\ntitle: Tickets\n---\n'):
+            with self.subTest(prefix=prefix):
+                path.write_text('```mermaid\n' + prefix + 'flowchart LR\n'
+                                'n1["T-1"] --> n2["T-2"]; n3["T-3"]\n```\n')
+                self.commit()
+                self.assertEqual(self.check()['state'], 'CURRENT')
+
     def test_missing_main_view_blocks(self):
         report = self.check()
         self.assertEqual(report['state'], 'UPDATE_REQUIRED')

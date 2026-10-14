@@ -70,7 +70,8 @@ Linear document, which remains the human maintainer's manual action below.
   Recorded units require it and a project UUID; validation checks shape/uniqueness,
   not existence. The same UUID identifies one executable unit. Human/evidence,
   release and external nodes may link its issue for context; `/next` maps an
-  implementation candidate only to kind `unit`. Groups must have `issue_ref: null`.
+  implementation candidate only to kind `unit`. Groups may reference parent/meta
+  tickets for coverage and context only; they still have no executable events.
 - `edges`: required source node/event, target node/event, type and source citation.
   Unknown fields are rejected. Nonblank string patterns are part of the schema.
   Draft template citations/checks use `TODO:`. Recorded project scope, node sources,

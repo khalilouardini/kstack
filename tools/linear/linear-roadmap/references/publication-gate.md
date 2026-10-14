@@ -16,7 +16,10 @@ coverage helper and wave's caller-evidence checks; it is not a global hook.
    tickets; verify project membership and completeness. A selected issue alone
    is insufficient. Do not audit the entire workspace as one project.
 2. Fetch the repository remote's `main` branch and record its exact SHA and the
-   check's UTC time. Inspect files at that ref, never the local branch, worktree
+   check's UTC time. This gate uses literal `main` independently of the implementation default branch;
+   a repository without `main`
+   needs an explicit policy change; never substitute its default branch silently.
+   Inspect files at that ref, never the local branch, worktree
    or remembered contents. An unavailable main/live read is UNKNOWN and blocks
    affected execution. Do not substitute another branch silently.
 3. Resolve the project's orchestration Markdown path from the root roadmap's
@@ -28,8 +31,13 @@ coverage helper and wave's caller-evidence checks; it is not a global hook.
    that owner repository's main and PR; do not make a competing copy.
 4. Require every ticket to appear as a graph node or contextual container in that
    project's Markdown view. An incidental mention in prose is insufficient.
-   Meta/decision tickets may be contextual nodes; this does not make them
-   implementation units. When the published index exists, require its single
+   Legacy views must put the ticket key at the start of its own node/container
+   label; mentions inside another ticket's label do not count. Generated views
+   may instead use the renderer's node/group ID and exact label, mapped through
+   the same manifest's issue UUID. Manifest membership alone cannot cover a
+   missing rendered declaration. Meta/decision tickets may be contextual nodes
+   or groups with issue_ref; this does not give groups executable events. When the
+   published index exists, require its single
    manifest to represent those UUIDs in the owning project as well. Keep the
    existing indexed validation, source pin and condition checks mandatory.
 
@@ -94,12 +102,19 @@ Use the validated PR graph for condition analysis and cite its SHA/digest. This
 waives only publication on main; it never waives scope, unmapped executable
 units, native blockers, event prerequisites, independence, plan/review approval
 or release gates. Do not base implementation on the graph PR's branch. Recheck
-before each execution transition; forward only flags explicitly supplied by the
-human into composed skills and include PR/head/main coverage evidence in the
+before each execution transition against the recorded main/PR SHA pins. A moved
+head stops execution until coverage, condition analysis and plan approval are
+repeated; do not silently proceed with a newly fetched graph. Read conditions,
+the index and its manifest from a detached checkout at the same validated SHA.
+Forward only flags explicitly supplied by the human into composed skills and include PR/head/main coverage evidence in the
 kickoff, plan risks and final report. A forwarded flag still requires live checks.
 
 For wave, the caller supplies transient `graph_publication` evidence with
-`main_sha`, `checked_at` (UTC ISO timestamp), and `projects`. Each project has
+`main_sha`, `checked_at` (valid UTC ISO timestamp on args.date), and `projects`.
+For project-less work, `{projects: []}` suffices and no main read is required;
+any selected/approved non-null project still requires coverage. Uncovered projects are
+excluded from A1 selection; only selected/approved uncovered tracks stop a wave.
+Each project has
 `project_id`, `project_name`, `view_path`, `state` (CURRENT, ACCEPTED_UPDATE,
 UPDATE_REQUIRED or UNKNOWN). ACCEPTED_UPDATE also carries `pr_number` and
 `head_sha`. Named bypass PR snapshots are `accepted_graph_updates` entries:
@@ -108,4 +123,7 @@ base main and coverage_exit 0. For plan retain the full selection tokens; for
 build use `graph_update_flags` containing only the current invocation's repeatable
 flag/value pairs. These are read-only caller observations, not durable approval
 records. Each node rechecks live state; stale Run A evidence is never reused as
-a Run B grant. Every selected/approved track must have a covered project.
+a Run B grant. Each selected/approved track must have a covered project or an
+explicit null project (exempt). Put the serialized publication evidence in the
+existing record.evidence array; nodes receive the exact main/PR pins. Run B
+compares the approved projects against Run A's graph evidence before building.

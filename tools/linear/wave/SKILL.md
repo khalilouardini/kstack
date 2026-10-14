@@ -93,7 +93,8 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    For build, accept `--approve` and repeated --accept-graph-update; reject `--accept-overlap` as unknown. Reject other unknown flags,
    nonpositive N, absent build approval, or an approval list containing unknown/stopped issues. N defaults
    to `/next`'s documented 3; announce the resolved count. Resolve repo root and
-   fetched default branch; use the remote-tracking ref, not a guessed `main`.
+   fetched default branch for implementation; use its remote-tracking ref.
+   Graph publication independently checks literal main under the shared contract.
 2. Read `tools/linear/wave/references/records.md`. Resolve the physical installed
    skill directory with `cd <installed-wave-directory> && pwd -P`, then its stack
    root. Build absolute `paths` to canonical `wave`, `next`, `dispatch`, `land`,
@@ -129,8 +130,12 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    `graph_update_flags` only from the human's current build invocation. Reject
    malformed/missing values and invalid or incomplete PR graphs before Workflow.
    Require coverage for every selected/approved project and recheck after selection.
+   Exclude uncovered projects during A1 selection; project-less tracks are exempt.
+   For project-backed work, require a valid UTC checked_at on args.date. Carry validated main/PR SHAs into
+   every node and the existing record.evidence array; nodes stop if live pins move.
+   Run B compares approved projects with Run A's evidence before implementation.
    A3 rechecks before contract publication; pass the same explicit
-   graph flags to composed land, dispatch and review-comments invocations. These
+   graph flags to composed land, dispatch, review-comments and B3 pr-loop invocations. These
    fields are transient args, not extra RUN_A/WAVE_REPORT schema keys.
 6. Call the Workflow tool with `scriptPath` equal to the physical
    `workflow/wave.js` inside the resolved wave directory and the JSON `args`.
@@ -139,7 +144,7 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    same file and pass its contents as the tool's `script` input, with identical
    args. Do not retry a partially executed run under a new input mechanism.
    Claude verifies path support on the first live run.
-6. Render the returned record. Attach the tool's actual run id if it allocates
+7. Render the returned record. Attach the tool's actual run id if it allocates
    one; preserve the caller invocation ids for Run B. Keep the complete Run A
    JSON available in the checkpoint handoff. Never truncate stopped, skipped,
    sequenced or already-active issues. Agent nulls/exceptions become explicit

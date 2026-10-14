@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+Require complete orchestration graph coverage on main for Linear project execution;
+`/linear-roadmap` publishes repairs through a PR, and repeatable
+`--accept-graph-update <PR#>` permits an explicitly accepted, validated pending graph.
+Wave preserves graph SHA evidence through planning, build and review; parent tickets
+may be groups for context without executable events.
+
 Add repeatable `--accept-overlap <PR#>` to `/next` and `/wave plan`: humans may
 accept file overlap with named open PRs, recorded in kickoffs and plan risks for
 rebasing onto the default branch after a merge, while scope, graph, dependency,

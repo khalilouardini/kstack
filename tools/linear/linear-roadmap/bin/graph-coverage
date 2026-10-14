@@ -39,17 +39,20 @@ def read_blob(repo, sha, path):
     return git(repo, 'show', f'{sha}:{path}')
 
 
-def diagram_labels(markdown):
-    labels = []
+def diagram_nodes(markdown):
+    nodes = set()
+    declaration = re.compile(r'(?<![\w-])(?:subgraph\s+)?([\w-]+)\s*[\[({]+\s*"([^"]*)"')
     for block in re.findall(r'```mermaid[^\n]*\n(.*?)```', markdown, re.S):
+        block = re.sub(r'\A\s*---[^\n]*\n.*?\n---[^\n]*(?:\n|$)', '', block, flags=re.S)
+        block = re.sub(r'%%\{.*?\}%%', '', block, flags=re.S)
+        block = re.sub(r'(?m)^\s*%%[^\n]*', '', block)
         if not re.match(r'\s*(?:flowchart|graph)\b', block):
             continue
-        # Only declared nodes/containers count, not prose, tables or edge citations.
+        # Consume whole declarations so mentions inside labels/edge text do not count.
         for line in block.splitlines():
-            match = re.match(r'\s*(?:subgraph\s+)?[\w-]+\s*[\[({]+\s*"([^"]*)"', line)
-            if match:
-                labels.append(match[1])
-    return '\n'.join(labels)
+            line = re.sub(r'\|"[^"\n]*"\|', '', line)
+            nodes.update((m[1], m[2]) for m in declaration.finditer(line))
+    return nodes
 
 
 def check(repo, ref, snapshot):
@@ -89,14 +92,24 @@ def check(repo, ref, snapshot):
             seen_issues.add(iid)
             seen_identifiers.add(identifier)
         text = read_blob(repo, sha, path)
-        labels = diagram_labels(text or '')
-        missing_view = [i['identifier'] for i in issues if not re.search(
-            rf'(?<![A-Z0-9_-]){re.escape(i["identifier"])}(?![A-Z0-9_-])', labels)]
+        view_nodes = diagram_nodes(text or '')
+        # Legacy views declare their own ticket key at the beginning of a label.
+        view_keys = {m[1] for _, label in view_nodes
+                     if (m := re.match(r'^([A-Z][A-Z0-9]*-[1-9][0-9]*)(?=[:\s]|$)', label))}
         missing_manifest = []
+        rendered_refs = set()
         if manifest is not None:
             keys = {p['key'] for p in manifest['projects'] if p['linear_id'] == pid}
-            refs = {n['issue_ref'] for n in manifest['nodes'] if n['project'] in keys}
+            nodes = [n for n in manifest['nodes'] if n['project'] in keys]
+            refs = {n['issue_ref'] for n in nodes}
+            expected = diagram_nodes('```mermaid\n' + API['render'](manifest) + '```')
+            # UUID membership alone cannot cover a node omitted from the Markdown.
+            rendered_refs = {n['issue_ref'] for n in nodes if any(
+                (node_id, label) in view_nodes for node_id, label in expected
+                if node_id == ('group_' if n['kind'] == 'group' else 'node_') + n['id'])}
             missing_manifest = [i['identifier'] for i in issues if i['id'] not in refs]
+        missing_view = [i['identifier'] for i in issues
+                        if i['identifier'] not in view_keys and i['id'] not in rendered_refs]
         project_in_manifest = manifest is None or any(p['linear_id'] == pid for p in manifest['projects'])
         state = 'CURRENT' if text is not None and project_in_manifest and not missing_view and not missing_manifest else 'UPDATE_REQUIRED'
         results.append({'project_id': pid, 'project_name': name, 'view_path': path,

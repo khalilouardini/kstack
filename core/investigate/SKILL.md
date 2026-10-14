@@ -8,7 +8,7 @@ description: Debug a failure by finding its root cause before any fix: reproduce
 
 ## When to invoke
 
-Something is broken and nobody yet knows why. Invoke as `/investigate [what is
+Something is broken and nobody yet knows why. Invoke as `/investigate [--accept-graph-update <PR#>]... [what is
 broken]` — use it in place of debugging directly whenever the user reports an
 error, stack trace, wrong result, or "it was working yesterday". The point of
 the skill is that it forbids the fix you would otherwise reach for first. Not

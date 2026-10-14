@@ -288,13 +288,20 @@ kickoff, including dispatch --plan-only and wave. Prior flags are not consent.
 
 ## Project orchestration records — read-only
 
-When `orchestration/index.json` exists, it is the sole active manifest index.
+Use a detached, read-only graph checkout at the exact main SHA validated above,
+or the exact accepted graph PR head for that project. Call it `<graph-checkout>`;
+verify its HEAD equals the coverage SHA. Read the index, manifest, root roadmap
+and human-decision table from that checkout. Never use the consuming working
+tree's unmerged graph for condition analysis. If the validated head moves, stop
+and repeat coverage and condition analysis before a kickoff.
+
+When `<graph-checkout>/orchestration/index.json` exists, it is the sole active manifest index.
 Resolve this skill's physical canonical directory: follow the installed Claude
 symlink with `cd <installed-next-directory> && pwd -P`, or read Codex's generated
 pointer and use its canonical target. Obtain `<stack-root>` with
 `git -C <physical-next-directory> rev-parse --show-toplevel`. Read
 `<stack-root>/ORCHESTRATION.md` and the roadmap `references/contract.md` beneath
-that root, then run `python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <absolute-consuming-root>/orchestration/index.json`. Unreadable,
+that root, then run `python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <graph-checkout>/orchestration/index.json`. Unreadable,
 invalid or mismatched pins stop the covered-project recommendation; never auto-repin.
 Absent index keeps the legacy procedure only where the root graph does not claim
 adoption. If the root claims adoption but lacks its index, stop recommendations
