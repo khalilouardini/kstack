@@ -48,8 +48,14 @@ anything.** A briefing on the wrong range is worse than none, and unlike a
 wrong file reference nothing downstream will catch it.
 
 ```bash
-git merge-base --fork-point HEAD origin/main || git merge-base HEAD origin/main
+BASE=$(git merge-base --fork-point HEAD origin/main || git merge-base HEAD origin/main)
+echo "$BASE"
 ```
+
+Every command in step 1 reads `$BASE`, so assign it first. Shell state does not
+persist between tool calls on most hosts: repeat the assignment in each call
+that reads `$BASE`, or an unset `$BASE` turns `git log "$BASE"..HEAD` into an
+empty `HEAD..HEAD` with no error.
 
 A PR-number input needs `gh`. **Without `gh` this skill still works on every
 other input form** — branch, range, paths — and it says so rather than
@@ -80,7 +86,6 @@ of that order, quoted; the rest of the session does not.
 **Code evidence** says what the change does:
 
 ```bash
-BASE=$(git merge-base HEAD origin/main)
 git diff --stat "$BASE"...HEAD          # which areas were touched
 git diff "$BASE"...HEAD                  # what the code now does
 git diff "$BASE"...HEAD -- '*test*'      # which assertions moved
