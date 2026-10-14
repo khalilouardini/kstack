@@ -1,0 +1,60 @@
+{
+  "complete": true,
+  "projects": [
+    {
+      "project_id": "6f94cd9f-84af-47c0-89f6-ec84be20a498",
+      "project_name": "MVP 2.3",
+      "view_path": "docs/orchestration/MVP-2.3.md",
+      "issues": [
+        {
+          "id": "5d193317-1508-4263-95b5-b0a16df044fa",
+          "identifier": "OGUR-372"
+        },
+        {
+          "id": "eb4d3ec0-dc31-46df-930b-142d03540b12",
+          "identifier": "OGUR-374"
+        },
+        {
+          "id": "c068b2cf-0d62-4aea-96f7-0b18e34e1b4a",
+          "identifier": "OGUR-367"
+        },
+        {
+          "id": "a4c8c0e9-bfa7-46e6-b487-9debe9b614b9",
+          "identifier": "OGUR-371"
+        },
+        {
+          "id": "6140b6b2-2241-47ba-9ad6-a79e04f2c7cf",
+          "identifier": "OGUR-474"
+        },
+        {
+          "id": "6a3662c3-ea8d-4e22-8a11-b346ed56cf39",
+          "identifier": "OGUR-368"
+        },
+        {
+          "id": "25587f80-f5e8-43df-a280-ae7c71c91d0f",
+          "identifier": "OGUR-373"
+        },
+        {
+          "id": "9b59c5b7-865a-4e61-bc4b-a1698d75ccb8",
+          "identifier": "OGUR-448"
+        },
+        {
+          "id": "2638d53b-7f5c-4cb2-a8d1-db8b858d0c9d",
+          "identifier": "OGUR-375"
+        },
+        {
+          "id": "5c3160c3-5795-4dbb-9d99-379a81868e7f",
+          "identifier": "OGUR-370"
+        },
+        {
+          "id": "54f082f8-15dd-4f18-9229-4b203e065ae7",
+          "identifier": "OGUR-369"
+        },
+        {
+          "id": "a8942c19-2e38-43e0-90d8-1c4c390fcc6f",
+          "identifier": "OGUR-366"
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,19 @@
 [
   {
+    "number": 26,
+    "name": "candidate closure evidence is required"
+  },
+  {
+    "number": 27,
+    "name": "bounded reconciliation and approval drift"
+  },
+  {
+    "number": 25,
+    "name": "unrelated maintenance addition does not freeze mapped work"
+  },
+  {
     "number": 18,
-    "name": "uncovered projects excluded before execution"
+    "name": "unknown selected project blocks execution"
   },
   {
     "number": 19,

@@ -39,12 +39,15 @@ Plain `validate`/`render` are structural draft tools and do not check the index 
 ## Publication before execution
 
 The [publication gate](publication-gate.md) adds a fresh-main ticket coverage
-check to roadmap and all Linear-linked execution transitions. Local indexed
-validity is not proof that a graph is published. Missing/incomplete project
-views or manifest membership require a graph update PR; execution waits for its
-coverage on main or an explicit --accept-graph-update PR under that contract.
-The bypass uses the pending validated graph and preserves all source, scope,
-condition and approval checks. This Git PR step is separate from publishing a
+audit to roadmap and separates project coverage warnings from per-candidate
+execution eligibility. Missing unrelated tickets do not freeze mapped work.
+Selected units and their relevant dependency closure still require verified
+scope, prerequisites, ownership and acceptance. The contract permits an auditable
+local delta of at most three missing maintenance units within approved scope;
+this is an explicit isolated admission artifact, never an implicit index overlay.
+Semantic scope/dependency/release/human-gate changes require reviewed publication
+or an explicitly accepted reviewed graph PR. Source pins and all condition and
+approval checks still apply. This Git PR step is separate from publishing a
 Linear document, which remains the human maintainer's manual action below.
 
 ## Manifest fields

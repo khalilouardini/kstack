@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.4.0
+version: 0.5.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -31,11 +31,14 @@ repeatable --accept-graph-update under the publication contract below. Build acc
 
 Before Workflow starts, follow
 `tools/linear/linear-roadmap/references/publication-gate.md` from the physical
-stack root for every affected Linear project. Fresh main coverage is required
-for both plan and build; gaps stop before contract/worktree/tracker writes.
-Only this invocation's explicit --accept-graph-update <PR#> can use a verified
-pending graph. Revalidate at A1, before A3/A4 writes and before B1 implementation;
-Run A observations and --approve do not grant a Run B publication bypass.
+stack root. Report project coverage warnings and require fresh candidate/closure
+admission for every selected/approved track before contract/worktree/tracker writes.
+Unrelated additions do not freeze mapped work. Bounded local maintenance repairs
+need no preliminary graph PR; retain their main SHA, full live evidence and exact
+delta. Semantic scope/dependency/release/human changes require reviewed publication.
+Only explicit --accept-graph-update can use a verified reviewed pending graph.
+Revalidate at A1, before A3/A4 writes, B1 implementation and B3 implementer fixes;
+Run A observations and --approve do not supply fresh evidence or a bypass.
 
 ## Project-level orchestration design
 
@@ -128,12 +131,16 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    `accepted_graph_updates` snapshots under the shared publication contract.
    For plan preserve graph flag/value tokens in `selection`; for build populate
    `graph_update_flags` only from the human's current build invocation. Reject
-   malformed/missing values and invalid or incomplete PR graphs before Workflow.
-   Require coverage for every selected/approved project and recheck after selection.
-   Exclude uncovered projects during A1 selection; project-less tracks are exempt.
-   For project-backed work, require a valid UTC checked_at on args.date. Carry validated main/PR SHAs into
-   every node and the existing record.evidence array; nodes stop if live pins move.
-   Run B compares approved projects with Run A's evidence before implementation.
+   malformed/missing values, unreviewed/invalid PR graphs and incomplete selected
+   closure evidence before Workflow; unrelated PR coverage gaps stay warnings.
+   Supply full `graph_admission` helper reports for candidate groups. Evaluate
+   each selected/approved issue's ELIGIBLE build state and relevant closure;
+   UPDATE_REQUIRED is a warning, never project-wide exclusion. Project-less tracks
+   remain exempt. Require valid UTC checked_at on args.date. Carry main/graph SHA,
+   full admission evidence, exact local delta and digests into every node and the
+   existing record.evidence array; nodes stop if live pins/relevant evidence move.
+   Run B compares effective graph and selected closure digests with Run A before
+   implementation; changed coverage counts alone do not invalidate plans.
    A3 rechecks before contract publication; pass the same explicit
    graph flags to composed land, dispatch, review-comments and B3 pr-loop invocations. These
    fields are transient args, not extra RUN_A/WAVE_REPORT schema keys.

@@ -1,7 +1,7 @@
 ---
 name: linear-roadmap
-version: 0.4.0
-description: Build a typed orchestration roadmap and Mermaid graph from existing Linear work or draft a proposed graph from a prompt. Checks main ticket coverage and opens graph update PRs. Creates or updates the local scope contract; tracker reads only. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap <project|spec|prompt>". Does not launch sessions or create tickets. (kstack)
+version: 0.5.0
+description: Build a typed orchestration roadmap and Mermaid graph from existing Linear work or draft a proposed graph from a prompt. Reports main coverage warnings; small in-scope repairs use bounded local evidence, semantic changes require reviewed graph PRs. Creates or updates the local scope contract; tracker reads only. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap <project|spec|prompt>". Does not launch sessions or create tickets. (kstack)
 ---
 
 # linear-roadmap — prepare the graph before execution
@@ -11,7 +11,8 @@ description: Build a typed orchestration roadmap and Mermaid graph from existing
 A project or subunit needs a reusable execution map before `/next` or `/wave`.
 Invoke `/linear-roadmap <project|spec|prompt>`. This skill creates local roadmap
 artifacts, creates or updates the local product scope contract, reads Linear,
-and opens a bounded graph update PR when main lacks complete ticket coverage;
+and reports main coverage warnings separately from candidate eligibility;
+semantic changes require a reviewed graph update PR under the shared contract;
 it does not create issues, grant scope approval, publish to Linear, invoke
 Workflow, or start a ticket session. Those limits are prompt-level.
 The validator checks structure and phase dependencies; it proves no live readiness.
@@ -60,9 +61,12 @@ an active-milestone status change. These rules are prompt-level.
 On every existing-project or mapped-spec invocation, follow
 [references/publication-gate.md](references/publication-gate.md). Inspect the
 project's orchestration file on freshly fetched main and compare its graph nodes
-with the complete live Linear ticket list. Missing or incomplete coverage requires
-updating the dependencies and pushing a graph update PR; report affected execution
-blocked until merged. An existing matching repair PR is reused. Prompt-only DRAFT
+with the complete live Linear ticket list. Report missing membership as coverage
+warnings separately from selected candidate eligibility. Small missing maintenance
+units can use bounded local reconciliation without a preliminary PR. Scope,
+dependency, release/acceptance or human-gate changes require reviewed publication
+before affected execution. Reuse an existing matching graph PR when publication
+is required or requested. Prompt-only DRAFT
 proposals remain local until tickets exist. Read-only Linear access is unchanged.
 The same contract defines the explicit execution bypass --accept-graph-update;
 opening the repair PR does not apply that bypass implicitly.
@@ -127,9 +131,12 @@ contract's existence, completeness or approval.
 5. Put the rendered project graph, a condition/source table, unknowns and links
    to the shared lifecycle in root `ORCHESTRATION.md`. Before replacing an
    existing diagram, inspect its conditions and preserve unrelated content.
-6. Complete the required graph update PR when the main-coverage audit found a
-   gap. Use the publication contract's bounded graph-only repair exception to
-   land; a local-only result is publication incomplete, never execution admission.
+6. For semantic changes, complete the required reviewed graph update PR using
+   the graph-only repair exception to land. For small in-scope maintenance, the
+   shared contract's bounded local reconciliation can establish candidate admission;
+   retain the main SHA, full live evidence and exact delta. Coverage bookkeeping
+   can accompany the implementation PR or a later requested roadmap refresh.
+   A local draft without that audit is never execution admission.
    Report artifact paths, source pin, manifest digest, resolved project IDs,
    missing tickets/scope, conflicting conditions and remaining human decisions.
    Never publish or link Linear documents from this skill. Return artifacts for

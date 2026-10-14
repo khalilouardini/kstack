@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""Audit candidate eligibility separately from project coverage; no network or writes."""
+import argparse
+import copy
+from datetime import datetime, timezone
+import hashlib
+import json
+from pathlib import Path
+import runpy
+import sys
+
+COVERAGE = runpy.run_path(str(Path(__file__).with_name('graph-coverage')))
+GRAPH = COVERAGE['API']
+MAX_REPAIRS = 3
+
+
+def digest(value):
+    return 'sha256:' + hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def required_text(value, label):
+    if not isinstance(value, str) or not value.strip() or value.strip().startswith('TODO:'):
+        raise ValueError(f'{label}: complete cited evidence required')
+    return value
+
+
+def utc(value):
+    required_text(value, 'checked_at')
+    if not value.endswith('Z'):
+        raise ValueError('checked_at must be UTC')
+    return datetime.fromisoformat(value[:-1] + '+00:00')
+
+
+def reconcile(base, proposed, repairs, selected):
+    """Only append small, edge-free maintenance units; never mutate approved policy."""
+    GRAPH['validate'](proposed)
+    before = {n['id']: n for n in base['nodes']}
+    after = {n['id']: n for n in proposed['nodes']}
+    if any(proposed[k] != v for k, v in base.items() if k != 'nodes'):
+        raise ValueError('REVIEWED_PUBLICATION_REQUIRED: scope, dependencies, release criteria or policy changed')
+    if any(after.get(key) != value for key, value in before.items()):
+        raise ValueError('REVIEWED_PUBLICATION_REQUIRED: existing nodes, acceptance or human gates changed')
+    added = [n for n in proposed['nodes'] if n['id'] not in before]
+    if not 1 <= len(added) <= MAX_REPAIRS or len(repairs) != len(added):
+        raise ValueError('local reconciliation permits one to three selected maintenance units')
+    by_id = {r['node_id']: r for r in repairs}
+    if len(by_id) != len(repairs) or set(by_id) != {n['id'] for n in added}:
+        raise ValueError('exact repair evidence required for every added node')
+    origins = {}
+    for node in added:
+        repair = by_id[node['id']]
+        origin = before.get(repair.get('origin'))
+        if repair.get('kind') != 'maintenance' or not origin or origin['kind'] != 'unit':
+            raise ValueError('REVIEWED_PUBLICATION_REQUIRED: repair must trace an existing approved unit')
+        required_text(repair.get('rationale'), 'repair rationale within existing scope')
+        if node['kind'] != 'unit' or node['issue_ref'] not in selected or any(
+                node[k] != origin[k] for k in ('project', 'unit_of', 'owner', 'effort')):
+            raise ValueError('REVIEWED_PUBLICATION_REQUIRED: repair expands ownership or approved boundary')
+        # New prerequisites also require review. No copied, removed or relaxed edges.
+        origins[node['id']] = origin['id']
+    return added, origins
+
+
+def ancestors(graph, roots):
+    incoming = {}
+    for edge in graph['edges']:
+        incoming.setdefault((edge['to'], edge['to_event']), set()).add((edge['from'], edge['from_event']))
+    for node in graph['nodes']:
+        if node['kind'] == 'unit':
+            incoming.setdefault((node['id'], 'build'), set()).add((node['id'], 'plan'))
+            incoming.setdefault((node['id'], 'merge'), set()).add((node['id'], 'build'))
+    found, pending = set(), list(roots)
+    while pending:
+        event = pending.pop()
+        if event in found:
+            continue
+        found.add(event)
+        pending.extend(incoming.get(event, set()))
+    return found
+
+
+def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
+    coverage = COVERAGE['check'](repo, ref, snapshot)
+    sha = coverage['sha']
+    main_sha = COVERAGE['git'](repo, 'rev-parse', '--verify', f'{main_ref or ref}^{{commit}}').strip()
+    if snapshot.get('main_sha') != main_sha or (sha != main_sha and snapshot.get('graph_sha') != sha):
+        raise ValueError('live evidence must pin the exact freshly fetched main SHA')
+    checked = utc(snapshot.get('checked_at'))
+    now = now or datetime.now(timezone.utc)
+    if not 0 <= (now - checked).total_seconds() <= 3600:
+        raise ValueError('live evidence is stale or future-dated; refresh before this transition')
+    index_text = COVERAGE['read_blob'](repo, sha, 'orchestration/index.json')
+    if index_text is None:
+        raise ValueError('typed index required for deterministic admission; use the documented legacy audit')
+    index = json.loads(index_text)
+    # Same installed-source guard as validate-index, without using a mutable checkout.
+    if index['source_revision'] != GRAPH['installed_revision']():
+        raise ValueError('source revision mismatch: reconcile installed stack and reviewed graph')
+    base = GRAPH['validate'](json.loads(COVERAGE['read_blob'](repo, sha, index['manifest'])))
+    graph = copy.deepcopy(base) if proposed is None else GRAPH['validate'](proposed)
+    selected = request.get('selected')
+    if not isinstance(selected, list) or not selected or len(set(selected)) != len(selected):
+        raise ValueError('selected must contain unique canonical issue UUIDs')
+    transition = request.get('transition')
+    if transition not in ('plan', 'build', 'merge'):
+        raise ValueError('transition must be plan, build or merge')
+    added, origins = ([], {})
+    if graph != base:
+        added, origins = reconcile(base, graph, request.get('repairs', []), selected)
+    elif request.get('repairs'):
+        raise ValueError('repair evidence has no exact graph delta')
+    nodes = {n['id']: n for n in graph['nodes']}
+    projects = {p['key']: p for p in graph['projects']}
+    issues = {i['id']: (p, i) for p in snapshot['projects'] for i in p['issues']}
+    proof_list = request.get('nodes', [])
+    proofs = {p['node_id']: p for p in proof_list}
+    if len(proofs) != len(proof_list):
+        raise ValueError('duplicate closure evidence')
+    events = request.get('events', [])
+    observed = {(e['node_id'], e['event']): e for e in events}
+    if len(observed) != len(events):
+        raise ValueError('duplicate event evidence')
+    candidates = []
+    for iid in selected:
+        matches = [n for n in nodes.values() if n['kind'] == 'unit' and n['issue_ref'] == iid]
+        if len(matches) != 1:
+            raise ValueError('UNMAPPED: selected work needs one verified executable unit or bounded local repair')
+        node = matches[0]
+        origin = origins.get(node['id'])
+        roots = {(node['id'], e) for e in ('plan', 'build', 'merge')}
+        if origin:
+            roots.update((origin, e) for e in ('plan', 'build', 'merge'))
+        closure_events = ancestors(graph, roots)
+        closure = {key for key, _ in closure_events}
+        for key in list(closure):
+            parent = nodes[key]['unit_of']
+            while parent:
+                closure.add(parent)
+                parent = nodes[parent]['unit_of']
+        for key in sorted(closure):
+            n = nodes[key]
+            p = projects[n['project']]
+            if p['authorization'] != 'recorded':
+                raise ValueError('REVIEWED_PUBLICATION_REQUIRED: scope authorization is draft')
+            proof = proofs.get(key, {})
+            scope = proof.get('scope', {})
+            path = COVERAGE['safe_path'](scope.get('path'))
+            text = COVERAGE['read_blob'](repo, sha, path)
+            line = scope.get('line')
+            quote = required_text(scope.get('quote'), 'approved scope quote')
+            if type(line) is not int or line < 1 or text is None or '\n'.join(
+                    text.splitlines()[line-1:line-1+len(quote.splitlines())]) != quote:
+                raise ValueError('scope citation must match exact lines on pinned main')
+            required_text(scope.get('rationale'), 'scope applicability rationale')
+            if proof.get('owner') != n['owner'] or proof.get('acceptance') != n['acceptance']:
+                raise ValueError('verified ownership and exact acceptance conditions required throughout closure')
+            required_text(proof.get('source'), 'ownership/acceptance source')
+            incoming = [e for e in graph['edges'] if e['to'] == key]
+            if proof.get('prerequisites') != incoming:
+                raise ValueError('complete prerequisite evidence must match the dependency closure')
+            if n['issue_ref']:
+                entry = issues.get(n['issue_ref'])
+                if entry is None or entry[0]['project_id'] != p['linear_id']:
+                    raise ValueError('complete live issue/project membership required throughout closure')
+                issue = entry[1]
+                for field in ('description', 'url', 'updated_at'):
+                    required_text(issue.get(field), 'live issue ' + field)
+                if issue.get('relations_complete') is not True:
+                    raise ValueError('complete live relations and issue-body prerequisite read required')
+                if issue.get('prerequisites') != incoming:
+                    raise ValueError('REVIEWED_PUBLICATION_REQUIRED: live dependencies differ from reviewed graph')
+                if issue['identifier'] in next(p for p in coverage['projects'] if p['project_id'] == entry[0]['project_id'])['missing_view'] and key not in origins:
+                    raise ValueError('selected closure node is absent from published Markdown; reviewed repair required')
+        # Check current phase only. Future merge/human/release gates stay visible.
+        required = ancestors(graph, {(node['id'], transition)})
+        if origin:
+            required |= ancestors(graph, {(origin, transition)})
+        required = {event for event in required if event[0] != node['id']}
+        unmet = []
+        for event in sorted(required):
+            observation = observed.get(event, {})
+            if observation.get('state') not in ('SATISFIED', 'UNSATISFIED', 'UNKNOWN'):
+                raise ValueError('incomplete event prerequisite evidence')
+            required_text(observation.get('source'), 'event evidence source')
+            if observation['state'] != 'SATISFIED':
+                unmet.append({'node_id': event[0], 'event': event[1], 'state': observation['state']})
+        candidates.append({'issue_id': iid, 'identifier': issues[iid][1]['identifier'],
+                           'project_id': projects[node['project']]['linear_id'],
+                           'state': 'BLOCKED' if unmet else 'ELIGIBLE',
+                           'mode': 'LOCAL_RECONCILIATION' if origin else 'PUBLISHED',
+                           'node_id': node['id'], 'closure': sorted(closure),
+                           'closure_evidence_digest': digest({
+                               'nodes': [proofs[k] for k in sorted(closure)],
+                               'issues': [{field: issues[nodes[k]['issue_ref']][1][field]
+                                           for field in ('id', 'identifier', 'description', 'url', 'prerequisites')}
+                                          for k in sorted(closure) if nodes[k]['issue_ref']],
+                               'events': [e for e in events if (e['node_id'], e['event']) in required]}),
+                           'unmet': unmet})
+    return {'schema_version': 1, 'main_sha': main_sha, 'graph_sha': sha, 'checked_at': snapshot['checked_at'],
+            'transition': transition, 'coverage': coverage,
+            'base_digest': digest(base), 'graph_digest': digest(graph),
+            'issue_evidence_digest': digest(snapshot), 'evidence': {'issues': snapshot, 'request': request},
+            'delta': {'added_nodes': added, 'changed_edges': [], 'repairs': request.get('repairs', [])},
+            'candidates': candidates, 'state': 'ELIGIBLE' if all(c['state'] == 'ELIGIBLE' for c in candidates) else 'BLOCKED'}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--repo', type=Path, required=True)
+    parser.add_argument('--ref', required=True)
+    parser.add_argument('--main-ref', help='fresh main ref when --ref is an explicitly accepted PR head')
+    parser.add_argument('--issues', type=Path, required=True)
+    parser.add_argument('--request', type=Path, required=True)
+    parser.add_argument('--reconcile', type=Path, help='complete proposed manifest; append-only maintenance delta')
+    args = parser.parse_args()
+    try:
+        report = audit(args.repo, args.ref, json.loads(args.issues.read_text()),
+                       json.loads(args.request.read_text()),
+                       json.loads(args.reconcile.read_text()) if args.reconcile else None, main_ref=args.main_ref)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
+        state = next((s for s in ('REVIEWED_PUBLICATION_REQUIRED', 'UNMAPPED') if str(error).startswith(s + ':')), 'UNKNOWN')
+        print(json.dumps({'state': state, 'error': str(error)}))
+        return 1
+    print(json.dumps(report, indent=2))
+    return 0 if report['state'] == 'ELIGIBLE' else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

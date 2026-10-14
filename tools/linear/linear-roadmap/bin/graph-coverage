@@ -115,6 +115,7 @@ def check(repo, ref, snapshot):
         results.append({'project_id': pid, 'project_name': name, 'view_path': path,
                         'state': state, 'view_exists': text is not None,
                         'project_in_manifest': project_in_manifest,
+                        'total_count': len(issues), 'covered_count': len(issues) - len(set(missing_view + missing_manifest)),
                         'missing_view': missing_view, 'missing_manifest': missing_manifest})
     return {'ref': ref, 'sha': sha, 'state': 'CURRENT' if all(
         p['state'] == 'CURRENT' for p in results) else 'UPDATE_REQUIRED', 'projects': results}
