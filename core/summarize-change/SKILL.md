@@ -1,7 +1,7 @@
 ---
 name: summarize-change
 version: 0.2.0
-description: Brief a change in the session by its intent — the intent with its source, approach and constraints touched, the diff checked against that intent, sensitive ranges, blast radius with real gate exit codes, the decision needed. Refuses file-by-file narration and line counts. Use when asked to "summarize this PR", "what did we do here", "give me a high-level summary of this branch", "brief me on this change", or "/summarize-change [branch | PR | commit range | paths]". (kstack)
+description: Brief a change in the session by its intent — the intent with its source, approach and constraints touched, the diff checked against that intent, sensitive ranges, blast radius with real gate exit codes, the decision needed. Refuses file-by-file narration and line counts. Use when asked to "summarize this PR", "what did we do here", "give me a high-level summary of this branch", "brief me on this change", or "/summarize-change [branch | PR | commit range | paths] [--tight]". (kstack)
 ---
 
 # summarize-change — brief a change by its intent, in chat
@@ -38,8 +38,10 @@ says "ship it".
 
 ## Inputs
 
-`/summarize-change [branch | PR number | commit range | file paths]`. With no
-argument, summarize the current branch against its merge base.
+`/summarize-change [branch | PR number | commit range | file paths] [--tight]`.
+With no target, summarize the current branch against its merge base.
+`--tight` emits the same six parts under per-part caps, at most 250 words — see
+step 3. It changes only what is emitted; steps 1 and 2 run in full either way.
 
 **Resolve the argument to concrete revisions and state them before summarizing
 anything.** A briefing on the wrong range is worse than none, and unlike a
@@ -173,6 +175,31 @@ you did not run the project's `gates.lint` and `gates.test` from
 `.agents/stack.yml`, write "gates not run in this session" — never imply a
 green suite you did not see.
 
+### `--tight`
+
+The same six parts, in the same order, at most **250 words** in total as
+`wc -w` counts them, the range statement from Inputs included. The budget is in
+words, not lines, because a line has no length limit.
+
+| Part | Cap |
+|---|---|
+| **Intent** | 2 sentences, 40 words, source kept |
+| **Approach** | 2 sentences, 40 words, naming at most 2 system constraints |
+| **Diff vs intent** | 3 items per group, each 12 words plus its `file:line` |
+| **Sensitive vs mechanical** | 4 sensitive ranges, each a `file:line` plus 6 words; mechanical as one line of kinds |
+| **Blast radius** | 30 words, gate exit codes kept |
+| **Decision needed** | 1 sentence |
+
+When a cap drops items, keep the ones most likely to change the reader's
+decision and state how many were dropped: `Beyond intent: …; …; … (+2 more)`.
+The count is the whole record of a dropped item; describing it in parentheses
+spends the words the cap removed. The reader can ask for the full briefing.
+The caps never drop the intent's source, the "inferred" label, a gate exit
+code, or a group's "none".
+
+Count before emitting. Over 250 words, cut the lowest-ranked items and raise
+their counts; do not shorten citations to fit.
+
 ## 4. What this skill refuses
 
 - **File-by-file narration.** The failure mode named at step 2 of
@@ -186,6 +213,7 @@ green suite you did not see.
   Report them as scale when scale matters to the reader's next action; never as
   a score. Inherited verbatim from `/delivery-retro` and CONVENTIONS.md §6.
 - **A gate claim with no exit code.**
+- **Under `--tight`, an item dropped without a count.**
 - **A summary of a range it did not state.** See Inputs.
 - **A merge verdict.** Beyond intent and short of intent are facts for the
   reviewer, not a ruling on them — see When to invoke.

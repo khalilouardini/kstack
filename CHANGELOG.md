@@ -8,7 +8,9 @@ constraints it touches, diff vs intent (delivered / beyond intent / short of
 intent), sensitive vs mechanical ranges, blast radius, and decision needed.
 Intent comes from the tracker issue, the `/spec` file, the PR body, then
 commits, in that order; the diff still decides what the code does. An intent
-inferred from the diff alone is labelled as inferred.
+inferred from the diff alone is labelled as inferred. `--tight` emits the same
+six parts under per-part caps, at most 250 words, and states how many items each
+cap dropped.
 
 Add repeatable `--accept-overlap <PR#>` to `/next` and `/wave plan`: humans may
 accept file overlap with named open PRs, recorded in kickoffs and plan risks for
