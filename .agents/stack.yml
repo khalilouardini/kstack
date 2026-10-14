@@ -46,6 +46,11 @@ review_model:
     - "tools/github/**"
   escalated_effort: high
 
+# kstack has no GitHub CI; bin/check-stack runs locally as gates.lint/test.
+# pr-loop's CLEAN therefore reflects review findings only, and says so.
+ci:
+  checks: none
+
 identities:
   maintainer: khalilouardini
   reviewer: ogur-codex-bot

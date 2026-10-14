@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+`/pr-loop` 0.6.0: `CLEAN` requires CI. After a finding-free review, step 3a
+reads the PR's checks at the reviewed head, waits up to `--ci-wait` minutes
+(default 30) for pending ones, and exits `BLOCKED` on a red or timed-out check
+instead of `CLEAN`. A head that moves while it waits starts the next round. New
+key `ci.checks` (`required` | `all` | `none`) says which checks count; missing →
+`/pr-loop` refuses. Buckets come from `gh pr checks --json`, which exits 0 on
+pending and failing checks alike (gh 2.89.0), so the exit code is never read.
+kstack's own `stack.yml` sets `none`: it has no GitHub CI.
+
 Require complete orchestration graph coverage on main for Linear project execution;
 `/linear-roadmap` publishes repairs through a PR, and repeatable
 `--accept-graph-update <PR#>` permits an explicitly accepted, validated pending graph.
