@@ -167,6 +167,7 @@ read-back still depend on nodes faithfully following the canonical procedures.
    present, then invokes `/wave build --approve <ids|all>`. One decision per wave;
    unapproved and stopped tracks remain visible. A3's contract work is the only
    preapproval code write; track implementation permission requires this checkpoint.
+   If no plan is PLANNED, Run A returns STOPPED with a null build_command instead.
 2. Run B returns `WAVE_REPORT`. Human may merge CLEAN PRs and decides every
    BLOCKED, ROUNDS_EXHAUSTED, STOPPED and SEAM_MISMATCH track. No further wave is
    selected automatically. These are prompt-level checkpoints, not hook guards.

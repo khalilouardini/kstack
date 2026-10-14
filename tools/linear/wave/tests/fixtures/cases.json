@@ -62,5 +62,9 @@
   {
     "number": 16,
     "name": "complete diff evidence and rename paths"
+  },
+  {
+    "number": 17,
+    "name": "all plans stopped returns STOPPED without build command"
   }
 ]

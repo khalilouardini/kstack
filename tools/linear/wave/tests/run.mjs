@@ -131,6 +131,18 @@ const tests=[
    const renamed=await run('plan',(f,a)=>{overlapArgs(f,a);a.accepted_prs[0].files=[{filename:'renamed.txt',previous_filename:'file1.txt'}];});
    const plan=renamed.calls.find(c=>c.label==='A4 plan T-1');
    assert.deepEqual(promptOverlaps(plan.prompt)[0].files,['file1.txt']);
+ },
+ async()=>{
+   const stopPlan=(f,id)=>Object.assign(f.responses['A4 plan '+id],{state:'STOPPED',stop_reason:'dispatch §1: '+id+' in Backlog',evidence:['status read-back']});
+   const all=await run('plan',f=>{for(const t of fixture.tracks)stopPlan(f,t.issue_id);});
+   assert.equal(all.result.state,'STOPPED');assert.equal(all.result.build_command,null);
+   assert.equal(all.result.stop_reason,'no PLANNED track; every A4 plan stopped');
+   assert.deepEqual(all.result.evidence,fixture.tracks.map(t=>t.issue_id+': dispatch §1: '+t.issue_id+' in Backlog'));
+   assert.equal(all.result.plans.length,fixture.tracks.length);
+   const mixed=await run('plan',f=>stopPlan(f,'T-1'));
+   assert.equal(mixed.result.state,'AWAITING_APPROVAL');assert.equal(mixed.result.build_command,'/wave build --approve all');
+   const build=await run('build',(_f,a)=>{a.plan_record=mixed.result;});
+   assert.deepEqual(build.result.approved,['T-2','T-3']);assert.ok(!build.calls.some(c=>c.label==='B1 build T-1'));
  }
 ];
 function seamIntegration(){
