@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+Add `/issue-graph open|status|refresh` for an installed local roadmap viewer.
+Refresh derives views from the indexed JSON and fresh Linear evidence, preserves
+typed event conditions and unverified checkpoints, and backs up one workspace
+before replacing its caches without changing saved views or notes.
+
 Require complete orchestration graph coverage on main for Linear project execution;
 `/linear-roadmap` publishes repairs through a PR, and repeatable
 `--accept-graph-update <PR#>` permits an explicitly accepted, validated pending graph.

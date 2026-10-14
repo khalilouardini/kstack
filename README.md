@@ -2,7 +2,7 @@
 
 # kstack
 
-A personal agent harness that travels across projects. Twenty-six installable skills and four
+A personal agent harness that travels across projects. Twenty-seven installable skills and four
 role contracts, each defined once, pointed at by every host and every repo that
 uses them.
 
@@ -118,6 +118,7 @@ merges on its own.
 | [`/pr-label-sweep`](tools/github/pr-label-sweep/SKILL.md) | Adds milestone, area and client labels to open PRs from configured rules; add-only |
 | [`/linear-steward`](tools/linear/linear-steward/SKILL.md) | Tracker structural health; mutates only on explicit apply |
 | [`/linear-release-audit`](tools/linear/linear-release-audit/SKILL.md) | Audits a release against its gates using tracker + GitHub evidence |
+| [`/issue-graph`](tools/linear/issue-graph/SKILL.md) | Opens the local roadmap viewer, checks its snapshot age, or refreshes one view from indexed JSON and fresh Linear data |
 | [`/follow-builders`](tools/external/follow-builders/SKILL.md) | Vendored from [zarazhangrui/follow-builders](https://github.com/zarazhangrui/follow-builders): AI-builders digest, in-chat / Telegram / email. Needs `node`; `npm ci` in its `scripts/` once |
 
 Run `/sweep-schedules` once in the consuming repository to enable both sweeps
@@ -125,6 +126,14 @@ through the desktop scheduler. Use `--hours 4` to change the cadence or
 `--sessions-only` / `--labels-only` to limit scope. Label scheduling requires
 `pr_labels.rules`; title scheduling requires supported desktop session tools.
 Installing or merging the skill does not activate a schedule.
+
+Use `/issue-graph open "Milestone 2.1"` to show an installed viewer, or
+`/issue-graph refresh "Milestone 2.1"` after roadmap changes. The refresh preserves
+typed conditions and unverified checkpoints, removes obsolete cached nodes,
+and keeps saved views and notes. `/linear-roadmap` owns changes to the roadmap
+itself. Viewer bindings are configured per project; see
+[the binding format](tools/linear/issue-graph/references/binding.md). Refreshing
+is explicit; installing the skill does not enable continuous synchronization.
 
 ## What this stack refuses
 

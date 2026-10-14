@@ -373,6 +373,7 @@ const SKILLS = [
   { n:"/pr-label-sweep", t:"gh", p:5, e:null, does:"Adds the milestone, area and client labels your rules call for to every open PR, each citing the tracker project, changed path or title keyword that fired it. Add-only; never creates a label.", says:["label my PRs","sweep PR labels"] },
   { n:"/linear-steward", t:"linear", p:5, e:null, does:"Structural health of the tracker: unprojected, stale, GitHub-contradicted, duplicated, superseded, ungateable. Mutates nothing unless explicitly applied.", says:["audit the board","these statuses are wrong"] },
   { n:"/linear-release-audit", t:"linear", p:5, e:"ro", does:"Audits a release against its gate criteria using tracker and GitHub evidence together. Headline finding: issues marked done with no acceptance evidence.", says:["is the release ready?","what's blocking the release"] },
+  { n:"/issue-graph", t:"linear", p:5, e:"prompt", does:"Opens an installed local roadmap viewer, checks its freshness, or refreshes one snapshot from indexed JSON and fresh Linear data. Preserves typed conditions and unverified checkpoints, saved views and notes.", says:["launch the issue graph","refresh the issue graph"] },
 ];
 
 const PHASES = [

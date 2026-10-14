@@ -39,6 +39,14 @@ workspace_contract: null         # e.g. docs/product/tracker-contract.md
 # null → session-titles falls back to PR numbers only.
 issue_prefix: null               # e.g. ACME  → matches ACME-123
 
+# Local issue-graph viewer binding. Paths may be absolute or relative to the
+# consuming repo; use project-template/issue-graph.json as the format example.
+# A host-local binding saved under KSTACK_STATE/projects/<project>/issue-graph.json
+# also works, keeping machine-specific paths out of Git. No installation or
+# background synchronization is enabled by this block.
+issue_graph:
+  config: null
+
 # The commands this repo considers authoritative. Skills run YOUR commands and
 # never infer one from the file tree — an inferred gate that passes proves
 # nothing. Both keys refuse rather than default.
