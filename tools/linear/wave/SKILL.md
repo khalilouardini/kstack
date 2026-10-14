@@ -61,9 +61,9 @@ Read every composed procedure by physical path, never copy its rules here.
   refuse naming `wave.contract_dir`. No defensible project-neutral location exists.
   When set, require a relative directory contained in the repo; reject traversal,
   absolute paths and symlink escape before launching the graph.
-- `gates.lint`, `gates.test`, `identities.maintainer`, `identities.reviewer`,
-  `identities.implementer`: missing/null → refuse naming the exact key before
-  graph execution. Pass review settings and workspace contracts through unchanged.
+- `gates.lint`, `gates.test`, `ci.checks`, `identities.maintainer`,
+  `identities.reviewer`, `identities.implementer`: missing/null → refuse naming
+  the exact key before graph execution. Pass review settings and workspace contracts through unchanged.
   `scope_doc` and `workspace_contract` must be readable for plan/build; named
   procedures own their remaining configuration and status checks.
 

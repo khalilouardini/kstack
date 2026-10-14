@@ -93,6 +93,14 @@ review_model:
   escalate_paths: []            # project-specific fnmatch globs; [] disables
   escalated_effort: high
 
+# Which of a PR's checks /pr-loop needs green at the reviewed head before it may
+# report CLEAN. `required` reads the base branch's required status checks; use
+# `all` when the base branch marks none as required (`required` would never turn
+# green there); `none` only for a repo with no CI, and the loop's report says so.
+# null → /pr-loop refuses.
+ci:
+  checks: null                   # required | all | none
+
 # GitHub logins. No defaults, ever — the human opens PRs, governs, and merges;
 # once a review loop starts, the reviewer publishes findings (Codex by default)
 # and the implementer fixes and replies (Claude by default). A skill refuses when a role it needs is null.
