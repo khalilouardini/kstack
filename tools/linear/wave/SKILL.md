@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.3.0
+version: 0.4.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -12,8 +12,8 @@ A wave is the set of mutually independent issues selected by `/next --parallel`.
 Build and human-merge this wave before selecting the next one. Invoke:
 
 ```text
-/wave plan [<milestone-id>|any] [--project "<p>"]... [--parallel N] [--accept-overlap <PR#>]...
-/wave build --approve <comma-separated-issue-ids|all>
+/wave plan [<milestone-id>|any] [--project "<p>"]... [--parallel N] [--accept-overlap <PR#>]... [--accept-graph-update <PR#>]...
+/wave build --approve <comma-separated-issue-ids|all> [--accept-graph-update <PR#>]...
 ```
 
 Invoking this skill explicitly opts into calling the Claude Code Workflow tool,
@@ -23,8 +23,19 @@ in an ordinary `/next` invocation. Project filters depend on the canonical
 and name the dependency. Do not approximate selection rules.
 
 Plan accepts repeatable `--accept-overlap <PR#>` and delegates its validation
-and narrow file-overlap exception to canonical `next`. Build accepts only
-`--approve`; `--accept-overlap` on build is an unknown flag and must be rejected.
+and narrow file-overlap exception to canonical `next`. Plan and build accept
+repeatable --accept-graph-update under the publication contract below. Build accepts
+`--approve` and that graph flag; `--accept-overlap` on build is an unknown flag and must be rejected.
+
+## Published graph admission
+
+Before Workflow starts, follow
+`tools/linear/linear-roadmap/references/publication-gate.md` from the physical
+stack root for every affected Linear project. Fresh main coverage is required
+for both plan and build; gaps stop before contract/worktree/tracker writes.
+Only this invocation's explicit --accept-graph-update <PR#> can use a verified
+pending graph. Revalidate at A1, before A3/A4 writes and before B1 implementation;
+Run A observations and --approve do not grant a Run B publication bypass.
 
 ## Project-level orchestration design
 
@@ -61,7 +72,7 @@ Read every composed procedure by physical path, never copy its rules here.
 Read `hosts/HOSTS.md`. Claude Code supplies the Workflow tool. On Codex, run
 A1 only: read `tools/linear/next/SKILL.md` and follow it top to bottom in parallel
 mode with the supplied milestone/project/count tokens and every
-`--accept-overlap <PR#>` occurrence unchanged. PLAN_ONLY candidates
+`--accept-overlap <PR#>` and --accept-graph-update occurrences unchanged. PLAN_ONLY candidates
 must go into SELECT.sequenced with their unmet condition/source, never TRACK.
 They do not count toward N and cannot reach `--approve all`. Render that selection
 and say **the graph did not run**; no dispatch, tracker write, contract or build.
@@ -72,14 +83,14 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
 ## Procedure
 
 1. Parse the stage and flags. For plan, accept the milestone, repeated `--project`,
-   `--parallel` and repeated `--accept-overlap <PR#>`. Before constructing args or
-   starting Workflow, validate each value with `^[1-9][0-9]*$` and verify its PR
-   is OPEN in the consuming repository, with complete live-diff evidence, using
-   `next`'s **Accepted file overlaps** procedure. Otherwise refuse and quote the
+   `--parallel`, repeated `--accept-overlap <PR#>` and --accept-graph-update pairs. Before constructing args or
+   starting Workflow, validate each PR flag value with `^[1-9][0-9]*$`.
+   For --accept-overlap, verify OPEN and complete live-diff evidence using
+   next's **Accepted file overlaps** procedure. For --accept-graph-update,
+   use the publication contract's exact-head graph-coverage procedure. Otherwise refuse and quote the
    value (or `<missing>`); do not report EMPTY. Deduplicate this read-only
    preflight while preserving all selection tokens. `/next` checks again in A1.
-   For build, accept only
-   `--approve` and reject `--accept-overlap` as unknown. Reject other unknown flags,
+   For build, accept `--approve` and repeated --accept-graph-update; reject `--accept-overlap` as unknown. Reject other unknown flags,
    nonpositive N, absent build approval, or an approval list containing unknown/stopped issues. N defaults
    to `/next`'s documented 3; announce the resolved count. Resolve repo root and
    fetched default branch; use the remote-tracking ref, not a guessed `main`.
@@ -112,7 +123,16 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    exact approval and wave id. Do not infer approval from a prior plan invocation
    or use `resumeFromRunId` to transport data across Claude sessions. If the
    record is unavailable, ask for that record before building anything.
-5. Call the Workflow tool with `scriptPath` equal to the physical
+5. For both stages, obtain fresh `graph_publication` evidence and any
+   `accepted_graph_updates` snapshots under the shared publication contract.
+   For plan preserve graph flag/value tokens in `selection`; for build populate
+   `graph_update_flags` only from the human's current build invocation. Reject
+   malformed/missing values and invalid or incomplete PR graphs before Workflow.
+   Require coverage for every selected/approved project and recheck after selection.
+   A3 rechecks before contract publication; pass the same explicit
+   graph flags to composed land, dispatch and review-comments invocations. These
+   fields are transient args, not extra RUN_A/WAVE_REPORT schema keys.
+6. Call the Workflow tool with `scriptPath` equal to the physical
    `workflow/wave.js` inside the resolved wave directory and the JSON `args`.
    Whether paths outside the session directory work through an installed symlink
    is unverified. If the tool rejects the path **before execution**, read that

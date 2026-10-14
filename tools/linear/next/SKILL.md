@@ -1,7 +1,7 @@
 ---
 name: next
-version: 0.6.0
-description: Read Linear and recommend scoped work. Default gives one recommendation; --parallel [N] selects up to five independent tracks, optionally across repeated --project filters, with separate kickoffs. --accept-overlap names open PRs whose file overlap the human accepts. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
+version: 0.7.0
+description: Read Linear and recommend one scoped issue, or up to five independent tracks with --parallel and repeated --project. Requires graph coverage on main; --accept-graph-update accepts a verified pending graph PR. --accept-overlap accepts named PR file overlap. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
 # next — what to pick up now
@@ -10,7 +10,7 @@ description: Read Linear and recommend scoped work. Default gives one recommenda
 
 Someone needs to decide what starts now, and the tracker holds more open work
 than fits in one head. Invoke as
-`/next [<milestone-id>|any] [--project "<name-or-id>"]... [--parallel [N]] [--accept-overlap <PR#>]...`.
+`/next [<milestone-id>|any] [--project "<name-or-id>"]... [--parallel [N]] [--accept-overlap <PR#>]... [--accept-graph-update <PR#>]...`.
 Forward-looking;
 the complement to `triage`, which audits unfinished GitHub work backwards. Not
 for deciding whether a *new* idea is in scope (that is the `spec` pipeline's
@@ -269,7 +269,24 @@ than useless.
    A milestone reading 100% means its issues are closed, which is not the same
    claim. Never quote milestone progress as evidence that something works.
 
-## Project orchestration records — optional, read-only
+## Published graph coverage — required for Linear projects
+
+Before ranking or emitting any kickoff, resolve the physical stack root and read
+`tools/linear/linear-roadmap/references/publication-gate.md` there. Follow its
+fresh main, complete ticket coverage and explicit bypass checks for each affected
+project, including legacy projects with no local index. Missing/incomplete
+publication blocks that project's selection; report missing keys and its repair
+PR, and route to linear-roadmap. Unknown live/main evidence fails closed.
+
+Accept repeatable --accept-graph-update <PR#> with the contract's positive-number,
+OPEN/main-base, exact-head and complete-graph checks before selection. It is
+independent of --accept-overlap and waives only main publication. Read the
+validated pending PR graph for condition analysis when accepted; do not relax
+indexed validation or the gates below. Report the main SHA, coverage and accepted
+PR/head/digest; forward the current invocation's flags into every execution
+kickoff, including dispatch --plan-only and wave. Prior flags are not consent.
+
+## Project orchestration records — read-only
 
 When `orchestration/index.json` exists, it is the sole active manifest index.
 Resolve this skill's physical canonical directory: follow the installed Claude
@@ -288,7 +305,7 @@ Read the exact manifest named by the index. Cite the `sha256:<digest>` reported
 by indexed validation as its revision. Never combine additional files or infer
 readiness from Mermaid. A covered project's open issue without a kind `unit`
 matching its canonical UUID is UNMAPPED: report it and require graph refresh
-before a kickoff. Other node kinds can share issue references for context only.
+before a kickoff. A publication bypass cannot waive this mapping requirement. Other node kinds can share issue references for context only.
 
 This analysis owns the read-only graph rehearsal. Use the state predicates in the
 contract: ACTIVE, HUMAN_REQUIRED, UNKNOWN, BLOCKED, PLAN_ONLY, READY_TO_BUILD and

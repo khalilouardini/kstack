@@ -1,6 +1,6 @@
 ---
 name: land
-version: 0.3.0
+version: 0.4.0
 description: Land an agent session's work safely — dedicated branch, concurrent-session guards re-run before every commit, the repo's own lint and test gates from .agents/stack.yml, atomic commits, then one PR. Stops at the PR; merging is a human decision. Use when asked to "land this", "commit and push", "open a PR", "ship it", or "/land". (kstack)
 ---
 
@@ -9,7 +9,14 @@ description: Land an agent session's work safely — dedicated branch, concurren
 ## When to invoke
 
 Work is done in the working tree and needs to become a reviewable PR. Invoke as
-`/land` (or `/land <type>/<name>` to name the branch yourself).
+`/land [<type>/<name>] [--accept-graph-update <PR#>]...`.
+
+For Linear-linked implementation, before commits/pushes follow
+`tools/linear/linear-roadmap/references/publication-gate.md` from the physical
+stack root. Check the linked projects' complete graphs on freshly fetched main;
+block publication gaps unless this invocation explicitly accepts the verified
+pending graph PR. Graph-only repair PRs have the contract's bounded exception;
+mixed implementation changes do not. This does not relax any land gate.
 
 This skill assumes **other agent sessions may be sharing this working directory
 and the machine's global state right now**. Most of its steps exist for that

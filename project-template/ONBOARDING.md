@@ -235,6 +235,14 @@ its required source pin is checked against the physical installed stack HEAD. Gr
 executable issue maps to one persistent session. `/next` reads indexed conditions
 and checks live evidence. `/wave` retains its current human plan checkpoint.
 
+Each project's Markdown graph must include all its Linear tickets on main.
+Linear-roadmap compares complete live membership and opens a graph update PR if
+coverage is missing. Next/wave, dispatch and later implementation transitions
+wait for that update to merge. An explicit --accept-graph-update <PR#> uses the
+validated pending graph for one invocation; wave build requires the flag again.
+This gate also applies when no local index has been adopted; a local-only diagram
+cannot provide publication evidence.
+
 The human maintainer manually publishes/links the shared team-owned Linear contract
 under the workspace rules and verifies read-back; the roadmap skill never writes it. Keep
 each pilot document with its project. Publishing a graph does not execute it;

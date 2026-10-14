@@ -1364,6 +1364,61 @@ if (!Number.isInteger(concurrency) || concurrency < 1) return refuse('wave.revie
 if (!cfg.max_review_rounds) log('wave.max_review_rounds default: 3 (documented bounded review evidence)');
 if (!cfg.review_concurrency) log('wave.review_concurrency default: 1 (shared reviewer quota)');
 
+// Caller observations are required before selection/build; nodes recheck live
+// publication before writes. Build never inherits plan-time bypass flags.
+const graphFlag='--accept-graph-update';
+const graphTokens=args.stage==='plan' ? (args.selection || []) : (args.graph_update_flags || []);
+if (!Array.isArray(graphTokens)) return refuse('graph update flags must be argument tokens');
+const graphFlags=[];
+const graphUpdates=new Map();
+for (let i=0;i<graphTokens.length;i++) {
+  if (graphTokens[i]!==graphFlag) {
+    if (args.stage==='build') return refuse('graph_update_flags accepts only --accept-graph-update pairs');
+    continue;
+  }
+  const value=graphTokens[++i];
+  if (value===undefined || String(value).startsWith('--'))
+    return refuse(`${graphFlag} "<missing>": requires a positive PR number`);
+  if (!/^[1-9][0-9]*$/.test(value) || !Number.isSafeInteger(Number(value)))
+    return refuse(`${graphFlag} ${JSON.stringify(value)}: requires a positive PR number`);
+  graphFlags.push(graphFlag,value);
+  const number=Number(value);
+  if (graphUpdates.has(number)) continue;
+  const pr=Array.isArray(args.accepted_graph_updates) ? args.accepted_graph_updates.find(p=>p.number===number) : null;
+  if (!pr || pr.state!=='OPEN' || pr.base!=='main' || pr.coverage_exit!==0 ||
+      !/^[0-9a-f]{40}$/.test(pr.head_sha || '') ||
+      typeof pr.url!=='string' || !pr.url || !Array.isArray(pr.project_ids) || !pr.project_ids.length)
+    return refuse(`${graphFlag} ${JSON.stringify(value)}: missing verified OPEN graph-update coverage`);
+  graphUpdates.set(number,pr);
+}
+const publication=args.graph_publication;
+if (!publication || !/^[0-9a-f]{40}$/.test(publication.main_sha || '') ||
+    typeof publication.checked_at!=='string' || !/^\d{4}-\d{2}-\d{2}T.*Z$/.test(publication.checked_at) ||
+    !Array.isArray(publication.projects) || !publication.projects.length)
+  return refuse('graph publication: fresh main and complete project coverage evidence required');
+const projectUUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+const coveredProjects=new Set();
+for (const p of publication.projects) {
+  if (!p || typeof p.project_id!=='string' || !projectUUID.test(p.project_id) || coveredProjects.has(p.project_id) ||
+      typeof p.project_name!=='string' || !p.project_name ||
+      typeof p.view_path!=='string' || !p.view_path || p.view_path.startsWith('/') || p.view_path.split('/').includes('..'))
+    return refuse('graph publication: invalid or duplicate project evidence');
+  coveredProjects.add(p.project_id);
+  if (p.state==='CURRENT') continue;
+  const pr=graphUpdates.get(p.pr_number);
+  if (p.state!=='ACCEPTED_UPDATE' || !pr || p.head_sha!==pr.head_sha || !pr.project_ids.includes(p.project_id))
+    return refuse(`graph publication: ${p.project_name} is ${p.state || 'UNKNOWN'}; merge its graph update or explicitly accept its verified PR`);
+}
+const publicationCovers=track => publication.projects.filter(p=>
+  p.project_id===track.project || p.project_name===track.project).length===1;
+const graphPrompt=`Before selection or execution, recheck the canonical graph publication gate
+against fresh main and the complete live Linear project ticket lists.
+Explicit graph bypass tokens from THIS invocation: ${JSON.stringify(graphFlags)}.
+Forward only these tokens to composed dispatch/land/review-comments procedures.
+Do not inherit a bypass from an earlier plan or approval. Re-fetch accepted PR
+heads and validate their full graphs; stop before writes if evidence changed or
+coverage is incomplete. Other scope, dependency and approval gates still apply.\n`;
+
 if (args.stage === 'plan') {
   const accepted = new Map();
   const tokens = args.selection || [];
@@ -1387,10 +1442,11 @@ if (args.stage === 'plan') {
     accepted.set(number,pr);
   }
   phase('Select');
-  const selected = await call('A1 select', `${read(args.paths.next, 'selection is read-only; no adaptation')}
+  const selected = await call('A1 select', `${graphPrompt}${read(args.paths.next, 'selection is read-only; no adaptation')}
 Run /next with argument tokens ${JSON.stringify(args.selection)} in parallel mode.
 Pass every token unchanged, including repeated --accept-overlap flags and values;
 /next owns their validation and deduplication.
+Also preserve every --accept-graph-update occurrence and apply its publication gate.
 PLAN_ONLY candidates must go in sequenced with the unmet build condition and source,
 never tracks. They do not count toward N and must not reach --approve all.
 Return all implementation-eligible tracks, sequenced and already_active entries. TRACK branch/worktree are
@@ -1402,6 +1458,10 @@ proposals only. Select no more than requested; explicitly report every excluded 
   if (!selected) { record.stop_reason='A1 returned no record'; record.evidence=[record.stop_reason]; return record; }
   for (const id of [...selected.sequenced, ...selected.already_active]) log(`A1 skipped: ${id}`);
   if (!selected.tracks.length) { record.state='EMPTY'; return record; }
+  if (selected.tracks.some(t=>!publicationCovers(t))) {
+    record.stop_reason='graph publication: a selected track has no unambiguous covered project';
+    record.evidence=[record.stop_reason]; return record;
+  }
   if (new Set(selected.tracks.map(t=>t.issue_id)).size !== selected.tracks.length) {
     record.stop_reason='A1 returned duplicate issue ids'; record.evidence=[record.stop_reason]; return record;
   }
@@ -1417,7 +1477,7 @@ config keys, paths, marker comments. Return literals with files, participating i
       record.evidence=['A2 found shared literals',JSON.stringify(scan.literals)];
       log(record.stop_reason); return record;
     }
-    record.contract=await call('A3 contract', `${read(args.paths.wave, 'contract preparation only')}
+    record.contract=await call('A3 contract', `${graphPrompt}${read(args.paths.wave, 'contract preparation only')}
 ${read(args.paths.land, 'headless land returns STOPPED instead of waiting')}
 In its own dedicated branch and worktree, write ${cfg.contract_dir}/${args.wave_id}.json
 as the JSON list of {literal, files} from ${JSON.stringify(scan.literals)} plus a
@@ -1461,8 +1521,8 @@ rebases onto the default branch and re-runs the gates before its merge. This is 
 record these future build actions as risks; do not rebase during A4.
 No intersection means no overlap risk or rebase instruction for this track.
 ` : '';
-    const p=await call(`A4 plan ${t.issue_id}`, `${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
-Dispatch exact issue ${t.issue_id} with --plan-only. Proposed track: ${JSON.stringify(t)}.
+    const p=await call(`A4 plan ${t.issue_id}`, `${graphPrompt}${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
+Dispatch exact issue ${t.issue_id} with --plan-only ${graphFlags.join(' ')}. Proposed track: ${JSON.stringify(t)}.
 Contract: ${JSON.stringify(record.contract)}. Return criteria citations, files, tests,
 risks, status read-back and verified absolute worktree. No implementation permission.`, schemas.PLAN, 'Plan');
     if (!p || p.issue_id !== t.issue_id || !p.worktree.startsWith('/') || !p.branch) return stoppedPlan(t,'A4 missing or wrong issue record');
@@ -1487,6 +1547,7 @@ const ids=args.approve === 'all' ? a.plans.filter(p=>p.state==='PLANNED').map(p=
 if (!Array.isArray(ids) || !ids.length || ids.some(id=>!a.plans.some(p=>p.issue_id===id && p.state==='PLANNED')))
   return refuse('approve must name existing PLANNED issues, or all');
 const approved=a.tracks.filter(t=>ids.includes(t.issue_id));
+if (approved.some(t=>!publicationCovers(t))) return refuse('graph publication: an approved track has no unambiguous covered project');
 const report={state:'COMPLETE',run_ids:[a.run_id,args.run_id],wave_id:a.wave_id,
   approved:ids,tracks:[],seam_check:{state:'NOT_RUN',table:[],reason:'A2 found no shared literals'},
   open_questions:[],unverified_questions:[],stop_reason:null,evidence:[]};
@@ -1494,7 +1555,7 @@ for (const t of a.tracks) if (!ids.includes(t.issue_id)) log(`${t.issue_id}: ski
 phase('Build');
 const built=await pipeline(approved, async (_prev,t) => {
   const plan=a.plans.find(p=>p.issue_id===t.issue_id);
-  const r=await call(`B1 build ${t.issue_id}`, `${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
+  const r=await call(`B1 build ${t.issue_id}`, `${graphPrompt}${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
 ${read(args.paths.land, 'headless land returns STOPPED with evidence instead of waiting')}
 Human approval: ${JSON.stringify(ids)} for wave ${a.wave_id}. Approved plan: ${JSON.stringify(plan)}.
 Use the existing dispatch worktree ${t.worktree}, branch ${t.branch}. Read back the

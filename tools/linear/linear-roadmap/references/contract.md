@@ -36,6 +36,17 @@ human decisions. A matching pin proves source identity, not human PR approval.
 bytes, including uncommitted drafts. This digest is the revision `/next` cites.
 Plain `validate`/`render` are structural draft tools and do not check the index pin.
 
+## Publication before execution
+
+The [publication gate](publication-gate.md) adds a fresh-main ticket coverage
+check to roadmap and all Linear-linked execution transitions. Local indexed
+validity is not proof that a graph is published. Missing/incomplete project
+views or manifest membership require a graph update PR; execution waits for its
+coverage on main or an explicit --accept-graph-update PR under that contract.
+The bypass uses the pending validated graph and preserves all source, scope,
+condition and approval checks. This Git PR step is separate from publishing a
+Linear document, which remains the human maintainer's manual action below.
+
 ## Manifest fields
 
 - `schema_version`: 1; `title`: required display title.

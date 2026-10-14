@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.2.0
+version: 0.3.0
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -12,7 +12,7 @@ An existing, approved Linear issue is ready to be picked up by Claude or Codex.
 Invoke as:
 
 ```text
-/dispatch-implementation <ISSUE-ID> [--executor claude|codex] [--model <name>] [--plan-only]
+/dispatch-implementation <ISSUE-ID> [--executor claude|codex] [--model <name>] [--plan-only] [--accept-graph-update <PR#>]...
 ```
 
 The exact issue identifier is required. Invoking this skill is explicit authorization
@@ -43,7 +43,16 @@ and read-back remain mandatory; a second approval prompt for that one row is not
 
 ## 1. Resolve the issue and prove it is startable
 
-Before any git write:
+Before any git or tracker write, follow the canonical
+`tools/linear/linear-roadmap/references/publication-gate.md` from the physical
+stack root. Check the issue's entire project's graph on freshly fetched main,
+including resumed work and --plan-only. UPDATE_REQUIRED/UNKNOWN stops dispatch
+before a workspace or status change. Accept repeatable --accept-graph-update
+only under that contract and report the accepted PR/head and main SHA. Forward
+explicit flags to later build/land; each transition rechecks them. A prior plan
+or wave approval does not supply the publication bypass.
+
+Then:
 
 1. Fetch the exact issue with relations and its project/milestone fields.
 2. List the team's issue statuses and resolve their ids. Judge lifecycle by status

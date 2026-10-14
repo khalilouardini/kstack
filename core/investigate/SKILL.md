@@ -1,6 +1,6 @@
 ---
 name: investigate
-version: 0.1.0
+version: 0.2.0
 description: Debug a failure by finding its root cause before any fix: reproduce, gather evidence, write a hypothesis ledger with confidence, test the most falsifiable hypothesis first, then fix with a regression test that failed before it and passes after. Use when asked to "debug this", "fix this bug", "why is this broken", "investigate this error", or "root cause analysis". Proactively suggest when the user reports a stack trace, a 500, unexpected behavior, or "it was working yesterday". (kstack)
 ---
 
@@ -177,6 +177,14 @@ their answer. Three strikes is a hard stop, not a suggestion to try harder.
 ## Phase 5 — Fix
 
 Only now. Only the confirmed root cause.
+
+For a bug linked to a Linear project, before product edits follow
+`tools/linear/linear-roadmap/references/publication-gate.md` from the physical
+stack root. Check that project's complete graph on main; gaps block the fix
+unless this invocation explicitly supplies --accept-graph-update <PR#> under
+that contract. Read-only investigation and failing reproductions remain allowed.
+Forward explicit flags to any land invocation. This bypass does not waive root
+cause confirmation, scope or regression proof.
 
 1. **Fix the cause, not the symptom.** The smallest change that eliminates the
    actual problem.

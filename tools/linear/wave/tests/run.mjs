@@ -30,6 +30,7 @@ function validate(value, schema, where='record') {
 async function run(stage, mutate=()=>{}, source=executable) {
   const f=clone(fixture);
   const args={stage,repo_root:'/tmp/repo',default_branch:'origin/main',gates:{lint:'lint',test:'test'},identities:{maintainer:'human',reviewer:'review',implementer:'impl'},stack_config:{},date:'2026-10-05',run_id:stage+'-run',wave_id:'wave-1',wave:{max_review_rounds:3,review_concurrency:1,contract_dir:'contracts'},selection:['any','--parallel','3'],paths:Object.fromEntries(['wave','next','dispatch','land','pr_loop','records','seam_check'].map(n=>[n,'/stack/'+n])),plan_record:f.plan_record,approve:'all'};
+  args.graph_publication={main_sha:'a'.repeat(40),checked_at:'2026-10-05T12:00:00Z',projects:[{project_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',project_name:'Project',view_path:'docs/project.md',state:'CURRENT'}]};
   mutate(f,args);
   const calls=[],events=[],logs=[];let runningReview=0,maxReview=0;
   const agent=async (prompt,opts)=>{
@@ -61,6 +62,51 @@ const overlapArgs=(_f,a)=>{a.selection=clone(overlapSelection);
   a.accepted_prs=[overlapPR(479,'file1.txt'),overlapPR(470,'file2.txt')];};
 const promptOverlaps=p=>JSON.parse(p.match(/Relevant accepted overlaps from caller preflight: (\[[^\n]*\])\./)[1]);
 const tests=[
+ async()=>{
+   for(const stage of ['plan','build']) for(const state of ['UPDATE_REQUIRED','UNKNOWN']){
+     const r=await run(stage,(_f,a)=>{a.graph_publication.projects[0].state=state;});
+     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+     assert.match(r.result.stop_reason,/graph publication/);
+   }
+   const absent=await run('plan',(_f,a)=>{delete a.graph_publication;});
+   assert.equal(absent.result.state,'STOPPED');assert.equal(absent.calls.length,0);
+ },
+ async()=>{
+   for(const value of ['0','-1','1.5','abc','#900',undefined]){
+     const r=await run('plan',(_f,a)=>{a.selection=['any','--parallel','3','--accept-graph-update',...(value===undefined?[]:[value])];});
+     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+     assert.match(r.result.stop_reason,/--accept-graph-update/);
+   }
+ },
+ async()=>{
+   const accept=a=>{
+     a.graph_publication.projects[0]={...a.graph_publication.projects[0],state:'ACCEPTED_UPDATE',pr_number:900,head_sha:'b'.repeat(40)};
+     a.accepted_graph_updates=[{number:900,url:'https://example.test/pull/900',state:'OPEN',base:'main',head_sha:'b'.repeat(40),coverage_exit:0,project_ids:['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']}];
+   };
+   const pending=await run('plan',(_f,a)=>{accept(a);});
+   assert.equal(pending.result.state,'STOPPED');assert.equal(pending.calls.length,0);
+   const flags=['--accept-graph-update','900','--accept-graph-update','900'];
+   const plan=await run('plan',(_f,a)=>{accept(a);a.selection.push(...flags);});
+   assert.equal(plan.result.state,'AWAITING_APPROVAL');
+   const selected=plan.calls.find(c=>c.label==='A1 select');
+   assert.deepEqual(JSON.parse(selected.prompt.match(/Run \/next with argument tokens (\[[^\n]*\])/)[1]).slice(-4),flags);
+   for(const call of plan.calls.filter(c=>c.label.startsWith('A4')))
+     assert.ok(call.prompt.includes('--plan-only --accept-graph-update 900 --accept-graph-update 900'));
+   const build=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;});
+   assert.equal(build.result.state,'COMPLETE');
+   assert.ok(build.calls.filter(c=>c.label.startsWith('B1')).every(c=>c.prompt.includes(JSON.stringify(flags))));
+   const inherited=await run('build',(_f,a)=>{accept(a);a.selection.push(...flags);});
+   assert.equal(inherited.result.state,'STOPPED');assert.equal(inherited.calls.length,0);
+   for(const delta of [{state:'CLOSED'},{state:'MERGED'},{base:'other'},{coverage_exit:1},{head_sha:'c'.repeat(40)},{project_ids:['unrelated']}]){
+     const r=await run('plan',(_f,a)=>{accept(a);a.selection.push(...flags);Object.assign(a.accepted_graph_updates[0],delta);});
+     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+   }
+ },
+ async()=>{
+   const r=await run('plan',f=>{f.responses['A1 select'].tracks[0].project='Uncovered';});
+   assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,1);
+   assert.match(r.result.stop_reason,/no unambiguous covered project/);
+ },
  async()=>{const r=await run('plan',f=>{f.responses['A1 select'].tracks=[];});assert.equal(r.result.state,'EMPTY');assert.equal(r.calls.length,1);},
  async()=>{const r=await run('plan');assert.equal(r.result.plans.length,3);assert.equal(r.result.state,'AWAITING_APPROVAL');assert.ok(!r.calls.some(c=>c.label.startsWith('A3')));},
  async()=>{const r=await run('plan',f=>{f.responses['A2 shared-literal scan'].literals=f.literals;});const end=r.events.indexOf('end A3 contract');assert.ok(end>=0);for(const t of fixture.tracks) assert.ok(r.events.indexOf('start A4 plan '+t.issue_id)>end);},

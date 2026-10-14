@@ -4,6 +4,16 @@ Status: experimental workflow specification, 2026-10-06. This is the reusable
 project-level template. It describes the requested controller; it does not install
 one or change `/wave`'s existing approval behavior.
 
+## Published graph admission
+
+Every Linear-backed project must have complete ticket coverage in its orchestration
+view on freshly fetched main before next/wave or another execution skill proceeds.
+Follow [the publication gate](tools/linear/linear-roadmap/references/publication-gate.md).
+Roadmap opens a graph update PR for gaps. Only explicitly supplied
+--accept-graph-update <PR#> permits using the validated pending graph; existing
+scope, source pin, dependency and approval gates still apply. Read-only analysis
+and graph-only repair publication remain possible while implementation is blocked.
+
 ## Central source and reusable preparation
 
 The canonical lifecycle is this root file. The structural contract is

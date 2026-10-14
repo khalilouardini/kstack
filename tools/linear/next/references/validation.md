@@ -7,6 +7,9 @@ an agent procedure; these are behavioral cases, not executable API tests.
 
 ## Frozen facts
 
+Unless a case says otherwise, every project has CURRENT graph coverage on
+freshly fetched main for all its tickets, including OUT and terminal tickets.
+
 Team `T` owns projects `P1` (Road to MVP-2), `P2` (MVP-2 stretch), and `P3`
 (MVP 2.3). Project `PX` belongs only to team `X`. All lookup and issue pages are
 complete unless a case says otherwise. The scope contract assigns tracker
@@ -123,3 +126,23 @@ tracker mutation, branch creation, or worktree creation as a successful skill ru
 These cases test the instructions' decisions, not a live connector's filtering or
 GraphQL schema. Live runs must still fetch complete state and verify IDs and team
 membership. Run `python3 bin/check-stack` for repository structural validation.
+
+## Published graph admission cases
+
+21. Main's P1 graph omits D although the local graph includes it: no P1 kickoff;
+    report UPDATE_REQUIRED and route to linear-roadmap for its repair PR. Terminal
+    or archived tickets missing from P1 also create a publication gap. Prose-only
+    mentions do not count as graph nodes.
+22. Main lacks the P1 file entirely, or Linear pagination/main fetch is incomplete:
+    block P1; an unavailable read is UNKNOWN. Legacy mode cannot bypass this check.
+23. Explicit --accept-graph-update 905 names an OPEN graph-only PR to main whose
+    stable validated head covers every P1 ticket: analyze that PR graph and allow
+    otherwise eligible P1 work, citing its head/main SHAs. Acceptance of --accept-overlap
+    905 alone does not satisfy publication. New code dependencies remain blocked.
+24. Bare/malformed graph flags, a closed/merged/nonexistent/unrelated PR, an invalid
+    graph, a source-pin mismatch or a PR still omitting D: refusal before selection.
+    A moving head requires a fresh graph/coverage check. Repeated valid flags are
+    validated/deduplicated but preserved through composed invocations.
+25. Planning used accepted #905, then wave build carries only --approve all while
+    main is still incomplete: block build. Passing --accept-graph-update 905 again
+    requires a fresh live PR/coverage check. A plan risk or prior flag is not consent.
