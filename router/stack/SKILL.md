@@ -1,6 +1,6 @@
 ---
 name: stack
-version: 0.8.0
+version: 0.8.1
 description: Router for the kstack skill suite — sends a request to the right skill across decide, build, review, land, and operate, and disambiguates the review and decide clusters. Use when asked to "route this", "which stack skill fits this?", "what should I use for this", or "/stack". Proactively suggest when a request matches a stack skill's purpose and the right one is not obvious. (kstack)
 ---
 
@@ -56,8 +56,9 @@ adapter, or read `roles/<role>.md` and follow it in-session.
   invoke `/linear-feature-intake`
 
 - "map this Linear project", "prepare an orchestration roadmap", "graph these
-  tickets", `/linear-roadmap <project|spec|prompt>` → invoke `/linear-roadmap`
-  (local artifacts and tracker reads; ticket creation stays with intake)
+  tickets", `/linear-roadmap <project|spec|prompt> [--publish]` → invoke `/linear-roadmap`
+  (local artifacts by default; preserve an explicit --publish for the graph PR;
+  tracker reads only, ticket creation stays with intake)
 
 ### Build
 
@@ -181,7 +182,7 @@ One axis: **which direction the work is moving**.
 | The backlog, **forward** | "what do I pick up next?" | `/next` — reads the tracker, recommends one issue or an independent batch with optional repeated `--project` filters, read-only |
 | Work already open, **backward** | "what do we do with everything still unfinished?" | `/triage` — scores open PRs, branches, worktrees; writes a proposal, executes nothing |
 | A decision already made, needing a record | "file it" | `/linear-feature-intake` — executes a verdict, never forms one |
-| A project needing an execution map | "graph these tickets" | `/linear-roadmap` — typed roadmap and Mermaid; checks main ticket coverage and opens or updates a graph repair PR when needed; tracker reads only |
+| A project needing an execution map | "graph these tickets" | `/linear-roadmap` — local typed roadmap and Mermaid; --publish explicitly opens/updates its graph PR; tracker reads only |
 
 Two properties worth preserving when you choose:
 

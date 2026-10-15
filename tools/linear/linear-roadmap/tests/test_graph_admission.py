@@ -80,6 +80,54 @@ class AdmissionTests(unittest.TestCase):
                                    'rationale': 'Existing fixture contradicts the accepted behavior; no product boundary changes'}]
         return graph
 
+    def publish(self, graph):
+        (self.repo / 'orchestration/graph.json').write_text(json.dumps(graph))
+        (self.repo / 'docs/project.md').write_text('```mermaid\n' + API['GRAPH']['render'](graph) + '```\n')
+        self.git('add', '.')
+        self.git('commit', '-m', 'refresh roadmap')
+        self.sha = self.git('rev-parse', 'main')
+        self.snapshot['main_sha'] = self.sha
+
+    def test_unrelated_graph_updates_preserve_candidate_constraints(self):
+        before = self.audit()
+        graph = copy.deepcopy(self.base)
+        unrelated = {**graph['nodes'][2], 'id': 'unrelated', 'issue_ref': REPAIR_ID,
+                     'title': 'Independent maintenance'}
+        graph['nodes'].append(unrelated)
+        graph['title'] = 'Roadmap with another ticket'
+        self.prove(unrelated, graph)
+        self.publish(graph)
+        after = self.audit()
+        self.assertNotEqual(before['main_sha'], after['main_sha'])
+        self.assertNotEqual(before['graph_digest'], after['graph_digest'])
+        self.assertEqual(before['candidates'][0]['closure_graph_digest'],
+                         after['candidates'][0]['closure_graph_digest'])
+        self.assertEqual(before['candidates'][0]['closure_evidence_digest'],
+                         after['candidates'][0]['closure_evidence_digest'])
+
+    def test_relevant_future_merge_gates_and_policy_change_candidate_constraints(self):
+        before = self.audit()['candidates'][0]['closure_graph_digest']
+        for change in ('human', 'dependency', 'policy', 'project'):
+            with self.subTest(change=change):
+                graph = copy.deepcopy(self.base)
+                if change == 'human':
+                    next(n for n in graph['nodes'] if n['id'] == 'merge')['acceptance'] += ['New required decision']
+                elif change == 'dependency':
+                    next(e for e in graph['edges'] if e['to'] == 'api')['source'] = 'Changed prerequisite authority'
+                elif change == 'policy':
+                    graph['policy']['max_plan_revisions'] += 1
+                else:
+                    graph['projects'][0]['scope_source'] = 'Changed product authority'
+                self.publish(graph)
+                for proof in self.request['nodes']:
+                    n = next(n for n in graph['nodes'] if n['id'] == proof['node_id'])
+                    proof['acceptance'] = copy.deepcopy(n['acceptance'])
+                    proof['prerequisites'] = [e for e in graph['edges'] if e['to'] == n['id']]
+                for issue in self.snapshot['projects'][0]['issues']:
+                    n = next(n for n in graph['nodes'] if n['issue_ref'] == issue['id'])
+                    issue['prerequisites'] = [e for e in graph['edges'] if e['to'] == n['id']]
+                self.assertNotEqual(before, self.audit()['candidates'][0]['closure_graph_digest'])
+
     def test_unrelated_addition_warns_without_blocking_mapped_work(self):
         self.snapshot['projects'][0]['issues'].append({'id': REPAIR_ID, 'identifier': 'T-474'})
         r = self.audit()

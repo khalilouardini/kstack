@@ -79,6 +79,16 @@ def ancestors(graph, roots):
     return found
 
 
+def closure_graph(graph, events, closure):
+    """Protect this unit's conditions, including future merge gates, not siblings."""
+    projects = {n['project'] for n in graph['nodes'] if n['id'] in closure}
+    return {'schema_version': graph['schema_version'], 'policy': graph['policy'],
+            'projects': sorted((p for p in graph['projects'] if p['key'] in projects), key=lambda p: p['key']),
+            'nodes': sorted((n for n in graph['nodes'] if n['id'] in closure), key=lambda n: n['id']),
+            'edges': sorted((e for e in graph['edges'] if (e['to'], e['to_event']) in events),
+                            key=lambda e: json.dumps(e, sort_keys=True))}
+
+
 def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
     coverage = COVERAGE['check'](repo, ref, snapshot)
     sha = coverage['sha']
@@ -189,6 +199,7 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
                            'state': 'BLOCKED' if unmet else 'ELIGIBLE',
                            'mode': 'LOCAL_RECONCILIATION' if origin else 'PUBLISHED',
                            'node_id': node['id'], 'closure': sorted(closure),
+                           'closure_graph_digest': digest(closure_graph(graph, closure_events, closure)),
                            'closure_evidence_digest': digest({
                                'nodes': [{'node_id': key,
                                           'scope': {field: proofs[key]['scope'][field] for field in ('path', 'line', 'quote')},

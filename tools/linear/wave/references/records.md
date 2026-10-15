@@ -15,6 +15,14 @@ evidence per plan.
 Run ids are caller-supplied Workflow invocation ids; the tool's actual run id is
 attached by the invoking skill after return if the tool allocates it itself.
 
+RUN_A.evidence retains full graph publication/admission observations. A build
+matches each approved unit's `closure_graph_digest` and `closure_evidence_digest`
+against fresh reports, rather than requiring unchanged main/full-graph revisions.
+Wave membership is fixed by RUN_A; unrelated additions never enroll new tracks.
+A changed or unauditable track produces a STOPPED TRACK_RESULT while independent
+siblings continue. If all approved tracks fail admission, return a STOPPED report.
+Older records without candidate graph digests require a new plan audit.
+
 Accepted-overlap flags use transient caller `args.accepted_prs` snapshots, not
 new record fields. A4 carries relevant overlaps and current PR states in the
 existing PLAN.risks strings; Run B receives them in the approved plan. SELECT

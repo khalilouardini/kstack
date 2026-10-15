@@ -10,6 +10,12 @@ of caller evidence; there is no global hook.
 
 ## Fresh baseline and project coverage
 
+`/linear-roadmap` refreshes local JSON/Markdown/scope artifacts by default. It
+does not commit, push or open/update a PR unless invoked with `--publish`.
+Local mapping and PR publication are separate from execution admission below.
+Keep a running wave's selected tickets, approved plans and saved evidence intact.
+New tickets wait for a later selection; local refreshes never enroll them in a wave.
+
 On each invocation, resolve the authoritative repository, project UUID and graph
 path without ambiguity. Fetch literal `main`, record its exact SHA and UTC check
 time, and inspect Git blobs at that SHA. Do not use an unmerged working graph or
@@ -83,7 +89,9 @@ also require full `description`, `url`, `updated_at`, `relations_complete: true`
 and `prerequisites` containing all incoming manifest edge objects in manifest
 order, after checking both prose and native relations. Do not use truncated list
 responses as full bodies. Evidence expires after one hour and must be refreshed
-before each transition. A changed SHA or relevant evidence requires reanalysis.
+before each transition. A changed SHA requires a fresh audit. Only changed
+relevant conditions/evidence invalidate a track's approval; unrelated graph
+changes or commits do not. Keep old and new SHA observations in the audit trail.
 
 The request contains `selected` issue UUIDs, `transition` (plan/build/merge),
 `nodes` and `events`. Each closure node proof has `node_id`, exact `owner` and
@@ -156,7 +164,7 @@ A graph-only PR is exempt from its own execution gate so it can repair it; a
 mixed implementation PR may use only verified existing scope/local reconciliation.
 Never merge automatically or write Linear through this policy.
 
-Linear-roadmap reports coverage warnings and may publish routine bookkeeping;
+Linear-roadmap reports coverage warnings and publishes only with `--publish`;
 it does not label the whole project blocked merely because coverage is below
 100%. Reuse a matching graph PR rather than opening duplicates. Report exactly
 which candidates or conditions require reviewed publication, including main SHA,
@@ -204,8 +212,13 @@ project/issue identity, main/graph pins, closure evidence and the bounded delta.
 Persist both coverage and admission reports in existing record.evidence; do not
 add RUN_A/WAVE_REPORT schema fields. A1 rechecks before selection, A3/A4 before
 writes, B1 before implementation and B3 before implementer fixes. Run B obtains
-fresh reports and compares effective graph and relevant closure digests with Run
-A before building. Coverage counts and routine tracker timestamp/status changes alone do not
+fresh reports and compares each candidate's `closure_graph_digest` and relevant
+`closure_evidence_digest` with Run A before building. The graph digest covers the
+selected unit, its containers, prerequisite events/nodes (including future merge
+gates), their project scope/authorization and execution policy. Unrelated nodes,
+edges, projects and graph display title are excluded. Full graph digests and
+SHAs remain audit observations, not whole-wave approval locks. Coverage counts
+and routine tracker timestamp/status changes alone do not
 invalidate approval; full fresh observations remain in the audit record. Relevant
 digests cover scope path/line/quote, node identity, ownership, acceptance, incoming
 prerequisites, issue id/identifier/description/url/prerequisites, and current event
@@ -213,7 +226,12 @@ node_id/event/state. Event facts are sorted by node_id/event before hashing.
 Agent-written scope rationales and proof/event source explanations remain required
 and fully retained in evidence.request but are excluded from the factual digest;
 rewording them alone cannot invalidate approval. The calling skills still verify
-source truth on each transition. Future gate definitions stay protected by the
-graph digest. A changed coverage count alone does not invalidate approval;
-a changed graph, relevant closure or SHA requires reanalysis and plan approval.
+source truth on each transition. Future merge gate definitions stay protected
+by the candidate graph digest; release conditions are verified at release.
+Changed relevant constraints or evidence require reanalysis and plan approval
+for that track. A missing/blocked/changed candidate stops only that track;
+independently verified siblings continue. If no approved track is eligible,
+return STOPPED with all reasons. Do not replace stopped tracks with new tickets.
+Older Run A records lacking candidate graph digests need a new plan audit;
+never substitute the full graph digest or invent missing evidence.
 These caller observations are evidence, not durable human approval records.

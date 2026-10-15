@@ -1383,7 +1383,7 @@ const parsePrFlags=(tokens, flag, only=false) => {
   return {flags,numbers};
 };
 // Caller observations are required before selection/build; nodes compare live
-// SHAs with these pins before writes. Build never inherits plan-time flags.
+// scoped conditions with these observations before writes. Build never inherits flags.
 const graphFlag='--accept-graph-update';
 const graphTokens=args.stage==='plan' ? (args.selection || []) : (args.graph_update_flags || []);
 const parsedGraph=parsePrFlags(graphTokens,graphFlag,args.stage==='build');
@@ -1446,20 +1446,21 @@ const validAdmissionReports=(reports,pins,date) => Array.isArray(reports) ? repo
 ) : [];
 // Incomplete unrelated reports and plan-only reports cannot shadow eligible builds.
 const validAdmissions=validAdmissionReports(admissions,publication,args.date);
-const candidateAdmission=track => {
+const candidateAdmission=(track,reports=validAdmissions,pins=publication,current=true) => {
   if (track.project===null) return {exempt:true};
-  const projects=publication.projects.filter(p=>p.project_id===track.project || p.project_name===track.project);
+  const projects=Array.isArray(pins?.projects) ? pins.projects.filter(p=>
+    p && (p.project_id===track.project || p.project_name===track.project)) : [];
   if (projects.length!==1 || projects[0].state==='UNKNOWN' ||
-      (projects[0].state==='ACCEPTED_UPDATE' && !graphUpdates.has(projects[0].pr_number))) return null;
-  const matches=validAdmissions.flatMap(report=>report.candidates.map(candidate=>({report,candidate})))
+      (current && projects[0].state==='ACCEPTED_UPDATE' && !graphUpdates.has(projects[0].pr_number))) return null;
+  const matches=reports.flatMap(report=>report.candidates.map(candidate=>({report,candidate})))
     .filter(({candidate:c})=>c && c.project_id===projects[0].project_id && c.identifier===track.issue_id);
   if (matches.length!==1) return null;
   const {report,candidate:c}=matches[0];
-  if (report.graph_sha!==(projects[0].state==='ACCEPTED_UPDATE' ? projects[0].head_sha : publication.main_sha) ||
+  if (report.graph_sha!==(projects[0].state==='ACCEPTED_UPDATE' ? projects[0].head_sha : pins.main_sha) ||
       report.transition!=='build' || c.state!=='ELIGIBLE' ||
       !['PUBLISHED','LOCAL_RECONCILIATION'].includes(c.mode) ||
       !Array.isArray(c.closure) || !c.closure.includes(c.node_id) ||
-      !shaDigest(c.closure_evidence_digest) || !Array.isArray(c.unmet) || c.unmet.length ||
+      !shaDigest(c.closure_graph_digest) || !shaDigest(c.closure_evidence_digest) || !Array.isArray(c.unmet) || c.unmet.length ||
       (c.mode==='LOCAL_RECONCILIATION' && !report.delta.added_nodes.some(n=>n.id===c.node_id && n.issue_ref===c.issue_id))) return null;
   return {report,candidate:c};
 };
@@ -1473,9 +1474,13 @@ Validated graph publication evidence: ${JSON.stringify(publication)}.
 Validated candidate admission reports: ${JSON.stringify(validAdmissions)}.
 Other missing/incomplete audits do not authorize their candidates; report them separately.
 Validated accepted PR snapshots: ${JSON.stringify([...graphUpdates.values()])}.
-Require live main SHA to equal the validated main_sha, and each accepted PR head
-SHA to equal its validated head_sha. If either moved, return STOPPED before any
-write and require fresh condition analysis/plan approval; never silently use a new head.
+Re-fetch main and accepted PR heads before writes. If a SHA moved, refresh the
+candidate audit and verify the exact accepted head's review. Compare this track's
+closure_graph_digest and closure_evidence_digest with the approved observations.
+Unrelated tickets, statuses, graph edits or main commits do not invalidate the plan.
+If its own scope, prerequisites, acceptance, human gates or policy changed, stop
+only the affected track before writes and repeat condition analysis/plan approval.
+Missing fresh evidence stops that track too. Never silently accept a changed condition.
 Explicit graph bypass tokens from THIS invocation: ${JSON.stringify(graphFlags)}.
 Forward only these tokens to composed dispatch/land/review-comments/pr-loop procedures.
 Do not inherit a bypass from an earlier plan or approval. Revalidate candidate eligibility
@@ -1607,39 +1612,41 @@ const ids=args.approve === 'all' ? a.plans.filter(p=>p.state==='PLANNED').map(p=
 if (!Array.isArray(ids) || !ids.length || ids.some(id=>!a.plans.some(p=>p.issue_id===id && p.state==='PLANNED')))
   return refuse('approve must name existing PLANNED issues, or all');
 const approved=a.tracks.filter(t=>ids.includes(t.issue_id));
-if (approved.some(t=>!candidateEligible(t))) return refuse('graph publication: an approved track has no unambiguous eligible candidate audit');
-// Run B must implement the graph used for Run A condition analysis, not a newer head.
+// Approval belongs to the selected mapped units and their conditions, not a
+// repository SHA or the whole project's membership. Isolate affected tracks.
 const priorEvidence=a.evidence?.find(e=>e.startsWith('Graph publication evidence: '));
 let priorPublication;
 try { priorPublication=priorEvidence && JSON.parse(priorEvidence.slice('Graph publication evidence: '.length)); }
 catch { return refuse('graph publication: invalid Run A SHA evidence'); }
-for (const t of approved.filter(t=>t.project!==null)) {
-  const now=publication.projects.find(p=>p.project_id===t.project || p.project_name===t.project);
-  const prior=Array.isArray(priorPublication?.projects) && priorPublication.projects.find(p=>p.project_id===now.project_id);
-  if (!prior || priorPublication.main_sha!==publication.main_sha ||
-      prior.pr_number!==now.pr_number || prior.head_sha!==now.head_sha)
-    return refuse(`graph publication: ${t.project} changed since Run A; repeat condition analysis and plan approval`);
-}
 let priorAdmissions;
 try { priorAdmissions=JSON.parse(a.evidence?.find(e=>e.startsWith('Graph admission evidence: '))?.slice('Graph admission evidence: '.length)); }
 catch { return refuse('graph admission: missing Run A candidate evidence'); }
 const priorDate=validUTC(priorPublication?.checked_at) ? priorPublication.checked_at.slice(0,10) : null;
 const validPriorAdmissions=validAdmissionReports(priorAdmissions,priorPublication,priorDate);
+const preflightStops=new Map();
 for (const t of approved.filter(t=>t.project!==null)) {
   const current=candidateAdmission(t);
-  const prior=validPriorAdmissions.flatMap(r=>r.candidates.map(c=>({r,c})))
-    .filter(({c})=>c && c.identifier===t.issue_id && c.project_id===current.candidate.project_id);
-  if (prior.length!==1 || prior[0].r.graph_digest!==current.report.graph_digest ||
-      prior[0].c.closure_evidence_digest!==current.candidate.closure_evidence_digest ||
-      prior[0].c.mode!==current.candidate.mode)
-    return refuse(`graph admission: ${t.issue_id} changed since Run A; repeat reconciliation and plan approval`);
+  const prior=candidateAdmission(t,validPriorAdmissions,priorPublication,false);
+  if (!current || !prior)
+    preflightStops.set(t.issue_id,`graph publication/admission: ${t.issue_id} has no unambiguous eligible candidate audit for both runs; repeat condition analysis and plan approval`);
+  else if (prior.candidate.issue_id!==current.candidate.issue_id ||
+      prior.candidate.project_id!==current.candidate.project_id ||
+      prior.candidate.closure_graph_digest!==current.candidate.closure_graph_digest ||
+      prior.candidate.closure_evidence_digest!==current.candidate.closure_evidence_digest ||
+      prior.candidate.mode!==current.candidate.mode)
+    preflightStops.set(t.issue_id,`graph admission: ${t.issue_id} changed since Run A; repeat reconciliation and plan approval`);
 }
+if (approved.every(t=>preflightStops.has(t.issue_id))) return refuse([...preflightStops.values()].join('; '));
 const report={state:'COMPLETE',run_ids:[a.run_id,args.run_id],wave_id:a.wave_id,
   approved:ids,tracks:[],seam_check:{state:'NOT_RUN',table:[],reason:'A2 found no shared literals'},
   open_questions:[],unverified_questions:[],stop_reason:null,evidence:[graphEvidence,admissionEvidence]};
 for (const t of a.tracks) if (!ids.includes(t.issue_id)) log(`${t.issue_id}: skipped; not approved`);
 phase('Build');
 const built=await pipeline(approved, async (_prev,t) => {
+  if (preflightStops.has(t.issue_id)) {
+    log(`${t.issue_id}: STOPPED ${preflightStops.get(t.issue_id)}`);
+    return stoppedBuild(t,preflightStops.get(t.issue_id));
+  }
   const plan=a.plans.find(p=>p.issue_id===t.issue_id);
   const r=await call(`B1 build ${t.issue_id}`, `${graphPrompt}${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
 ${read(args.paths.land, 'headless land returns STOPPED with evidence instead of waiting')}

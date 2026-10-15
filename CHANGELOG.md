@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+`/linear-roadmap` 0.6.0 refreshes local JSON, orchestration Markdown and scope
+files by default; `--publish` explicitly opens or updates the graph PR. Local
+mapping does not grant execution admission or alter a running wave's membership.
+`/wave` 0.6.0 compares per-candidate graph/evidence closure digests across plan
+and build instead of locking approval to the whole graph or main SHA. Unrelated
+graph/ticket/main changes preserve approval after a fresh audit; changed or
+missing relevant evidence stops only the affected track, not independent siblings.
+
 `/pr-loop` 0.6.0: `CLEAN` requires CI. After a finding-free review, step 3a
 reads the PR's checks at the reviewed head, waits up to `--ci-wait` minutes
 (default 30) for pending ones, and exits `BLOCKED` on a red or timed-out check

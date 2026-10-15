@@ -35,7 +35,7 @@ async function run(stage, mutate=()=>{}, source=executable) {
     transition:'build',base_digest:'sha256:'+'c'.repeat(64),graph_digest:'sha256:'+'c'.repeat(64),issue_evidence_digest:'sha256:'+'d'.repeat(64),
     evidence:{issues:{complete:true},request:{selected:['T-1','T-2','T-3']}},delta:{added_nodes:[],changed_edges:[]},
     candidates:fixture.tracks.map(t=>({issue_id:t.issue_id,identifier:t.issue_id,project_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      state:'ELIGIBLE',mode:'PUBLISHED',node_id:t.issue_id,closure:[t.issue_id],closure_evidence_digest:'sha256:'+'e'.repeat(64),unmet:[]}))}];
+      state:'ELIGIBLE',mode:'PUBLISHED',node_id:t.issue_id,closure:[t.issue_id],closure_graph_digest:'sha256:'+'f'.repeat(64),closure_evidence_digest:'sha256:'+'e'.repeat(64),unmet:[]}))}];
   const pinEvidence=()=>['Graph publication evidence: '+JSON.stringify(args.graph_publication),'Graph admission evidence: '+JSON.stringify(args.graph_admission)];
   args.plan_record.evidence=pinEvidence();
   mutate(f,args);
@@ -69,6 +69,38 @@ const overlapArgs=(_f,a)=>{a.selection=clone(overlapSelection);
   a.accepted_prs=[overlapPR(479,'file1.txt'),overlapPR(470,'file2.txt')];};
 const promptOverlaps=p=>JSON.parse(p.match(/Relevant accepted overlaps from caller preflight: (\[[^\n]*\])\./)[1]);
 const tests=[
+ async()=>{
+   const planned=await run('plan');
+   const built=await run('build',(_f,a)=>{
+     a.plan_record=planned.result;
+     a.graph_publication.main_sha='b'.repeat(40);
+     a.graph_publication.projects[0].state='UPDATE_REQUIRED';
+     a.graph_publication.projects[0].missing_manifest=['T-474'];
+     Object.assign(a.graph_admission[0],{main_sha:'b'.repeat(40),graph_sha:'b'.repeat(40),
+       base_digest:'sha256:'+'1'.repeat(64),graph_digest:'sha256:'+'1'.repeat(64)});
+   });
+   assert.equal(built.result.state,'COMPLETE');
+   assert.deepEqual(built.calls.filter(c=>c.label.startsWith('B1')).map(c=>c.label),
+     ['B1 build T-1','B1 build T-2','B1 build T-3']);
+   assert.ok(built.result.evidence.some(e=>e.includes('b'.repeat(40))));
+ },
+ async()=>{
+   for (const change of ['constraints','evidence','blocked','missing','unmapped']) {
+     const r=await run('build',(_f,a)=>{
+       const report=a.graph_admission[0],c=report.candidates[0];
+       if(change==='constraints') c.closure_graph_digest='sha256:'+'1'.repeat(64);
+       if(change==='evidence') c.closure_evidence_digest='sha256:'+'1'.repeat(64);
+       if(change==='blocked') {c.state='BLOCKED';c.unmet=[{node_id:'new-blocker',event:'merge',state:'UNKNOWN'}];}
+       if(change==='missing') delete c.closure_graph_digest;
+       if(change==='unmapped') report.candidates.shift();
+     });
+     assert.equal(r.result.state,'COMPLETE');
+     assert.equal(r.result.tracks[0].state,'STOPPED');
+     assert.deepEqual(r.calls.filter(c=>c.label.startsWith('B1')).map(c=>c.label),['B1 build T-2','B1 build T-3']);
+     assert.ok(r.result.tracks[0].evidence.length);
+     assert.equal(r.result.tracks[1].state,'CLEAN');
+   }
+ },
  async()=>{
    const planned=await run('plan',(_f,a)=>{
      a.graph_admission.push({...clone(a.graph_admission[0]),transition:'plan'});
@@ -105,7 +137,12 @@ const tests=[
        if(change==='digest') c.closure_evidence_digest='unknown';
        if(change==='phase') report.transition='plan';
      });
-     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,stage==='plan'?1:0);
+     if(stage==='plan' || change==='phase') {
+       assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,stage==='plan'?1:0);
+     } else {
+       assert.equal(r.result.state,'COMPLETE');assert.equal(r.result.tracks[0].state,'STOPPED');
+       assert.ok(!r.calls.some(c=>c.label.endsWith('T-1')));
+     }
    }
  },
  async()=>{
@@ -119,9 +156,10 @@ const tests=[
      assert.equal(r.result.state,stage==='plan'?'AWAITING_APPROVAL':'COMPLETE');
      assert.ok(r.result.evidence.some(e=>e.includes('LOCAL_RECONCILIATION')));
    }
-   const drift=await run('build',(_f,a)=>{local(a);a.graph_admission[0].graph_digest='sha256:'+'f'.repeat(64);});
-   assert.equal(drift.result.state,'STOPPED');assert.equal(drift.calls.length,0);
-   assert.match(drift.result.stop_reason,/repeat reconciliation/);
+   const drift=await run('build',(_f,a)=>{local(a);a.graph_admission[0].candidates[0].closure_graph_digest='sha256:'+'1'.repeat(64);});
+   assert.equal(drift.result.state,'COMPLETE');assert.equal(drift.result.tracks[0].state,'STOPPED');
+   assert.ok(!drift.calls.some(c=>c.label.endsWith('T-1')));
+   assert.match(drift.result.tracks[0].result.stop_reason,/repeat reconciliation/);
    const dep=await run('plan',(_f,a)=>{local(a);a.graph_admission[0].delta.changed_edges=[{}];});
    assert.equal(dep.result.state,'STOPPED');assert.equal(dep.calls.length,1);
  },
@@ -184,11 +222,11 @@ const tests=[
    const drift=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;
      a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify({...a.graph_publication,main_sha:'d'.repeat(40)})];});
    assert.equal(drift.result.state,'STOPPED');assert.equal(drift.calls.length,0);
-   assert.match(drift.result.stop_reason,/changed since Run A/);
+   assert.match(drift.result.stop_reason,/missing Run A candidate evidence/);
    const movedHead=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;
      a.graph_publication.projects[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].reviewed_head_sha='c'.repeat(40);a.graph_admission[0].graph_sha='c'.repeat(40);});
-   assert.equal(movedHead.result.state,'STOPPED');assert.equal(movedHead.calls.length,0);
-   assert.match(movedHead.result.stop_reason,/changed since Run A/);
+   assert.equal(movedHead.result.state,'COMPLETE',
+     'a freshly reviewed accepted head with unchanged selected conditions preserves approval');
    const inherited=await run('build',(_f,a)=>{accept(a);a.selection.push(...flags);});
    assert.equal(inherited.result.state,'STOPPED');assert.equal(inherited.calls.length,0);
    const warning=await run('plan',(_f,a)=>{accept(a);a.selection.push(...flags);
@@ -239,7 +277,7 @@ const tests=[
      assert.match(r.result.stop_reason,/fresh main/);
    }
    const r=await run('plan');
-   assert.ok(r.calls.filter(c=>/^A[134]/.test(c.label)).every(c=>c.prompt.includes('a'.repeat(40))&&c.prompt.includes('Require live main SHA')));
+   assert.ok(r.calls.filter(c=>/^A[134]/.test(c.label)).every(c=>c.prompt.includes('a'.repeat(40))&&c.prompt.includes('Re-fetch main')));
    assert.ok(r.result.evidence.some(e=>e.startsWith('Graph publication evidence: ')));
  },
  async()=>{const r=await run('plan',f=>{f.responses['A1 select'].tracks=[];});assert.equal(r.result.state,'EMPTY');assert.equal(r.calls.length,1);},

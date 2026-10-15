@@ -247,6 +247,13 @@ validated reviewed pending graph for one invocation; build requires the flag aga
 Legacy graphs still need cited closure audits and reviewed mapping repairs.
 See the canonical publication-gate contract in the physical KStack checkout.
 
+Use `/linear-roadmap <project>` for local JSON, orchestration Markdown and scope
+updates; add `--publish` explicitly to open or update the graph PR. Updating the
+map leaves existing wave membership and approved plans intact. Revalidation uses
+each mapped track's graph/evidence closure; unrelated ticket, graph or main
+changes do not interrupt it. Changed relevant conditions stop only affected tracks
+while independent audited siblings continue. Local drafts alone grant no admission.
+
 The human maintainer manually publishes/links the shared team-owned Linear contract
 under the workspace rules and verifies read-back; the roadmap skill never writes it. Keep
 each pilot document with its project. Publishing a graph does not execute it;
