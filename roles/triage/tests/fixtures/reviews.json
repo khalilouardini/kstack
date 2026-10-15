@@ -532,7 +532,8 @@
       "expected": {
         "loop": "UNKNOWN",
         "review": "no P0\u2013P2",
-        "merge_gate": true
+        "merge_gate": true,
+        "ledger_status": "unavailable"
       }
     },
     {
@@ -751,6 +752,185 @@
       "expected": {
         "ci": "pending",
         "merge_gate": false
+      }
+    },
+    {
+      "name": "requested-changes current summary P1",
+      "facts": {
+        "reviews": [
+          {
+            "nodes": [
+              {
+                "author": "review-agent",
+                "state": "COMMENTED",
+                "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "body": "Review performed by Codex\n<!-- codex-review head:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->",
+                "findings": []
+              },
+              {
+                "author": "review-agent",
+                "state": "CHANGES_REQUESTED",
+                "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "body": "Review performed by Codex\n<!-- codex-review head:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->",
+                "findings": [
+                  "P1"
+                ]
+              }
+            ],
+            "after": null,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": null
+            }
+          }
+        ]
+      },
+      "expected": {
+        "review": "findings present",
+        "merge_gate": false
+      }
+    },
+    {
+      "name": "unclassified non-null priority retains evidence hold",
+      "facts": {
+        "threads": [
+          {
+            "nodes": [
+              {
+                "id": "thread-1",
+                "title": "Synthetic finding",
+                "priority": "p1",
+                "resolved": false,
+                "outdated": false,
+                "replies": [
+                  {
+                    "nodes": [
+                      {
+                        "author": "review-agent",
+                        "state": "COMMENTED",
+                        "body": "Fixed in commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                      },
+                      {
+                        "author": "implementation-agent",
+                        "state": "COMMENTED",
+                        "body": "Fixed in commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                      }
+                    ],
+                    "after": null,
+                    "pageInfo": {
+                      "hasNextPage": false,
+                      "endCursor": null
+                    }
+                  }
+                ]
+              }
+            ],
+            "after": null,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": null
+            }
+          }
+        ]
+      },
+      "expected": {
+        "counts": {
+          "unknown": 1
+        },
+        "merge_gate": false
+      }
+    },
+    {
+      "name": "same-head earlier P1 survives later clean summary",
+      "facts": {
+        "reviews": [
+          {
+            "nodes": [
+              {
+                "author": "review-agent",
+                "state": "COMMENTED",
+                "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "body": "Review performed by Codex\n<!-- codex-review head:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->",
+                "findings": [
+                  "P1"
+                ]
+              },
+              {
+                "author": "review-agent",
+                "state": "COMMENTED",
+                "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "body": "Review performed by Codex\n<!-- codex-review head:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->",
+                "findings": []
+              }
+            ],
+            "after": null,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": null
+            }
+          }
+        ]
+      },
+      "expected": {
+        "review": "no P0\u2013P2",
+        "earlier_same_head_findings": [
+          "P1"
+        ],
+        "merge_gate": false
+      }
+    },
+    {
+      "name": "conversation review with explicit null commit",
+      "facts": {
+        "reviews": [
+          {
+            "nodes": [
+              {
+                "author": "review-agent",
+                "state": "COMMENTED",
+                "commit": null,
+                "body": "Review performed by Codex\n<!-- codex-review head:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->",
+                "findings": [],
+                "surface": "conversation"
+              }
+            ],
+            "after": null,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": null
+            }
+          }
+        ]
+      },
+      "expected": {
+        "review": "no P0\u2013P2",
+        "merge_gate": true
+      }
+    },
+    {
+      "name": "consistent snapshots of wrong head",
+      "facts": {
+        "snapshots": [
+          "cccccccccccccccccccccccccccccccccccccccc",
+          "cccccccccccccccccccccccccccccccccccccccc",
+          "cccccccccccccccccccccccccccccccccccccccc"
+        ]
+      },
+      "expected": {
+        "stable": false,
+        "review": "unknown",
+        "merge_gate": false
+      }
+    },
+    {
+      "name": "available ledger does not invent loop verdict",
+      "facts": {
+        "ledger_available": true
+      },
+      "expected": {
+        "ledger_status": "available",
+        "loop": "UNKNOWN",
+        "merge_gate": true
       }
     }
   ]

@@ -130,7 +130,18 @@
         "selected": [
           11,
           14
-        ]
+        ],
+        "selection_evidence": {
+          "14": [
+            {
+              "issue": "container-a",
+              "project": "11111111-1111-4111-8111-111111111111",
+              "team": "team-a",
+              "state": "Done",
+              "container": true
+            }
+          ]
+        }
       },
       "error": false
     },
@@ -146,9 +157,8 @@
           14
         ],
         "excluded": {
-          "project-only": 2,
-          "label-only": 1,
-          "both": 1
+          "project": 2,
+          "label-only or both": 2
         }
       },
       "error": false

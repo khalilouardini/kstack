@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+`/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
+retains contradictory same-head findings and unknown severities as holds, and
+reports ledger/container provenance. Shared project-resolution and complete-file
+references are now consumed by both `/next` 0.7.1 and triage. CI discovery names
+permission-aware policy/workflow fallbacks and caches base evidence; labels
+prefilter costly project mapping with honest exclusion counts. Missing audit
+configuration has an explicit reporting-only exception in CONVENTIONS.md.
+
+
 `/triage` 0.3.0 adds repeatable Linear project filters (union, intersected with
 all requested GitHub labels) and evidence for every PR disposition: intent,
 state/head/base, CI coverage, posted loop versus derived review status, and a

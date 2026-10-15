@@ -1,6 +1,6 @@
 ---
 name: triage
-version: 0.3.0
+version: 0.3.1
 description: Score open work against scope and report PR intent, merge/CI, review-loop evidence and unresolved threads. Default PR-only; optional repeated project and label filters. Read-only proposal; never reviews, merges or closes. Use when asked to "triage the backlog", "clean up the open PRs", "which branches can we delete?", or "/triage [prs|branches|worktrees|all] [--project <name-or-ID>]... [--label <name>]...". (kstack)
 ---
 
@@ -56,10 +56,13 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 - **`spec_output_dir`** — the proposal is written to its **parent** directory as
   `triage-<YYYY-MM-DD>.md` (collision handling in Step 5). Missing or null →
   **ask the user** where to write it; do not guess a docs path.
-- **`identities.reviewer`, `identities.implementer`, `ci.checks`** — read for
+- **`identities.maintainer`, `identities.reviewer`, `identities.implementer`,
+  `ci.checks`** — read for
   status interpretation using the referenced review/CI contracts. Missing keys
   make the affected assessment **UNKNOWN**, naming the key; they do not turn
-  zero findings into clearance or stop unrelated scope scoring.
+  zero findings into clearance or stop unrelated scope scoring. This is the
+  explicit **Triage reporting exception** in CONVENTIONS.md §2, not pr-loop's
+  configuration refusal policy; it authorizes no gate or external action.
 - **`workspace_contract`, `issue_prefix`** — used only with `--project`, through
   the referenced project-filter procedure. No tracker configuration is needed
   without that flag.
@@ -96,12 +99,21 @@ tool-list-enforced; say which case you are in if the user asks.
 week and a stale figure in a proposal is a claim you cannot support:
 
 ```bash
-DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
-SCRATCH=$(mktemp -d)  # private to this run; never reuse another session's file
+DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name) || exit 1
+SCRATCH=$(mktemp -d) || exit 1  # private to this run
 # Flatten all pages; retain errors and fail closed on an incomplete inventory.
 gh api --paginate --slurp 'repos/{owner}/{repo}/pulls?state=open&per_page=100' \
-  > "$SCRATCH/open-pages.json"
-python3 -c 'import json,sys; pages=json.load(open(sys.argv[1])); rows=[r for page in pages for r in page]; print(len(rows), "open PRs")' "$SCRATCH/open-pages.json"
+  > "$SCRATCH/open-pages.json" || exit 1
+python3 - "$SCRATCH/open-pages.json" <<'PY' || exit 1
+import json, sys
+pages = json.load(open(sys.argv[1]))
+if not isinstance(pages, list) or not pages or not all(isinstance(p, list) for p in pages):
+    sys.exit("UNKNOWN inventory: expected a non-empty array of PR-list pages")
+rows = [row for page in pages for row in page]
+if not all(isinstance(row, dict) and type(row.get("number")) is int and row["number"] > 0 for row in rows):
+    sys.exit("UNKNOWN inventory: invalid PR records")
+print(len(rows), "open PRs")
+PY
 git branch --no-merged "$DEFAULT_BRANCH" | wc -l
 git worktree list --porcelain | sed -n '/^worktree /p' | wc -l
 ```
@@ -283,7 +295,11 @@ git worktree list
 Write `<parent of spec_output_dir>/triage-<YYYY-MM-DD>.md` (or the supplied
 path). **Never overwrite an existing proposal.** If occupied, use
 `triage-<YYYY-MM-DD>-<filter-slug>-<HHMMSS>-<unique-run-ID>.md`, with `all-prs`
-for no filter. Claim the path with exclusive creation (`open(..., "x")` or host
+for no filter. For filtered runs, join the project/label values with `-`,
+lowercase, replace runs of characters outside `[a-z0-9-]` with `-`, collapse
+repeated `-`, trim edge hyphens, truncate to 40 characters and trim again. Use
+`filtered` if empty. This is a single filename component, never a raw project
+name/path. Claim the path with exclusive creation (`open(..., "x")` or host
 equivalent); retry a collision with a fresh run ID. Announce the actual path and
 time zone. This also protects two projects sharing an output directory.
 
@@ -296,7 +312,7 @@ Use a compact overview plus concrete per-PR paragraphs and a linked appendix:
 **Repository / inventory time:** <repo, default branch, timestamp>
 **Filter:** <none | project inputs → canonical IDs/team; labels>
 **Coverage:** <scored> of <total> initially open PRs; <excluded> excluded;
-<project-only / label-only / both exclusions, deduplicated>; <state transitions>
+<project exclusions among label matches / label-only or both exclusions>; <state transitions>
 **Passes:** PR <filtered/unfiltered>; branches/worktrees <not scored | unfiltered>
 **Measured:** <n> open PRs · <n> unmerged branches · <n> worktrees
 **Totals:** <n> MERGE · <n> REBASE+MERGE · <n> CLOSE · <n> PARK

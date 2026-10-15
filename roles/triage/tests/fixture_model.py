@@ -34,7 +34,7 @@ def connection(pages):
 
 def review_status(facts):
     head = facts['head']
-    stable = all(value == facts['snapshots'][0] for value in facts['snapshots'])
+    stable = bool(facts['snapshots']) and all(value == head for value in facts['snapshots'])
     complete, reviews, threads = True, [], []
     try:
         reviews = connection(facts['reviews'])
@@ -51,19 +51,23 @@ def review_status(facts):
             replies = []
         if thread['resolved']:
             continue
-        counts[thread.get('priority') or 'unknown'] += 1
+        priority = thread.get('priority')
+        counts[priority if priority in {'P0', 'P1', 'P2', 'P3'} else 'unknown'] += 1
         last[thread['id']] = replies[-1]['author'] if replies else None
     valid = []
     history = []
     for review in reviews:
         match = re.search(r'<!-- codex-review head:([a-f0-9]{40}) -->', review['body'])
-        if (review['author'] != facts['reviewer'] or review['state'] != 'COMMENTED'
+        if (review['author'] != facts['reviewer']
+                or review['state'] not in {'COMMENTED', 'CHANGES_REQUESTED', 'APPROVED'}
                 or 'Review performed by Codex' not in review['body'] or not match
-                or review.get('commit', match[1]) != match[1]):
+                or (review.get('commit') or match[1]) != match[1]):
             continue
         history.append(match[1])
         if match[1] == head:
             valid.append(review)
+    earlier_findings = [priority for review in valid[:-1] for priority in review['findings']
+                        if priority in {'P0', 'P1', 'P2'}]
     assessment = 'unknown'
     if stable and complete and valid:
         priorities = valid[-1]['findings']
@@ -105,6 +109,8 @@ def review_status(facts):
         holds.append('no current review evidence')
     if assessment == 'findings present':
         holds.append('current findings')
+    if earlier_findings:
+        holds.append('earlier same-head findings need reconciliation')
     if any(counts[p] for p in ['P0', 'P1', 'P2']):
         holds.append('unresolved P0–P2')
     if counts['unknown']:
@@ -113,6 +119,8 @@ def review_status(facts):
         holds.append('CI ' + ci_status)
     return dict(review=assessment, loop=loop, loop_head=loop_head, ci=ci_status,
                 counts=dict(counts), last_authors=last, history=history,
+                earlier_same_head_findings=earlier_findings,
+                ledger_status='available' if facts['ledger_available'] else 'unavailable',
                 clean_conditions=clean_conditions, merge_gate=clean_conditions and not holds,
                 holds=holds, complete=complete, stable=stable)
 
@@ -136,9 +144,13 @@ def select_projects(facts):
                for i in facts.get('query_rows', [])):
             raise EvidenceGap('leaked row')
     issues = {issue['id']: issue for issue in facts['issues']}
-    selected, reasons = [], Counter({'project-only': 0, 'label-only': 0, 'both': 0})
+    selected, reasons, evidence = [], Counter({'project': 0, 'label-only or both': 0}), {}
     for pr in facts['prs']:
+        if not labels.issubset(pr['labels']):
+            reasons['label-only or both'] += 1
+            continue  # excluded before body/files/issue mapping
         project_match = not inputs
+        matches = []
         for link in pr['links'] if inputs else []:
             if link['kind'] not in ['attachment', 'direct']:
                 continue
@@ -147,13 +159,16 @@ def select_projects(facts):
                 raise EvidenceGap('issue mapping unavailable')
             if issue['team'] == facts['team'] and issue['project'] in selected_projects:
                 project_match = True
-        label_match = labels.issubset(pr['labels'])
-        if project_match and label_match:
+                matches.append(dict(issue=issue['id'], project=issue['project'],
+                                    team=issue['team'], state=issue.get('state'),
+                                    container=issue.get('container', False)))
+        if project_match:
             selected.append(pr['number'])
+            evidence[str(pr['number'])] = matches
         else:
-            key = 'both' if not project_match and not label_match else 'label-only' if project_match else 'project-only'
-            reasons[key] += 1
-    return dict(selected=selected, excluded=dict(reasons), projects=sorted(selected_projects))
+            reasons['project'] += 1
+    return dict(selected=selected, excluded=dict(reasons), projects=sorted(selected_projects),
+                selection_evidence=evidence)
 
 
 def changed_paths(count, files):

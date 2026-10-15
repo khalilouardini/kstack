@@ -113,7 +113,7 @@ class PromptContract(unittest.TestCase):
         for source in ['tools/github/pr-loop/SKILL.md',
                        'tools/github/review-claude-pr/SKILL.md',
                        'tools/github/review-comments/SKILL.md',
-                       'tools/linear/next/SKILL.md']:
+                       'tools/linear/next/references/pr-file-snapshot.md']:
             self.assertIn(source, status)
             self.assertTrue((ROOT / source).is_file())
         for phrase in ['including `CLOSE` and `PARK`', 'exactly once',
@@ -126,10 +126,10 @@ class PromptContract(unittest.TestCase):
 
     def test_project_delegates_membership_but_includes_terminal_containers(self):
         project = (ROOT / 'roles/triage/references/project-filter.md').read_text()
-        for phrase in ['tools/linear/next/SKILL.md', 'first two paragraphs',
+        for phrase in ['tools/linear/next/references/project-resolution.md',
                        '**all issue states**', 'container/parent counts',
                        'prerequisite', '**all** GitHub label filters',
-                       'project-only exclusion', 'branch/worktree-only']:
+                       'label-only or both', 'branch/worktree-only']:
             self.assertIn(phrase, project)
 
 
