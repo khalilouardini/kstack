@@ -81,7 +81,9 @@ It reads immutable Git blobs and does not fetch, write, dispatch or grant human
 approval. Add `main_sha` and `checked_at` to the coverage snapshot. Closure issues
 also require full `description`, `url`, `updated_at`, `relations_complete: true`,
 and `prerequisites` containing all incoming manifest edge objects in manifest
-order, after checking both prose and native relations. Do not use truncated list
+order, after checking both prose and native relations. The list is per issue:
+when several nodes share one `issue_ref` (a unit and its human review node), it
+holds every edge into any of those nodes, in manifest order. Do not use truncated list
 responses as full bodies. Evidence expires after one hour and must be refreshed
 before each transition. A changed SHA or relevant evidence requires reanalysis.
 
