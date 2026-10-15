@@ -189,7 +189,7 @@ case you are in if the user asks.
 
 | | `triage` | `next` |
 |---|---|---|
-| Source | GitHub — PRs, branches, worktrees | Linear — issues, cycles, projects |
+| Source | GitHub — PRs (default), branches/worktrees on request; optional Linear project selection | Linear — issues, cycles, projects |
 | Direction | Backward. What did we leave unfinished? | Forward. What should start now? |
 | Output | A scored roster of everything | One recommendation plus two runners-up — or, under `--parallel`, an N-track batch |
 

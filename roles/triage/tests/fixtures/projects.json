@@ -1,0 +1,453 @@
+{
+  "defaults": {
+    "team": "team-a",
+    "filters": [
+      "11111111-1111-4111-8111-111111111111"
+    ],
+    "labels": [],
+    "mapping_available": true,
+    "projects": [
+      {
+        "nodes": [
+          {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "Release Amber",
+            "teams": [
+              "team-a"
+            ]
+          },
+          {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "name": "Release Violet",
+            "teams": [
+              "team-a"
+            ]
+          },
+          {
+            "id": "99999999-9999-4999-8999-999999999999",
+            "name": "Other",
+            "teams": [
+              "team-x"
+            ]
+          }
+        ],
+        "after": null,
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        }
+      }
+    ],
+    "issues": [
+      {
+        "id": "issue-a",
+        "project": "11111111-1111-4111-8111-111111111111",
+        "team": "team-a"
+      },
+      {
+        "id": "issue-b",
+        "project": "22222222-2222-4222-8222-222222222222",
+        "team": "team-a"
+      },
+      {
+        "id": "container-a",
+        "project": "11111111-1111-4111-8111-111111111111",
+        "team": "team-a",
+        "state": "Done",
+        "container": true
+      },
+      {
+        "id": "outside",
+        "project": "99999999-9999-4999-8999-999999999999",
+        "team": "team-x"
+      }
+    ],
+    "prs": [
+      {
+        "number": 11,
+        "labels": [],
+        "links": [
+          {
+            "kind": "attachment",
+            "issue": "issue-a"
+          }
+        ]
+      },
+      {
+        "number": 12,
+        "labels": [
+          "release"
+        ],
+        "links": [
+          {
+            "kind": "prerequisite",
+            "issue": "issue-a"
+          }
+        ]
+      },
+      {
+        "number": 13,
+        "labels": [
+          "release"
+        ],
+        "links": [
+          {
+            "kind": "direct",
+            "issue": "issue-b"
+          }
+        ]
+      },
+      {
+        "number": 14,
+        "labels": [
+          "release",
+          "ready"
+        ],
+        "links": [
+          {
+            "kind": "attachment",
+            "issue": "container-a"
+          }
+        ]
+      },
+      {
+        "number": 15,
+        "labels": [],
+        "links": [
+          {
+            "kind": "attachment",
+            "issue": "outside"
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "unlabeled project PR and explicit terminal container",
+      "facts": {},
+      "expected": {
+        "selected": [
+          11,
+          14
+        ]
+      },
+      "error": false
+    },
+    {
+      "name": "misleading prerequisite mention excluded",
+      "facts": {
+        "labels": [
+          "release"
+        ]
+      },
+      "expected": {
+        "selected": [
+          14
+        ],
+        "excluded": {
+          "project-only": 2,
+          "label-only": 1,
+          "both": 1
+        }
+      },
+      "error": false
+    },
+    {
+      "name": "exact project-ID membership",
+      "facts": {
+        "filters": [
+          "22222222-2222-4222-8222-222222222222"
+        ]
+      },
+      "expected": {
+        "selected": [
+          13
+        ],
+        "projects": [
+          "22222222-2222-4222-8222-222222222222"
+        ]
+      },
+      "error": false
+    },
+    {
+      "name": "project union and label intersection",
+      "facts": {
+        "filters": [
+          "Release Amber",
+          "11111111-1111-4111-8111-111111111111",
+          "22222222-2222-4222-8222-222222222222"
+        ],
+        "labels": [
+          "release",
+          "ready"
+        ]
+      },
+      "expected": {
+        "selected": [
+          14
+        ],
+        "projects": [
+          "11111111-1111-4111-8111-111111111111",
+          "22222222-2222-4222-8222-222222222222"
+        ]
+      },
+      "error": false
+    },
+    {
+      "name": "union includes direct unlabeled implementations",
+      "facts": {
+        "filters": [
+          "11111111-1111-4111-8111-111111111111",
+          "22222222-2222-4222-8222-222222222222"
+        ]
+      },
+      "expected": {
+        "selected": [
+          11,
+          13,
+          14
+        ]
+      },
+      "error": false
+    },
+    {
+      "name": "no project uses GitHub only",
+      "facts": {
+        "filters": [],
+        "mapping_available": false
+      },
+      "expected": {
+        "selected": [
+          11,
+          12,
+          13,
+          14,
+          15
+        ]
+      },
+      "error": false
+    },
+    {
+      "name": "project lookup unavailable fails closed",
+      "facts": {
+        "mapping_available": false
+      },
+      "expected": null,
+      "error": true
+    },
+    {
+      "name": "cross-team project refuses",
+      "facts": {
+        "filters": [
+          "99999999-9999-4999-8999-999999999999"
+        ]
+      },
+      "expected": null,
+      "error": true
+    },
+    {
+      "name": "exact project ID row leak refuses",
+      "facts": {
+        "query_rows": [
+          {
+            "id": "issue-b",
+            "project": "22222222-2222-4222-8222-222222222222",
+            "team": "team-a"
+          }
+        ]
+      },
+      "expected": null,
+      "error": true
+    },
+    {
+      "name": "partial project pagination refuses",
+      "facts": {
+        "projects": [
+          {
+            "nodes": [
+              {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "name": "Release Amber",
+                "teams": [
+                  "team-a"
+                ]
+              },
+              {
+                "id": "22222222-2222-4222-8222-222222222222",
+                "name": "Release Violet",
+                "teams": [
+                  "team-a"
+                ]
+              },
+              {
+                "id": "99999999-9999-4999-8999-999999999999",
+                "name": "Other",
+                "teams": [
+                  "team-x"
+                ]
+              }
+            ],
+            "after": null,
+            "pageInfo": {
+              "hasNextPage": true,
+              "endCursor": "next"
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "error": true
+    },
+    {
+      "name": "ambiguous exact name refuses",
+      "facts": {
+        "filters": [
+          "Release Amber"
+        ],
+        "projects": [
+          {
+            "nodes": [
+              {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "name": "Release Amber",
+                "teams": [
+                  "team-a"
+                ]
+              },
+              {
+                "id": "22222222-2222-4222-8222-222222222222",
+                "name": "Release Violet",
+                "teams": [
+                  "team-a"
+                ]
+              },
+              {
+                "id": "99999999-9999-4999-8999-999999999999",
+                "name": "Other",
+                "teams": [
+                  "team-x"
+                ]
+              },
+              {
+                "id": "22222222-2222-4222-8222-222222222222",
+                "name": "Release Amber",
+                "teams": [
+                  "team-a"
+                ]
+              }
+            ],
+            "after": null,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": null
+            }
+          }
+        ]
+      },
+      "expected": null,
+      "error": true
+    },
+    {
+      "name": "unresolved direct mapping refuses",
+      "facts": {
+        "prs": [
+          {
+            "number": 11,
+            "labels": [],
+            "links": [
+              {
+                "kind": "attachment",
+                "issue": "missing"
+              }
+            ]
+          },
+          {
+            "number": 12,
+            "labels": [
+              "release"
+            ],
+            "links": [
+              {
+                "kind": "prerequisite",
+                "issue": "issue-a"
+              }
+            ]
+          },
+          {
+            "number": 13,
+            "labels": [
+              "release"
+            ],
+            "links": [
+              {
+                "kind": "direct",
+                "issue": "issue-b"
+              }
+            ]
+          },
+          {
+            "number": 14,
+            "labels": [
+              "release",
+              "ready"
+            ],
+            "links": [
+              {
+                "kind": "attachment",
+                "issue": "container-a"
+              }
+            ]
+          },
+          {
+            "number": 15,
+            "labels": [],
+            "links": [
+              {
+                "kind": "attachment",
+                "issue": "outside"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": null,
+      "error": true
+    },
+    {
+      "name": "null project never matches",
+      "facts": {
+        "issues": [
+          {
+            "id": "issue-a",
+            "project": null,
+            "team": "team-a"
+          },
+          {
+            "id": "issue-b",
+            "project": "22222222-2222-4222-8222-222222222222",
+            "team": "team-a"
+          },
+          {
+            "id": "container-a",
+            "project": "11111111-1111-4111-8111-111111111111",
+            "team": "team-a",
+            "state": "Done",
+            "container": true
+          },
+          {
+            "id": "outside",
+            "project": "99999999-9999-4999-8999-999999999999",
+            "team": "team-x"
+          }
+        ]
+      },
+      "expected": {
+        "selected": [
+          14
+        ]
+      },
+      "error": false
+    }
+  ]
+}

@@ -57,10 +57,19 @@ needs a Linear workspace.
 | Skill | Does | Refuses |
 |---|---|---|
 | [`/spec`](roles/spec/SKILL.md) | Product gate: the scope role runs first and alone; only an in-scope verdict fans out to tech-lead + designer, then qa | Spending four agents on an idea that fails the first gate |
-| [`/triage`](roles/triage/SKILL.md) | Scores every open PR, branch and worktree against the scope doc; writes a dated proposal | Closing, merging or deleting anything |
+| [`/triage`](roles/triage/SKILL.md) | PR intent, merge/CI and review/thread evidence against scope; optional project/label filters; branches/worktrees on request | Reviewing, posting, merging, closing or tracker writes |
 | [`/next`](tools/linear/next/SKILL.md) | Recommends one scoped issue or up to five independent tracks across repeated project filters | Inventing a ticket; any write |
 | [`/linear-feature-intake`](tools/linear/linear-feature-intake/SKILL.md) | Turns a scope verdict into the right tracker records | Forming a verdict of its own |
 | [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) | Creates or updates the product scope contract; maps work, validates JSON and generates Mermaid | Creating tickets, granting scope or launching sessions |
+
+`/triage` defaults to PRs only. Use
+`/triage prs --project "Release Amber" --project "<project-ID>" --label release`
+for a verified Linear project union intersected with the GitHub label. Without
+`--project`, it needs GitHub only; unavailable requested project mapping fails
+closed. It writes a collision-safe proposal with an overview, per-PR intent,
+current-head CI/review evidence, linked unresolved threads and complete merge
+lanes. [Offline fixtures](roles/triage/tests/README.md) check frozen evidence
+interpretation; the live procedure and read-only boundary remain prompt-level.
 
 For new work, compose `/spec` → `/linear-feature-intake` → `/linear-roadmap`.
 For existing approved tickets, start with `/linear-roadmap`. A simple prompt can
