@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+`graph-admission` compares a closure issue's live `prerequisites` once per issue:
+the edges into every node sharing its `issue_ref`, in manifest order. A unit and
+its human review node with one `issue_ref` could not both match before, so no
+such candidate was admissible. Live-dependency drift still refuses.
+
 `/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
 retains contradictory same-head findings and unknown severities as holds, and
 reports ledger/container provenance. Shared project-resolution and complete-file
