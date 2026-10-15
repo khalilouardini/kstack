@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+`/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
+retains contradictory same-head findings and unknown severities as holds, and
+reports ledger/container provenance. Shared project-resolution and complete-file
+references are now consumed by both `/next` 0.8.1 and triage. CI discovery names
+permission-aware policy/workflow fallbacks and caches base evidence; labels
+prefilter costly project mapping with honest exclusion counts. Missing audit
+configuration has an explicit reporting-only exception in CONVENTIONS.md.
+
+
+`/triage` 0.3.0 adds repeatable Linear project filters (union, intersected with
+all requested GitHub labels) and evidence for every PR disposition: intent,
+state/head/base, CI coverage, posted loop versus derived review status, and a
+linked unresolved-thread appendix. Reuses `/next` membership/file verification
+and review contracts without running them. Proposals disclose unknown/unstable
+reads, all merge candidates in dependency order or independent lanes, and use
+exclusive collision-safe output creation. Default remains GitHub-only PR triage;
+project lookup fails closed, and branch/worktree passes remain separate.
+Synthetic offline fixtures and prompt-reference checks run in `bin/check-stack`;
+they do not enforce live agent behavior. Router and README preserve invocation
+filters. Refresh adapters through `bin/install --host codex` after deployment.
+
 `/pr-loop` 0.6.0: `CLEAN` requires CI. After a finding-free review, step 3a
 reads the PR's checks at the reviewed head, waits up to `--ci-wait` minutes
 (default 30) for pending ones, and exits `BLOCKED` on a red or timed-out check
@@ -110,7 +131,8 @@ Filtering weakens the skill's completeness promise, so the proposal now carries
 a mandatory `**Filter:**` header line — `none` when unfiltered — plus the scored
 and excluded counts, the truncation assertion moves to the filtered count, and
 the branch/worktree tables state that no label reached them. `--label` is a
-GitHub PR label only; `triage` still never reads a tracker.
+GitHub PR label only; that path stays GitHub-only. Optional Linear project
+filtering is described in the current triage procedure.
 
 New `core/summarize-change`: briefs one change in the session as six fixed parts
 — verdict, decision, behavioral change map with `file:line`, blast radius with
