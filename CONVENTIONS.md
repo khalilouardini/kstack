@@ -48,6 +48,8 @@ project: <slug>
 scope_doc: <path|null>          # scope/priority contract — roles, spec, triage, next
 workspace_contract: <path|null> # Linear workspace rules — tools/linear
 issue_prefix: <PREFIX|null>     # e.g. OGUR — session-titles, next, pr-label-sweep
+issue_graph:                   # local roadmap visualization — issue-graph
+  config: <path|null>          # JSON viewer binding; absolute or relative to consuming repo
 gates:                          # `lint` + `test` are the two any skill may assume.
   lint: <cmd|null>              # must pass before any commit/push claim
   test: <cmd|null>              # fast suite
@@ -79,6 +81,13 @@ pr_labels:                      # pr-label-sweep only
   rules: []                     # each: label + any of linear_project, linear_label,
                                 # paths (fnmatch), text (regex); a rule fires on ANY match
 ```
+
+`issue_graph.config` points to the JSON viewer binding described in
+`tools/linear/issue-graph/references/binding.md`. A saved host-local binding at
+`${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/issue-graph.json` also supplies
+the installation and workspace mapping when this key is unset. Opening and
+inspecting an existing viewer need no tracker access; refresh needs fresh Linear
+reads and the indexed roadmap.
 
 `review_model` is the one block that defaults rather than refuses, and the
 reason is the asymmetry: an unset gate command silently passes a check that

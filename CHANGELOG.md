@@ -23,6 +23,11 @@ Synthetic offline fixtures and prompt-reference checks run in `bin/check-stack`;
 they do not enforce live agent behavior. Router and README preserve invocation
 filters. Refresh adapters through `bin/install --host codex` after deployment.
 
+Add `/issue-graph open|status|refresh` for an installed local roadmap viewer.
+Refresh derives views from the indexed JSON and fresh Linear evidence, preserves
+typed event conditions and unverified checkpoints, and backs up one workspace
+before replacing its caches without changing saved views or notes.
+
 `/pr-loop` 0.6.0: `CLEAN` requires CI. After a finding-free review, step 3a
 reads the PR's checks at the reviewed head, waits up to `--ci-wait` minutes
 (default 30) for pending ones, and exits `BLOCKED` on a red or timed-out check
