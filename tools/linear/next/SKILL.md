@@ -1,7 +1,7 @@
 ---
 name: next
-version: 0.7.1
-description: Read Linear and recommend one scoped issue, or up to five independent tracks with --parallel and repeated --project. Requires graph coverage on main; --accept-graph-update accepts a verified pending graph PR. --accept-overlap accepts named PR file overlap. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
+version: 0.8.1
+description: Read Linear and recommend one scoped issue, or up to five independent tracks with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. --accept-graph-update accepts a reviewed pending graph PR. --accept-overlap accepts named PR file overlap. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
 # next — what to pick up now
@@ -246,18 +246,24 @@ than useless.
 
 Before ranking or emitting any kickoff, resolve the physical stack root and read
 `tools/linear/linear-roadmap/references/publication-gate.md` there. Follow its
-fresh main, complete ticket coverage and explicit bypass checks for each affected
-project, including legacy projects with no local index. Missing/incomplete
-publication blocks that project's selection; report missing keys and its repair
-PR, and route to linear-roadmap. Unknown live/main evidence fails closed.
+fresh main coverage audit and separate candidate/closure eligibility checks,
+including legacy projects with no index. Report coverage counts and missing keys
+as project warnings. Rank otherwise eligible mapped candidates despite unrelated
+missing tickets. Selected unmapped maintenance work may prepare the bounded local
+reconciliation artifact; cite main SHA, full live evidence and exact delta in its
+kickoff. Scope/dependency/release/human changes need reviewed publication. Unknown
+selected main/live/closure evidence fails closed; exclude that candidate, not all
+independently verified work in its project.
 
 Accept repeatable --accept-graph-update <PR#> with the contract's positive-number,
-OPEN/main-base, exact-head and complete-graph checks before selection. It is
+OPEN/main-base, reviewed exact-head, indexed validation and selected-closure checks
+before selection; unrelated coverage omissions remain warnings. It is
 independent of --accept-overlap and waives only main publication. Read the
 validated pending PR graph for condition analysis when accepted; do not relax
 indexed validation or the gates below. Report the main SHA, coverage and accepted
-PR/head/digest; forward the current invocation's flags into every execution
-kickoff, including dispatch --plan-only and wave. Prior flags are not consent.
+PR/head/digest and candidate audit path/digests; carry the local delta and forward
+current invocation flags into every kickoff, including dispatch --plan-only and
+wave. Prior flags or local audit records are not consent or fresh evidence.
 
 ## Project orchestration records — read-only
 
@@ -265,8 +271,11 @@ Use a detached, read-only graph checkout at the exact main SHA validated above,
 or the exact accepted graph PR head for that project. Call it `<graph-checkout>`;
 verify its HEAD equals the coverage SHA. Read the index, manifest, root roadmap
 and human-decision table from that checkout. Never use the consuming working
-tree's unmerged graph for condition analysis. If the validated head moves, stop
-and repeat coverage and condition analysis before a kickoff.
+tree's unmerged graph for condition analysis. The sole exception is the bounded
+local maintenance manifest reconstructed from pinned main plus the recorded exact
+delta; validate its effective digest and origin closure under the shared contract.
+If the validated head or relevant evidence moves, repeat admission and condition
+analysis before a kickoff.
 
 When `<graph-checkout>/orchestration/index.json` exists, it is the sole active manifest index.
 Resolve this skill's physical canonical directory: follow the installed Claude
@@ -284,8 +293,10 @@ their graph conditions.
 Read the exact manifest named by the index. Cite the `sha256:<digest>` reported
 by indexed validation as its revision. Never combine additional files or infer
 readiness from Mermaid. A covered project's open issue without a kind `unit`
-matching its canonical UUID is UNMAPPED: report it and require graph refresh
-before a kickoff. A publication bypass cannot waive this mapping requirement. Other node kinds can share issue references for context only.
+matching its canonical UUID is UNMAPPED: require bounded verified local maintenance
+reconciliation or reviewed graph publication before a kickoff. A publication flag
+cannot waive executable mapping or closure evidence. Other node kinds can share
+issue references for context only.
 
 This analysis owns the read-only graph rehearsal. Use the state predicates in the
 contract: ACTIVE, HUMAN_REQUIRED, UNKNOWN, BLOCKED, PLAN_ONLY, READY_TO_BUILD and

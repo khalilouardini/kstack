@@ -1,6 +1,6 @@
 ---
 name: review-comments
-version: 0.3.0
+version: 0.4.0
 description: Find unanswered PR feedback, make the warranted code fixes, and reply under the configured implementer identity using a per-command token that never switches global gh state. Use when asked to "answer the review comments", "reply to the review", "address the PR feedback", or "/review-comments [PR#]". (kstack)
 ---
 
@@ -18,10 +18,13 @@ changing PR state — see "What this skill is NOT for".
 
 For feedback on Linear-linked implementation, before edits/commits/pushes follow
 `tools/linear/linear-roadmap/references/publication-gate.md` from the physical
-stack root. Missing/incomplete main coverage stops fixes until linear-roadmap's
-repair lands or the current invocation explicitly supplies a verified
---accept-graph-update PR. Read-only feedback lookup remains allowed. Forward
-explicit flags into land; no earlier review/plan inherits a bypass.
+stack root. Audit the PR's selected units and relevant dependency closure against
+fresh main/live sources before fixes. Unrelated missing tickets remain coverage
+warnings. Bounded local maintenance reconciliation is allowed with main SHA,
+live evidence and exact delta retained in the PR; scope/dependency/release/human
+changes require reviewed publication or an explicitly accepted reviewed graph PR.
+Read-only feedback lookup remains allowed. Carry the audit and explicit flags
+into land; every transition refreshes evidence, with no inherited bypass.
 
 ## Configuration — read `.agents/stack.yml` first
 

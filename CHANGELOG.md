@@ -5,7 +5,7 @@
 `/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
 retains contradictory same-head findings and unknown severities as holds, and
 reports ledger/container provenance. Shared project-resolution and complete-file
-references are now consumed by both `/next` 0.7.1 and triage. CI discovery names
+references are now consumed by both `/next` 0.8.1 and triage. CI discovery names
 permission-aware policy/workflow fallbacks and caches base evidence; labels
 prefilter costly project mapping with honest exclusion counts. Missing audit
 configuration has an explicit reporting-only exception in CONVENTIONS.md.
@@ -32,11 +32,14 @@ key `ci.checks` (`required` | `all` | `none`) says which checks count; missing â
 pending and failing checks alike (gh 2.89.0), so the exit code is never read.
 kstack's own `stack.yml` sets `none`: it has no GitHub CI.
 
-Require complete orchestration graph coverage on main for Linear project execution;
-`/linear-roadmap` publishes repairs through a PR, and repeatable
-`--accept-graph-update <PR#>` permits an explicitly accepted, validated pending graph.
-Wave preserves graph SHA evidence through planning, build and review; parent tickets
-may be groups for context without executable events.
+Separate project graph coverage warnings from execution eligibility across next,
+wave, dispatch, land, investigate and review workflows. Unrelated missing tickets
+no longer freeze mapped work. Add `graph-admission` for pinned candidate/closure
+evidence and at most three missing maintenance units within approved scope,
+recording main SHA, full live issue evidence and exact node delta without a
+preliminary graph PR. Scope, dependencies, release criteria and human gates still
+require reviewed publication. Wave retains admission digests through plan/build
+and requires fresh candidate evidence before implementation.
 
 `/summarize-change` 0.2.0 briefs a change by its intent instead of its
 behavior. The six parts are now intent with its source, approach and the system

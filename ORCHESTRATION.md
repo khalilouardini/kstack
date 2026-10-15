@@ -6,13 +6,14 @@ one or change `/wave`'s existing approval behavior.
 
 ## Published graph admission
 
-Every Linear-backed project must have complete ticket coverage in its orchestration
-view on freshly fetched main before next/wave or another execution skill proceeds.
-Follow [the publication gate](tools/linear/linear-roadmap/references/publication-gate.md).
-Roadmap opens a graph update PR for gaps. Only explicitly supplied
---accept-graph-update <PR#> permits using the validated pending graph; existing
-scope, source pin, dependency and approval gates still apply. Read-only analysis
-and graph-only repair publication remain possible while implementation is blocked.
+Project coverage is a maintenance warning; execution eligibility is per selected
+unit and its relevant dependency closure. Follow
+[the shared gate](tools/linear/linear-roadmap/references/publication-gate.md).
+Unrelated missing tickets do not freeze mapped work. Up to three missing
+maintenance units within approved scope may use an audited local reconciliation
+containing main SHA, full live evidence and exact delta. Scope, dependency,
+release-criteria and human-gate changes require reviewed graph publication.
+Source pins, prerequisites, ownership, acceptance and plan/review gates still apply.
 
 ## Central source and reusable preparation
 

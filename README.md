@@ -15,9 +15,11 @@ Ultracode coordinator, per-ticket sessions and human checkpoints;
 [the project template](project-template/ORCHESTRATION.md) carries project-specific conditions.
 [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) prepares a typed record
 and generates its Mermaid view; `/next` reads its conditions before recommending work.
-Roadmap checks each project graph on main against all Linear tickets and opens a
-graph update PR for gaps. Execution waits for publication unless that invocation
-explicitly supplies `--accept-graph-update <PR#>` for the validated pending graph.
+Roadmap reports project-wide coverage warnings separately from candidate eligibility.
+Mapped work can proceed despite unrelated missing tickets; small repairs within
+approved scope can use an auditable local reconciliation. Scope, dependency,
+release-criteria and human-gate changes require reviewed graph publication.
+See the [shared gate contract](tools/linear/linear-roadmap/references/publication-gate.md).
 The [interactive map](docs/skill-map.html) adds filtering when opened locally.
 
 ```bash
