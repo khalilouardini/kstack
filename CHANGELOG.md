@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+Add `/update-stack` to refresh the recorded canonical checkout from the remote
+default branch, reinstall both host adapters through `bin/install`, and report
+source/host/project evidence. Dirty or divergent source checkouts stop updates.
+A read-only installation audit detects stale targets/frontmatter, missing or
+orphaned adapters, and bounded project-local copies; `--check` never fetches or
+installs. Updates are manually invoked, with no schedule or merge hook.
+
 `/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
 retains contradictory same-head findings and unknown severities as holds, and
 reports ledger/container provenance. Shared project-resolution and complete-file

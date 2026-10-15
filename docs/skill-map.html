@@ -367,6 +367,7 @@ const SKILLS = [
 
   { n:"/land", t:"core", p:4, e:null, does:"Dedicated branch, gates green, atomic commits, PR opened — with the concurrent-session guards: re-verify the branch and the staged set before every commit. Stops at the PR.", says:["land this","commit and push","open a PR"] },
 
+  { n:"/update-stack", t:"core", p:5, e:"prompt", does:"Refreshes the recorded canonical checkout from main, reinstalls both host adapters and reports source/host/project evidence. Check-only mode is read-only; dirty or divergent sources stop updates.", says:["update kstack","reinstall kstack","refresh the shared skills"] },
   { n:"/health", t:"core", p:5, e:"ro", does:"Runs the project's own gates, scores them, and reports the trend against the last run. Never edits, never fixes.", says:["how healthy is this codebase?","quality score"] },
   { n:"/delivery-retro", t:"gh", p:5, e:"ro", does:"Was this period fruitful versus the previous equal period? Measures outcomes, flow, quality and focus — and refuses commits, lines and PR counts as scores.", says:["was this week fruitful?","what did we ship"] },
   { n:"/session-titles", t:"gh", p:5, e:"ro", does:"Sweeps open agent sessions across both harnesses, resolves each to a branch, PR and issue key, and retitles them so the session list is scannable.", says:["what is each session working on?"] },
