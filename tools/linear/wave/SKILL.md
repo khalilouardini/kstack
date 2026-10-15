@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.5.1
+version: 0.5.2
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -36,6 +36,8 @@ admission for every selected/approved track before contract/worktree/tracker wri
 Unrelated additions do not freeze mapped work. Bounded local maintenance repairs
 need no preliminary graph PR; retain their main SHA, full live evidence and exact
 delta. Semantic scope/dependency/release/human changes require reviewed publication.
+Stack upgrades alone need no graph repin: `source_revision` records adoption
+provenance; supported graph schemas determine compatibility with installed kstack.
 Only explicit --accept-graph-update can use a verified reviewed pending graph.
 Revalidate at A1, before A3/A4 writes, B1 implementation and B3 implementer fixes;
 Run A observations and --approve do not supply fresh evidence or a bypass.

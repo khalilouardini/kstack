@@ -65,11 +65,15 @@ For every proposed, resumed or reviewed implementation unit:
    prohibit an otherwise eligible build. PLAN_ONLY remains a separate next/dispatch
    outcome and cannot enter wave's implementation tracks.
 
-Indexed validation, installed source pin, graph/event-cycle checks, scope, active
+Indexed schema validation, clean installed source, graph/event-cycle checks, scope, active
 session checks, independence, plan/review approval and release gates remain
 mandatory. Legacy graphs require the same cited closure audit by the skill;
 `graph-admission` cannot grant deterministic admission without a typed index.
 A legacy missing unit or dependency repair requires a reviewed graph update.
+The index's `source_revision` records adoption provenance. A different installed
+kstack HEAD alone is not an admission failure or a reason for a graph-only repin
+PR; supported index/manifest schemas determine compatibility. Unsupported schemas
+require migration. Preserve provenance and all scope/dependency/approval checks.
 
 For indexed graphs, use `bin/graph-admission` beside `bin/graph-coverage`:
 
@@ -167,7 +171,7 @@ scope or prerequisites to manufacture completeness.
 
 Retain this repeatable flag for a specific pending **reviewed** graph update.
 Validate positive decimal numbers, deduplicate, and verify OPEN, base main,
-stable exact head, affected projects, indexed validation/source pin and review
+stable exact head, affected projects, indexed schema validation/clean source and review
 evidence at that head. Report coverage gaps separately and require verified
 selected units and closure on that head; unrelated omissions do not veto it. Review must come from the configured reviewer
 or authorized human; scope decisions require the authorized owner independently.

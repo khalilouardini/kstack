@@ -94,6 +94,35 @@ class AdmissionTests(unittest.TestCase):
         changed = self.audit()
         self.assertNotEqual(r['candidates'][0]['closure_evidence_digest'], changed['candidates'][0]['closure_evidence_digest'])
 
+    def test_stack_update_keeps_admission_and_graph_provenance_unchanged(self):
+        index = self.repo / 'orchestration/index.json'
+        before_index = index.read_bytes()
+        before = self.audit()
+        API['GRAPH']['installed_revision'] = lambda: 'b' * 40
+        self.assertEqual(self.audit(), before)
+        self.snapshot['projects'][0]['issues'].append({'id': REPAIR_ID, 'identifier': 'T-474'})
+        after = self.audit()
+        self.assertEqual(after['state'], 'ELIGIBLE')
+        self.assertEqual(after['coverage']['state'], 'UPDATE_REQUIRED')
+        self.assertEqual(after['candidates'], before['candidates'])
+        self.assertEqual(index.read_bytes(), before_index)
+
+    def test_stack_update_does_not_accept_unsupported_graph_schema(self):
+        API['GRAPH']['installed_revision'] = lambda: 'b' * 40
+        for name in ('index.json', 'graph.json'):
+            with self.subTest(name=name):
+                path = self.repo / 'orchestration' / name
+                value = json.loads(path.read_text())
+                value['schema_version'] = 2
+                path.write_text(json.dumps(value))
+                self.git('add', '.')
+                self.git('commit', '-m', 'unsupported graph format')
+                self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+                with self.assertRaisesRegex(ValueError, 'expected 1'):
+                    self.audit()
+                value['schema_version'] = 1
+                path.write_text(json.dumps(value))
+
     def test_reworded_proof_prose_preserves_factual_digest_and_full_record(self):
         before = copy.deepcopy(self.audit())
         for proof in self.request['nodes']:
@@ -175,7 +204,7 @@ class AdmissionTests(unittest.TestCase):
             self.audit()
 
     def test_partial_missing_or_stale_evidence_refuses(self):
-        for change in ('pagination', 'relations', 'body', 'owner', 'acceptance', 'quote', 'event', 'sha', 'stale', 'pin'):
+        for change in ('pagination', 'relations', 'body', 'owner', 'acceptance', 'quote', 'event', 'sha', 'stale', 'dirty_source'):
             with self.subTest(change=change):
                 self.setUp()
                 if change == 'pagination':
@@ -197,7 +226,9 @@ class AdmissionTests(unittest.TestCase):
                 elif change == 'stale':
                     self.snapshot['checked_at'] = (NOW - timedelta(hours=2)).isoformat().replace('+00:00', 'Z')
                 else:
-                    API['GRAPH']['installed_revision'] = lambda: 'b' * 40
+                    def dirty_source():
+                        raise ValueError('installed lifecycle/roadmap source has uncommitted changes')
+                    API['GRAPH']['installed_revision'] = dirty_source
                 with self.assertRaises(ValueError):
                     self.audit()
 

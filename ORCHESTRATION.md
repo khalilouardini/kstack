@@ -13,7 +13,7 @@ Unrelated missing tickets do not freeze mapped work. Up to three missing
 maintenance units within approved scope may use an audited local reconciliation
 containing main SHA, full live evidence and exact delta. Scope, dependency,
 release-criteria and human-gate changes require reviewed graph publication.
-Source pins, prerequisites, ownership, acceptance and plan/review gates still apply.
+Schema compatibility, prerequisites, ownership, acceptance and plan/review gates still apply.
 
 ## Central source and reusable preparation
 
@@ -57,11 +57,12 @@ document rather than a workspace-root parent. Link that shared document from
 each project/subunit; keep each pilot's issue IDs in a separate project document.
 Links inherit actual access controls and do not grant access to other teams.
 Each repository's `orchestration/index.json` requires `source_revision`, the full
-reviewed kstack commit SHA. Both roadmap and `/next` use `validate-index` to check
-it against the physical installed HEAD and refuse mismatches/dirty source. They
-never silently repin. Each active manifest holds all its projects/subunits, so
-uniqueness and cycles are checked together. Source changes require explicit
-reconciliation; a matching pin is not execution approval.
+reviewed kstack commit SHA at adoption. It records provenance; compatibility uses
+the supported index/manifest schema versions rather than equality with installed
+HEAD. Stack upgrades alone require no repin PR. Roadmap, `/next` and admission
+still reject unsupported schemas and dirty lifecycle/roadmap source. Each active manifest holds all its projects/subunits, so
+uniqueness and cycles are checked together. Incompatible graph formats or event
+semantics require a schema migration; provenance is not execution approval.
 
 ## The graph
 

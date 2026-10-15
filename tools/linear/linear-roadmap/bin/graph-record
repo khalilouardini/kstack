@@ -257,9 +257,9 @@ def load_index(path):
         raise ValueError('consuming root equals stack root; do not overwrite shared lifecycle')
     index = json.loads(path.read_text(encoding='utf-8'))
     check_schema(index, json.loads(INDEX_SCHEMA.read_text(encoding='utf-8')))
-    actual = installed_revision()
-    if index['source_revision'] != actual:
-        raise ValueError(f'source revision mismatch: index {index["source_revision"]}, installed {actual}')
+    # source_revision records adoption provenance, not runtime compatibility.
+    # Schema validation owns compatibility; retain the clean-source check.
+    installed_revision()
     manifest = (consumer / index['manifest']).resolve()
     try:
         manifest.relative_to(path.parent)

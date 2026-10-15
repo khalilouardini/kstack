@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+Roadmap admission now treats `source_revision` as adoption provenance, rather than
+requiring equality with the installed kstack HEAD. `/linear-roadmap` 0.5.1,
+`/next` 0.8.2 and `/wave` 0.5.2 use supported index/manifest schemas for
+compatibility, so stack upgrades alone need no graph-only repin PR. Dirty source,
+unsupported schemas, scope, dependency and approval checks still refuse as before.
+Regression fixtures verify unchanged admission across stack updates, preserved
+provenance and unrelated coverage warnings.
+
 `/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
 retains contradictory same-head findings and unknown severities as holds, and
 reports ledger/container provenance. Shared project-resolution and complete-file

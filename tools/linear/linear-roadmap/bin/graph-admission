@@ -93,9 +93,9 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
     if index_text is None:
         raise ValueError('typed index required for deterministic admission; use the documented legacy audit')
     index = json.loads(index_text)
-    # Same installed-source guard as validate-index, without using a mutable checkout.
-    if index['source_revision'] != GRAPH['installed_revision']():
-        raise ValueError('source revision mismatch: reconcile installed stack and reviewed graph')
+    # Coverage validated both schemas from immutable blobs. Adoption provenance
+    # need not match today's stack HEAD; still refuse uncommitted source.
+    GRAPH['installed_revision']()
     base = GRAPH['validate'](json.loads(COVERAGE['read_blob'](repo, sha, index['manifest'])))
     graph = copy.deepcopy(base) if proposed is None else GRAPH['validate'](proposed)
     selected = request.get('selected')
