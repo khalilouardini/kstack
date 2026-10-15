@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.3.0
+version: 0.4.0
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -45,12 +45,15 @@ and read-back remain mandatory; a second approval prompt for that one row is not
 
 Before any git or tracker write, follow the canonical
 `tools/linear/linear-roadmap/references/publication-gate.md` from the physical
-stack root. Check the issue's entire project's graph on freshly fetched main,
-including resumed work and --plan-only. UPDATE_REQUIRED/UNKNOWN stops dispatch
-before a workspace or status change. Accept repeatable --accept-graph-update
-only under that contract and report the accepted PR/head and main SHA. Forward
-explicit flags to later build/land; each transition rechecks them. A prior plan
-or wave approval does not supply the publication bypass.
+stack root. Verify this issue and its relevant dependency closure on fresh main,
+including resumed work and --plan-only. Unrelated missing tickets are coverage
+warnings, not a dispatch refusal. A selected unmapped maintenance repair may use
+the bounded local audit before any workspace/status write; retain its main SHA,
+full live evidence and exact delta. UNKNOWN selected evidence or semantic changes
+require reviewed publication. Accept repeatable --accept-graph-update only for
+verified reviewed PRs under that contract. Carry audit paths/digests and explicit
+flags to later build/land; each transition rechecks fresh evidence. A prior plan
+or wave approval supplies no bypass or new scope authorization.
 
 Then:
 

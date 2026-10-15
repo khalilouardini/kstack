@@ -1,6 +1,6 @@
 ---
 name: review-claude-pr
-version: 0.2.0
+version: 0.3.0
 description: Review an open agent-built PR (implementer-authored, or maintainer-opened with Claude-attributed commits) and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
@@ -15,6 +15,18 @@ ladder below. This is the reviewer half of the review loop: it finds and posts
 defects, and never answers, fixes, or resolves them — that is
 `tools/github/review-comments`, and the unattended pairing of the two is
 `tools/github/pr-loop`.
+
+## Graph eligibility evidence in review
+
+For Linear-linked PRs, read the canonical
+`tools/linear/linear-roadmap/references/publication-gate.md` from the physical
+stack root. Review the selected units and relevant dependency closure, including
+any local reconciliation record's main SHA, live evidence and exact delta.
+Missing unrelated tickets are coverage warnings, never a reason to withhold
+read-only review. Flag missing selected evidence, scope expansion, changed
+prerequisites, acceptance/release criteria or human gates without reviewed
+publication as findings. Review-only authorization does not permit graph or
+implementation edits, and structural admission does not grant human approval.
 
 ## Configuration — read `.agents/stack.yml` first
 

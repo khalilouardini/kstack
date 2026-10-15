@@ -31,7 +31,13 @@ async function run(stage, mutate=()=>{}, source=executable) {
   const f=clone(fixture);
   const args={stage,repo_root:'/tmp/repo',default_branch:'origin/main',gates:{lint:'lint',test:'test'},identities:{maintainer:'human',reviewer:'review',implementer:'impl'},stack_config:{},date:'2026-10-05',run_id:stage+'-run',wave_id:'wave-1',wave:{max_review_rounds:3,review_concurrency:1,contract_dir:'contracts'},selection:['any','--parallel','3'],paths:Object.fromEntries(['wave','next','dispatch','land','pr_loop','records','seam_check'].map(n=>[n,'/stack/'+n])),plan_record:f.plan_record,approve:'all'};
   args.graph_publication={main_sha:'a'.repeat(40),checked_at:'2026-10-05T12:00:00Z',projects:[{project_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',project_name:'Project',view_path:'docs/project.md',state:'CURRENT'}]};
-  args.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(args.graph_publication)];
+  args.graph_admission=[{schema_version:1,main_sha:'a'.repeat(40),graph_sha:'a'.repeat(40),checked_at:'2026-10-05T12:00:00Z',
+    transition:'build',base_digest:'sha256:'+'c'.repeat(64),graph_digest:'sha256:'+'c'.repeat(64),issue_evidence_digest:'sha256:'+'d'.repeat(64),
+    evidence:{issues:{complete:true},request:{selected:['T-1','T-2','T-3']}},delta:{added_nodes:[],changed_edges:[]},
+    candidates:fixture.tracks.map(t=>({issue_id:t.issue_id,identifier:t.issue_id,project_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      state:'ELIGIBLE',mode:'PUBLISHED',node_id:t.issue_id,closure:[t.issue_id],closure_evidence_digest:'sha256:'+'e'.repeat(64),unmet:[]}))}];
+  const pinEvidence=()=>['Graph publication evidence: '+JSON.stringify(args.graph_publication),'Graph admission evidence: '+JSON.stringify(args.graph_admission)];
+  args.plan_record.evidence=pinEvidence();
   mutate(f,args);
   const calls=[],events=[],logs=[];let runningReview=0,maxReview=0;
   const agent=async (prompt,opts)=>{
@@ -64,7 +70,76 @@ const overlapArgs=(_f,a)=>{a.selection=clone(overlapSelection);
 const promptOverlaps=p=>JSON.parse(p.match(/Relevant accepted overlaps from caller preflight: (\[[^\n]*\])\./)[1]);
 const tests=[
  async()=>{
-   for(const stage of ['plan','build']) for(const state of ['UPDATE_REQUIRED','UNKNOWN']){
+   const planned=await run('plan',(_f,a)=>{
+     a.graph_admission.push({...clone(a.graph_admission[0]),transition:'plan'});
+   });
+   assert.equal(planned.result.state,'AWAITING_APPROVAL',
+     'plan-transition reports cannot create ambiguous build candidates');
+   const built=await run('build',(_f,a)=>{a.plan_record=planned.result;});
+   assert.equal(built.result.state,'COMPLETE');
+ },
+ async()=>{
+   const planned=await run('plan',(_f,a)=>{
+     a.graph_admission.push({...clone(a.graph_admission[0]),checked_at:'2026-10-04T12:00:00Z'});
+   });
+   assert.equal(planned.result.state,'AWAITING_APPROVAL');
+   const built=await run('build',(_f,a)=>{a.plan_record=planned.result;});
+   assert.equal(built.result.state,'COMPLETE',
+     'Run B must discard the same invalid reports Run A discarded');
+   const nextDay=await run('build',(_f,a)=>{
+     a.plan_record=planned.result;a.date='2026-10-06';
+     a.graph_publication.checked_at='2026-10-06T12:00:00Z';
+     a.graph_admission[0].checked_at='2026-10-06T12:00:00Z';
+   });
+   assert.equal(nextDay.result.state,'COMPLETE',
+     'prior report validity uses Run A date while current validity uses Run B date');
+ },
+
+ async()=>{
+   for(const stage of ['plan','build']) for(const change of ['missing','blocked','closure','digest','phase']) {
+     const r=await run(stage,(_f,a)=>{
+       const report=a.graph_admission[0],c=report.candidates[0];
+       if(change==='missing') report.candidates.shift();
+       if(change==='blocked') c.state='BLOCKED';
+       if(change==='closure') c.closure=[];
+       if(change==='digest') c.closure_evidence_digest='unknown';
+       if(change==='phase') report.transition='plan';
+     });
+     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,stage==='plan'?1:0);
+   }
+ },
+ async()=>{
+   const local=a=>{
+     const r=a.graph_admission[0],c=r.candidates[0];
+     c.mode='LOCAL_RECONCILIATION';r.delta.added_nodes=[{id:c.node_id,issue_ref:c.issue_id}];
+     a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(a.graph_publication),'Graph admission evidence: '+JSON.stringify(a.graph_admission)];
+   };
+   for(const stage of ['plan','build']) {
+     const r=await run(stage,(_f,a)=>{local(a);a.graph_publication.projects[0].state='UPDATE_REQUIRED';});
+     assert.equal(r.result.state,stage==='plan'?'AWAITING_APPROVAL':'COMPLETE');
+     assert.ok(r.result.evidence.some(e=>e.includes('LOCAL_RECONCILIATION')));
+   }
+   const drift=await run('build',(_f,a)=>{local(a);a.graph_admission[0].graph_digest='sha256:'+'f'.repeat(64);});
+   assert.equal(drift.result.state,'STOPPED');assert.equal(drift.calls.length,0);
+   assert.match(drift.result.stop_reason,/repeat reconciliation/);
+   const dep=await run('plan',(_f,a)=>{local(a);a.graph_admission[0].delta.changed_edges=[{}];});
+   assert.equal(dep.result.state,'STOPPED');assert.equal(dep.calls.length,1);
+ },
+
+ async()=>{
+   for(const stage of ['plan','build']) {
+     const r=await run(stage,(_f,a)=>{
+       a.graph_publication.projects[0].state='UPDATE_REQUIRED';
+       a.graph_publication.projects[0].missing_view=['T-474'];
+       a.graph_publication.projects[0].missing_manifest=['T-474'];
+     });
+     assert.equal(r.result.state,stage==='plan'?'AWAITING_APPROVAL':'COMPLETE',
+       'an unrelated maintenance addition must not freeze mapped candidates');
+   }
+ },
+
+ async()=>{
+   for(const stage of ['plan','build']) for(const state of ['UNKNOWN']){
      const r=await run(stage,(_f,a)=>{a.graph_publication.projects[0].state=state;});
      assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,stage==='plan'?1:0);
      assert.match(r.result.stop_reason,/graph publication/);
@@ -82,8 +157,9 @@ const tests=[
  async()=>{
    const accept=a=>{
      a.graph_publication.projects[0]={...a.graph_publication.projects[0],state:'ACCEPTED_UPDATE',pr_number:900,head_sha:'b'.repeat(40)};
-     a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(a.graph_publication)];
-     a.accepted_graph_updates=[{number:900,url:'https://example.test/pull/900',state:'OPEN',base:'main',head_sha:'b'.repeat(40),coverage_exit:0,project_ids:['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']}];
+     a.graph_admission[0].graph_sha='b'.repeat(40);
+     a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(a.graph_publication),'Graph admission evidence: '+JSON.stringify(a.graph_admission)];
+     a.accepted_graph_updates=[{number:900,url:'https://example.test/pull/900',state:'OPEN',base:'main',head_sha:'b'.repeat(40),coverage_exit:0,coverage_state:'CURRENT',validation_exit:0,reviewed_head_sha:'b'.repeat(40),review_source:'Reviewer approved at this exact head',project_ids:['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']}];
    };
    const pending=await run('plan',(_f,a)=>{accept(a);});
    assert.equal(pending.result.state,'STOPPED');assert.equal(pending.calls.length,1);
@@ -110,12 +186,15 @@ const tests=[
    assert.equal(drift.result.state,'STOPPED');assert.equal(drift.calls.length,0);
    assert.match(drift.result.stop_reason,/changed since Run A/);
    const movedHead=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;
-     a.graph_publication.projects[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].head_sha='c'.repeat(40);});
+     a.graph_publication.projects[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].reviewed_head_sha='c'.repeat(40);a.graph_admission[0].graph_sha='c'.repeat(40);});
    assert.equal(movedHead.result.state,'STOPPED');assert.equal(movedHead.calls.length,0);
    assert.match(movedHead.result.stop_reason,/changed since Run A/);
    const inherited=await run('build',(_f,a)=>{accept(a);a.selection.push(...flags);});
    assert.equal(inherited.result.state,'STOPPED');assert.equal(inherited.calls.length,0);
-   for(const delta of [{state:'CLOSED'},{state:'MERGED'},{base:'other'},{coverage_exit:1},{head_sha:'c'.repeat(40)},{project_ids:['unrelated']}]){
+   const warning=await run('plan',(_f,a)=>{accept(a);a.selection.push(...flags);
+     Object.assign(a.accepted_graph_updates[0],{coverage_exit:1,coverage_state:'UPDATE_REQUIRED'});});
+   assert.equal(warning.result.state,'AWAITING_APPROVAL');
+   for(const delta of [{state:'CLOSED'},{state:'MERGED'},{base:'other'},{validation_exit:1},{coverage_state:'UNKNOWN'},{review_source:''},{reviewed_head_sha:'c'.repeat(40)},{head_sha:'c'.repeat(40)},{project_ids:['unrelated']}]){
      const r=await run('plan',(_f,a)=>{accept(a);a.selection.push(...flags);Object.assign(a.accepted_graph_updates[0],delta);});
      assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
    }
@@ -123,12 +202,12 @@ const tests=[
  async()=>{
    const r=await run('plan',f=>{f.responses['A1 select'].tracks[0].project='Uncovered';});
    assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,1);
-   assert.match(r.result.stop_reason,/no unambiguous covered project/);
+   assert.match(r.result.stop_reason,/no unambiguous eligible candidate audit/);
  },
  async()=>{
    for(const stage of ['plan','build']){
      const r=await run(stage,(f,a)=>{
-       a.graph_publication={projects:[]};
+       a.graph_publication={projects:[]};a.graph_admission=[];
        f.responses['A1 select'].tracks.forEach(t=>t.project=null);
        a.plan_record.tracks.forEach(t=>t.project=null);
      });
@@ -139,12 +218,16 @@ const tests=[
    const r=await run('plan',(_f,a)=>{a.graph_publication.projects.push({
      project_id:'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',project_name:'Blocked',view_path:'docs/blocked.md',state:'UPDATE_REQUIRED'});});
    assert.equal(r.result.state,'AWAITING_APPROVAL');
-   assert.ok(r.calls[0].prompt.includes('Excluded projects'));
+   assert.ok(r.calls[0].prompt.includes('Project coverage warnings'));
    assert.ok(r.calls[0].prompt.includes('Blocked'));
    const selected=await run('plan',(f,a)=>{a.graph_publication.projects.push({
      project_id:'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',project_name:'Blocked',view_path:'docs/blocked.md',state:'UNKNOWN'});
      f.responses['A1 select'].tracks[0].project='Blocked';});
    assert.equal(selected.result.state,'STOPPED');assert.equal(selected.calls.length,1);
+   for(const stage of ['plan','build']) {
+     const independent=await run(stage,(_f,a)=>{a.graph_admission.push({state:'UNKNOWN',error:'unrelated missing scope evidence'});});
+     assert.equal(independent.result.state,stage==='plan'?'AWAITING_APPROVAL':'COMPLETE');
+   }
    const build=await run('build',(_f,a)=>{a.graph_publication.projects.push({
      project_id:'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',project_name:'Blocked',view_path:'docs/blocked.md',state:'UPDATE_REQUIRED'});});
    assert.equal(build.result.state,'COMPLETE');
@@ -236,7 +319,7 @@ const tests=[
    assert.equal(all.result.state,'STOPPED');assert.equal(all.result.build_command,null);
    assert.equal(all.result.stop_reason,'no PLANNED track; every A4 plan stopped');
    assert.ok(all.result.evidence[0].startsWith('Graph publication evidence: '));
-   assert.deepEqual(all.result.evidence.slice(1),fixture.tracks.map(t=>t.issue_id+': dispatch §1: '+t.issue_id+' in Backlog'));
+   assert.deepEqual(all.result.evidence.slice(2),fixture.tracks.map(t=>t.issue_id+': dispatch §1: '+t.issue_id+' in Backlog'));
    assert.equal(all.result.plans.length,fixture.tracks.length);
    const mixed=await run('plan',f=>stopPlan(f,'T-1'));
    assert.equal(mixed.result.state,'AWAITING_APPROVAL');assert.equal(mixed.result.build_command,'/wave build --approve all');

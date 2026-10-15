@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.6.0
+version: 0.7.0
 description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED; each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, repeat-finding ledger, head-SHA marker, and pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
 ---
 
@@ -21,10 +21,13 @@ For Linear-linked implementation, follow
 `tools/linear/linear-roadmap/references/publication-gate.md` from the physical
 stack root before implementer edits or merge work. Validate repeatable
 --accept-graph-update PR values from this invocation and forward them explicitly
-into each review-comments/land invocation; those skills recheck live coverage.
-A publication gap blocks implementation rounds, even on an already-open PR.
-Read-only review can still run and report the block. Existing scope, review and
-merge requirements are unaffected; a graph-only repair uses the shared exception.
+into each review-comments/land invocation; those skills recheck candidate and
+closure eligibility. Unrelated project coverage gaps do not block mapped PR work.
+A missing maintenance unit may use bounded local reconciliation; carry the main
+SHA, full live evidence and exact delta into each implementation round and PR.
+Scope/dependency/release/human-gate changes require reviewed publication; unknown
+selected evidence blocks fixes. Read-only review remains allowed. Existing review
+and merge requirements hold; a graph-only repair uses the shared exception.
 
 ## Configuration — read `.agents/stack.yml` first
 

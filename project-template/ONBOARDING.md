@@ -237,12 +237,15 @@ executable issue maps to one persistent session. `/next` reads indexed condition
 and checks live evidence. `/wave` retains its current human plan checkpoint.
 
 Each project's Markdown graph must include all its Linear tickets on main.
-Linear-roadmap compares complete live membership and opens a graph update PR if
-coverage is missing. Next/wave, dispatch and later implementation transitions
-wait for that update to merge. An explicit --accept-graph-update <PR#> uses the
-validated pending graph for one invocation; wave build requires the flag again.
-This gate also applies when no local index has been adopted; a local-only diagram
-cannot provide publication evidence.
+Linear-roadmap reports coverage gaps as maintenance warnings. Next/wave, dispatch,
+land and implementer review workflows verify selected work and its dependency
+closure; unrelated missing tickets do not freeze mapped candidates. At most three
+missing in-scope maintenance units may use a local reconciliation record containing
+main SHA, live issue evidence and exact delta. Scope/dependency/release/human-gate
+changes require reviewed publication. An explicit --accept-graph-update uses a
+validated reviewed pending graph for one invocation; build requires the flag again.
+Legacy graphs still need cited closure audits and reviewed mapping repairs.
+See the canonical publication-gate contract in the physical KStack checkout.
 
 The human maintainer manually publishes/links the shared team-owned Linear contract
 under the workspace rules and verifies read-back; the roadmap skill never writes it. Keep
