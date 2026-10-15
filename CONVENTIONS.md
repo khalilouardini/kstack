@@ -107,6 +107,15 @@ does not find it either asks the user (interactive judgment calls) or refuses
 with the exact key name (gates, identities and `ci.checks` always refuse — a
 gate that defaults open is not a gate).
 
+**Triage reporting exception:** `/triage` reads `identities.maintainer`,
+`identities.reviewer`, `identities.implementer` and `ci.checks` as evidence
+interpretation inputs, not as authorization for a gate or write. When one is
+missing, it names the exact key and marks the affected attribution/assessment
+UNKNOWN with an evidence hold; it can retain unrelated scope facts. It never
+invents an identity, CI mode, successful gate or merge permission. This exception
+does not apply to review, implementation, publication or merge procedures,
+which continue to refuse their required missing identities/gates/CI mode.
+
 `wave.max_review_rounds` missing/null defaults to 3, announced: observed later
 rounds addressed interactions among earlier fixes, so a bounded three-round run
 leaves further decisions human. `wave.review_concurrency` defaults to 1,

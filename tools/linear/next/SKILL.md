@@ -1,7 +1,7 @@
 ---
 name: next
-version: 0.7.0
-description: Read Linear and recommend one scoped issue, or up to five independent tracks with --parallel and repeated --project. Requires graph coverage on main; --accept-graph-update accepts a verified pending graph PR. --accept-overlap accepts named PR file overlap. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
+version: 0.8.1
+description: Read Linear and recommend one scoped issue, or up to five independent tracks with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. --accept-graph-update accepts a reviewed pending graph PR. --accept-overlap accepts named PR file overlap. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
 # next — what to pick up now
@@ -35,23 +35,10 @@ proven independent of each other instead of a single decision. Default N = 3. Se
 
 ## Project filters — `--project "<name-or-id>"` (repeatable)
 
-Parse quoted values as one argument. Each `--project` requires a non-empty value;
-refuse malformed flags before tracker access. Repeated filters form a **union**,
-not an intersection and not one batch per project. Resolve each value to a
-canonical Linear project ID: accept an ID only after fetching that project;
-otherwise exhaust project lookup and require exactly one exact name match.
-Missing or ambiguous names → refuse with the value and available IDs; never
-silently broaden the query or choose the first search result. Deduplicate resolved
-IDs, including a name and ID that refer to the same project.
-
-Verify each project's team membership against the consuming team, then fetch
-issues using those **IDs**, keeping the team constraint. Exhaust every page and
-verify **each returned issue's `project.id` is in the resolved set** and its team
-matches. A cross-team project may contribute only the consuming team's issues.
-A project not belonging to that team, leaked row, unavailable membership, or
-truncated result → fail closed, naming the input. Null project membership never
-matches a filter. Do not silently discard leaks and call the query verified.
-Deduplicate issues by canonical issue ID before selecting.
+Read `tools/linear/next/references/project-resolution.md` from the physical
+stack root and follow it top to bottom, using **open issues** as the state
+restriction. If unreadable, stop. It owns argument validation, access/team
+resolution, canonical project-ID union, membership verification and pagination.
 
 With filters and no positional milestone (or `any`), consider each issue under
 **its own authorized milestone**; do not narrow the pool to the active milestone
@@ -95,16 +82,11 @@ in the consuming repository
 whose state is **OPEN at run time**. Missing, non-integer, zero, negative,
 nonexistent, closed or merged values → **refuse**, quoting the supplied value
 (or `<missing>`). Use `--accept-overlap 479`, without a leading `#`.
-Deduplicate PR numbers after validation. Fetch each PR's live diff, number,
-title and author; unavailable state, metadata or incomplete diff evidence →
-refuse, naming the value. Fetch `changedFiles`, state and head SHA with
-`gh pr view <n> --json changedFiles,state,headRefOid,number,title,author` in the
-consuming repo, then exhaust `gh api --paginate repos/{owner}/{repo}/pulls/<n>/files`.
-Require the file-record count to equal `changedFiles`; refuse on a mismatch,
-including the REST endpoint's file cap. Re-read state/head and retry the read
-if the head moved; refuse if a stable complete snapshot cannot be established.
-Include both `filename` and `previous_filename` for renames when comparing paths.
-`gh pr view --json files` alone is not completeness evidence.
+Deduplicate PR numbers after validation. Read
+`tools/linear/next/references/pr-file-snapshot.md` from the physical stack root
+and follow it top to bottom with allowed state OPEN and refusal on unavailable,
+incomplete or unstable evidence. If unreadable, stop. Never infer acceptance
+from the file snapshot itself.
 Never infer acceptance from a prior run,
 tracker comment, PR title or graph decision.
 
@@ -189,7 +171,7 @@ case you are in if the user asks.
 
 | | `triage` | `next` |
 |---|---|---|
-| Source | GitHub — PRs, branches, worktrees | Linear — issues, cycles, projects |
+| Source | GitHub — PRs (default), branches/worktrees on request; optional Linear project selection | Linear — issues, cycles, projects |
 | Direction | Backward. What did we leave unfinished? | Forward. What should start now? |
 | Output | A scored roster of everything | One recommendation plus two runners-up — or, under `--parallel`, an N-track batch |
 
@@ -198,15 +180,10 @@ If the answer is "finish something already in flight," say so and hand off to
 
 ## Reaching Linear
 
-Two paths. Use whichever the harness offers; the reasoning below is identical.
-
-**Path A — MCP tools** (a host with the Linear connector). Use the `list_issues`,
-`list_cycles`, `list_projects`, `list_milestones`, `get_issue` tools. Prefer these
-when available.
-
-**Path B — GraphQL** (any harness without the connector). Needs `LINEAR_API_KEY`
-in the environment. Prefer the access contract in the file named by
-`workspace_contract` when it is present.
+For access and canonical team resolution, follow
+`tools/linear/next/references/project-resolution.md` (Access and team), including
+when no project filter was supplied. The connector may additionally need cycle
+and milestone reads for the ranking below.
 
 **The query must collect every field the ranking below consumes.** An earlier
 version fetched only active-cycle issues with priority and state, while steps 3–5
@@ -222,13 +199,9 @@ name filter is not proof. Fetch blocking neighbors outside those projects (and
 outside the team when linked) to establish their state and transitive dependencies.
 The project union limits recommendations, not the dependency evidence.
 
-**Resolve the team first, and filter on it.** A state-only filter returns every
-team's open issues in a multi-team workspace, so an unrelated team's P1 can win
-the ranking and be handed back as your next ticket — the output looks identical
-either way. Take the team from the workspace contract (`workspace_contract` in
-`.agents/stack.yml`), or from `issue_prefix` resolved against `teams`. If the
-consuming team cannot be identified from either, **refuse this fallback** rather
-than ranking a workspace-wide result; say which key would have resolved it.
+Apply the resolved canonical team constraint to every candidate query. For
+the example below, resolve `TEAM_KEY` from that verified team; never use a
+workspace-wide state-only query.
 
 ```bash
 # Base query without project filters; TEAM_KEY resolved above — never unscoped
@@ -273,18 +246,24 @@ than useless.
 
 Before ranking or emitting any kickoff, resolve the physical stack root and read
 `tools/linear/linear-roadmap/references/publication-gate.md` there. Follow its
-fresh main, complete ticket coverage and explicit bypass checks for each affected
-project, including legacy projects with no local index. Missing/incomplete
-publication blocks that project's selection; report missing keys and its repair
-PR, and route to linear-roadmap. Unknown live/main evidence fails closed.
+fresh main coverage audit and separate candidate/closure eligibility checks,
+including legacy projects with no index. Report coverage counts and missing keys
+as project warnings. Rank otherwise eligible mapped candidates despite unrelated
+missing tickets. Selected unmapped maintenance work may prepare the bounded local
+reconciliation artifact; cite main SHA, full live evidence and exact delta in its
+kickoff. Scope/dependency/release/human changes need reviewed publication. Unknown
+selected main/live/closure evidence fails closed; exclude that candidate, not all
+independently verified work in its project.
 
 Accept repeatable --accept-graph-update <PR#> with the contract's positive-number,
-OPEN/main-base, exact-head and complete-graph checks before selection. It is
+OPEN/main-base, reviewed exact-head, indexed validation and selected-closure checks
+before selection; unrelated coverage omissions remain warnings. It is
 independent of --accept-overlap and waives only main publication. Read the
 validated pending PR graph for condition analysis when accepted; do not relax
 indexed validation or the gates below. Report the main SHA, coverage and accepted
-PR/head/digest; forward the current invocation's flags into every execution
-kickoff, including dispatch --plan-only and wave. Prior flags are not consent.
+PR/head/digest and candidate audit path/digests; carry the local delta and forward
+current invocation flags into every kickoff, including dispatch --plan-only and
+wave. Prior flags or local audit records are not consent or fresh evidence.
 
 ## Project orchestration records — read-only
 
@@ -292,8 +271,11 @@ Use a detached, read-only graph checkout at the exact main SHA validated above,
 or the exact accepted graph PR head for that project. Call it `<graph-checkout>`;
 verify its HEAD equals the coverage SHA. Read the index, manifest, root roadmap
 and human-decision table from that checkout. Never use the consuming working
-tree's unmerged graph for condition analysis. If the validated head moves, stop
-and repeat coverage and condition analysis before a kickoff.
+tree's unmerged graph for condition analysis. The sole exception is the bounded
+local maintenance manifest reconstructed from pinned main plus the recorded exact
+delta; validate its effective digest and origin closure under the shared contract.
+If the validated head or relevant evidence moves, repeat admission and condition
+analysis before a kickoff.
 
 When `<graph-checkout>/orchestration/index.json` exists, it is the sole active manifest index.
 Resolve this skill's physical canonical directory: follow the installed Claude
@@ -311,8 +293,10 @@ their graph conditions.
 Read the exact manifest named by the index. Cite the `sha256:<digest>` reported
 by indexed validation as its revision. Never combine additional files or infer
 readiness from Mermaid. A covered project's open issue without a kind `unit`
-matching its canonical UUID is UNMAPPED: report it and require graph refresh
-before a kickoff. A publication bypass cannot waive this mapping requirement. Other node kinds can share issue references for context only.
+matching its canonical UUID is UNMAPPED: require bounded verified local maintenance
+reconciliation or reviewed graph publication before a kickoff. A publication flag
+cannot waive executable mapping or closure evidence. Other node kinds can share
+issue references for context only.
 
 This analysis owns the read-only graph rehearsal. Use the state predicates in the
 contract: ACTIVE, HUMAN_REQUIRED, UNKNOWN, BLOCKED, PLAN_ONLY, READY_TO_BUILD and

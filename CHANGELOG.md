@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+`/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
+retains contradictory same-head findings and unknown severities as holds, and
+reports ledger/container provenance. Shared project-resolution and complete-file
+references are now consumed by both `/next` 0.8.1 and triage. CI discovery names
+permission-aware policy/workflow fallbacks and caches base evidence; labels
+prefilter costly project mapping with honest exclusion counts. Missing audit
+configuration has an explicit reporting-only exception in CONVENTIONS.md.
+
+
+`/triage` 0.3.0 adds repeatable Linear project filters (union, intersected with
+all requested GitHub labels) and evidence for every PR disposition: intent,
+state/head/base, CI coverage, posted loop versus derived review status, and a
+linked unresolved-thread appendix. Reuses `/next` membership/file verification
+and review contracts without running them. Proposals disclose unknown/unstable
+reads, all merge candidates in dependency order or independent lanes, and use
+exclusive collision-safe output creation. Default remains GitHub-only PR triage;
+project lookup fails closed, and branch/worktree passes remain separate.
+Synthetic offline fixtures and prompt-reference checks run in `bin/check-stack`;
+they do not enforce live agent behavior. Router and README preserve invocation
+filters. Refresh adapters through `bin/install --host codex` after deployment.
+
 Add `/issue-graph open|status|refresh` for an installed local roadmap viewer.
 Refresh derives views from the indexed JSON and fresh Linear evidence, preserves
 typed event conditions and unverified checkpoints, and backs up one workspace
@@ -16,11 +37,14 @@ key `ci.checks` (`required` | `all` | `none`) says which checks count; missing �
 pending and failing checks alike (gh 2.89.0), so the exit code is never read.
 kstack's own `stack.yml` sets `none`: it has no GitHub CI.
 
-Require complete orchestration graph coverage on main for Linear project execution;
-`/linear-roadmap` publishes repairs through a PR, and repeatable
-`--accept-graph-update <PR#>` permits an explicitly accepted, validated pending graph.
-Wave preserves graph SHA evidence through planning, build and review; parent tickets
-may be groups for context without executable events.
+Separate project graph coverage warnings from execution eligibility across next,
+wave, dispatch, land, investigate and review workflows. Unrelated missing tickets
+no longer freeze mapped work. Add `graph-admission` for pinned candidate/closure
+evidence and at most three missing maintenance units within approved scope,
+recording main SHA, full live issue evidence and exact node delta without a
+preliminary graph PR. Scope, dependencies, release criteria and human gates still
+require reviewed publication. Wave retains admission digests through plan/build
+and requires fresh candidate evidence before implementation.
 
 `/summarize-change` 0.2.0 briefs a change by its intent instead of its
 behavior. The six parts are now intent with its source, approach and the system
@@ -112,7 +136,8 @@ Filtering weakens the skill's completeness promise, so the proposal now carries
 a mandatory `**Filter:**` header line — `none` when unfiltered — plus the scored
 and excluded counts, the truncation assertion moves to the filtered count, and
 the branch/worktree tables state that no label reached them. `--label` is a
-GitHub PR label only; `triage` still never reads a tracker.
+GitHub PR label only; that path stays GitHub-only. Optional Linear project
+filtering is described in the current triage procedure.
 
 New `core/summarize-change`: briefs one change in the session as six fixed parts
 — verdict, decision, behavioral change map with `file:line`, blast radius with

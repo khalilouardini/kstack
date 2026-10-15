@@ -196,6 +196,19 @@ class CoverageTests(unittest.TestCase):
         self.commit()
         self.assertEqual(self.check()['state'], 'UPDATE_REQUIRED')
 
+    def test_recorded_ogur_474_addition_changes_only_coverage_warning(self):
+        captured = json.loads((ROOT / 'tests/fixtures/ogur-474-coverage.json').read_text())
+        self.snapshot = captured
+        self.snapshot['projects'][0]['view_path'] = 'docs/MVP.md'
+        original = [i for i in captured['projects'][0]['issues'] if i['identifier'] != 'OGUR-474']
+        self.view(original)
+        self.commit()
+        report = self.check()['projects'][0]
+        self.assertEqual((report['covered_count'], report['total_count']), (11, 12))
+        self.assertEqual(report['missing_view'], ['OGUR-474'])
+        self.snapshot['projects'][0]['issues'] = original
+        self.assertEqual(self.check()['state'], 'CURRENT')
+
     def test_symlink_view_and_missing_ref_refuse(self):
         (self.repo / 'docs').mkdir()
         (self.repo / 'docs/MVP.md').symlink_to('../README.md')

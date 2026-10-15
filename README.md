@@ -15,9 +15,11 @@ Ultracode coordinator, per-ticket sessions and human checkpoints;
 [the project template](project-template/ORCHESTRATION.md) carries project-specific conditions.
 [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) prepares a typed record
 and generates its Mermaid view; `/next` reads its conditions before recommending work.
-Roadmap checks each project graph on main against all Linear tickets and opens a
-graph update PR for gaps. Execution waits for publication unless that invocation
-explicitly supplies `--accept-graph-update <PR#>` for the validated pending graph.
+Roadmap reports project-wide coverage warnings separately from candidate eligibility.
+Mapped work can proceed despite unrelated missing tickets; small repairs within
+approved scope can use an auditable local reconciliation. Scope, dependency,
+release-criteria and human-gate changes require reviewed graph publication.
+See the [shared gate contract](tools/linear/linear-roadmap/references/publication-gate.md).
 The [interactive map](docs/skill-map.html) adds filtering when opened locally.
 
 ```bash
@@ -57,10 +59,19 @@ needs a Linear workspace.
 | Skill | Does | Refuses |
 |---|---|---|
 | [`/spec`](roles/spec/SKILL.md) | Product gate: the scope role runs first and alone; only an in-scope verdict fans out to tech-lead + designer, then qa | Spending four agents on an idea that fails the first gate |
-| [`/triage`](roles/triage/SKILL.md) | Scores every open PR, branch and worktree against the scope doc; writes a dated proposal | Closing, merging or deleting anything |
+| [`/triage`](roles/triage/SKILL.md) | PR intent, merge/CI and review/thread evidence against scope; optional project/label filters; branches/worktrees on request | Reviewing, posting, merging, closing or tracker writes |
 | [`/next`](tools/linear/next/SKILL.md) | Recommends one scoped issue or up to five independent tracks across repeated project filters | Inventing a ticket; any write |
 | [`/linear-feature-intake`](tools/linear/linear-feature-intake/SKILL.md) | Turns a scope verdict into the right tracker records | Forming a verdict of its own |
 | [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) | Creates or updates the product scope contract; maps work, validates JSON and generates Mermaid | Creating tickets, granting scope or launching sessions |
+
+`/triage` defaults to PRs only. Use
+`/triage prs --project "Release Amber" --project "<project-ID>" --label release`
+for a verified Linear project union intersected with the GitHub label. Without
+`--project`, it needs GitHub only; unavailable requested project mapping fails
+closed. It writes a collision-safe proposal with an overview, per-PR intent,
+current-head CI/review evidence, linked unresolved threads and complete merge
+lanes. [Offline fixtures](roles/triage/tests/README.md) check frozen evidence
+interpretation; the live procedure and read-only boundary remain prompt-level.
 
 For new work, compose `/spec` → `/linear-feature-intake` → `/linear-roadmap`.
 For existing approved tickets, start with `/linear-roadmap`. A simple prompt can
