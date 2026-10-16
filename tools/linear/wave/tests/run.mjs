@@ -173,7 +173,7 @@ const tests=[
    const build=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;});
    assert.equal(build.result.state,'COMPLETE');
    assert.ok(build.calls.filter(c=>c.label.startsWith('B1')).every(c=>c.prompt.includes(JSON.stringify(flags))));
-   for(const c of build.calls.filter(c=>c.label.startsWith('B3'))){
+   for(const c of build.calls.filter(c=>c.label.startsWith('B3 review'))){
      assert.ok(c.prompt.includes('/pr-loop '));
      assert.ok(c.prompt.includes('--max-rounds 3 --accept-graph-update 900 --accept-graph-update 900'));
      assert.ok(c.prompt.includes('Validated graph publication evidence: '));
@@ -255,11 +255,11 @@ const tests=[
  async()=>{const r=await run('build',(_f,a)=>{a.approve=['T-2'];});assert.deepEqual(r.calls.filter(c=>c.label.startsWith('B1')).map(c=>c.label),['B1 build T-2']);assert.equal(r.result.tracks[0].state,'NOT_APPROVED');
  const invalid=await run('build',(_f,a)=>{a.approve=['unknown'];});assert.equal(invalid.result.state,'STOPPED');assert.equal(invalid.calls.length,0);assert.ok(invalid.result.evidence.length);
  },
- async()=>{const r=await run('build',stopped);assert.ok(!r.calls.some(c=>c.label==='B3 review T-1'));assert.equal(r.result.tracks[0].state,'STOPPED');assert.equal(r.calls.filter(c=>c.label.startsWith('B3')).length,2);
+ async()=>{const r=await run('build',stopped);assert.ok(!r.calls.some(c=>c.label==='B3 review T-1'));assert.equal(r.result.tracks[0].state,'STOPPED');assert.equal(r.calls.filter(c=>c.label.startsWith('B3 review')).length,2);
  const dropped=await run('build',f=>{f.responses['B1 build T-1']=null;});assert.equal(dropped.result.tracks[0].state,'STOPPED');assert.ok(dropped.logs.some(l=>l.includes('dropped')));
  const badGate=await run('build',f=>{f.responses['B1 build T-1'].gates.test.exit=1;});assert.equal(badGate.result.tracks[0].state,'STOPPED');
  },
- async()=>{const r=await run('build',(f,a)=>{a.plan_record.contract=f.contract;a.plan_record.literals=f.literals;f.responses['B2 seam check']={exit:1,table:seamTable(f).map(r=>r.branch==='codex/t-2'&&r.file==='file2.txt'?{...r,state:'MISMATCH',evidence:'absent'}:r),open_questions:[]};});assert.ok(!r.calls.some(c=>c.label==='B3 review T-2'));assert.equal(r.result.tracks[1].state,'SEAM_MISMATCH');for(const t of fixture.tracks)assert.ok(r.events.indexOf('start B2 seam check')>r.events.indexOf('end B1 build '+t.issue_id));assert.equal(r.result.seam_check.table[0].literal,'AGREED');assert.ok(r.result.seam_check.table.some(row=>row.file==='file2.txt'&&row.state==='MISMATCH'));assert.equal(r.calls.filter(c=>c.label.startsWith('B3')).length,2);
+ async()=>{const r=await run('build',(f,a)=>{a.plan_record.contract=f.contract;a.plan_record.literals=f.literals;f.responses['B2 seam check']={exit:1,table:seamTable(f).map(r=>r.branch==='codex/t-2'&&r.file==='file2.txt'?{...r,state:'MISMATCH',evidence:'absent'}:r),open_questions:[]};});assert.ok(!r.calls.some(c=>c.label==='B3 review T-2'));assert.equal(r.result.tracks[1].state,'SEAM_MISMATCH');for(const t of fixture.tracks)assert.ok(r.events.indexOf('start B2 seam check')>r.events.indexOf('end B1 build '+t.issue_id));assert.equal(r.result.seam_check.table[0].literal,'AGREED');assert.ok(r.result.seam_check.table.some(row=>row.file==='file2.txt'&&row.state==='MISMATCH'));assert.equal(r.calls.filter(c=>c.label.startsWith('B3 review')).length,2);
    const absent=await run('build',(f,a)=>{a.plan_record.contract=f.contract;a.plan_record.literals=f.literals;f.responses['B2 seam check']=null;});assert.ok(!absent.calls.some(c=>c.label.startsWith('B3')));
    const incomplete=await run('build',(f,a)=>{a.plan_record.contract=f.contract;a.plan_record.literals=f.literals;});assert.ok(!incomplete.calls.some(c=>c.label.startsWith('B3')));
    seamIntegration();
@@ -341,6 +341,7 @@ const tests=[
    const build=(change=()=>{},prior=planned.result)=>run('build',(f,a)=>{
      a.plan_record=clone(prior);f.responses['B2 seam check'].table=seamTable(f);
      a.graph_publication.main_sha=merged;Object.assign(a.graph_admission[0],{main_sha:merged,graph_sha:merged});
+     for(const t of fixture.tracks) f.responses['B3 admission '+t.issue_id].main_sha=merged;
      change(a.graph_admission[0]);
    });
    const r=await build();
@@ -352,7 +353,8 @@ const tests=[
      assert.ok(c.prompt.includes(`Run A pinned main ${pinned}`)&&c.prompt.includes(merged));
      assert.match(c.prompt,/is an ancestor of the fetched origin\/main/);
    }
-   assert.equal(r.calls.filter(c=>c.label.startsWith('B3')).length,fixture.tracks.length);
+   assert.equal(r.calls.filter(c=>c.label.startsWith('B3 review')).length,fixture.tracks.length);
+   assert.deepEqual(r.result.tracks.map(t=>t.state),['CLEAN','CLEAN','CLEAN']);
    assert.ok(r.result.evidence.some(e=>e.includes(pinned)&&e.includes(merged)&&/digests unchanged/.test(e)));
    const same=await run('build',(f,a)=>{a.plan_record=clone(planned.result);f.responses['B2 seam check'].table=seamTable(f);});
    assert.equal(same.result.state,'COMPLETE');
@@ -370,8 +372,73 @@ const tests=[
    const project=await build(()=>{},other);
    assert.equal(project.result.state,'STOPPED');assert.equal(project.calls.length,0);
    assert.match(project.result.stop_reason,/graph publication: Project changed since Run A/);
+ },
+ async()=>{
+   // review_concurrency 1 starts T-1's review after B1 and B2; an unrelated PR merged
+   // in between (ogur wave-2026-10-16-mvp21-r2: c5673b96 -> 47299f8c, PR #527 BLOCKED, rounds 0).
+   const validated='a'.repeat(40),live='7'.repeat(40);
+   const r=await run('build',(f,a)=>{movedAdmission(f,a,'T-1',live);});
+   assert.equal(r.result.state,'COMPLETE');
+   assert.deepEqual(r.result.tracks.map(t=>t.state),['CLEAN','CLEAN','CLEAN']);
+   assert.deepEqual(r.calls.filter(c=>c.label.startsWith('B3 admission')).map(c=>c.label),fixture.tracks.map(t=>'B3 admission '+t.issue_id));
+   assert.ok(r.events.indexOf('end B3 admission T-1')<r.events.indexOf('start B3 review T-1'));
+   const admission=r.calls.find(c=>c.label==='B3 admission T-1');
+   assert.match(admission.prompt,/merge-base --is-ancestor a{40} <live main>/);
+   assert.match(admission.prompt,/merge-tree --write-tree <live main> <PR head>/);
+   assert.match(admission.prompt,/graph-admission --ref <live main>/);
+   const review=r.calls.find(c=>c.label==='B3 review T-1');
+   assert.ok(review.prompt.includes(`main moved ${validated} -> ${live}`));
+   assert.ok(review.prompt.includes(`For this review node live main ${live} replaces the`));
+   assert.ok(review.prompt.includes('"main_sha":"'+live+'"'));
+   for(const id of ['T-2','T-3']) assert.ok(!r.calls.find(c=>c.label==='B3 review '+id).prompt.includes('main moved'));
+   assert.ok(r.result.evidence.some(e=>e.includes(validated)&&e.includes(live)&&/graph and closure digests unchanged/.test(e)));
+   const exempt=await run('build',(f,a)=>{
+     a.graph_publication={projects:[]};a.graph_admission=[];
+     a.plan_record.tracks.forEach(t=>t.project=null);movedAdmission(f,a,'T-1',live);
+   });
+   assert.deepEqual(exempt.result.tracks.map(t=>t.state),['CLEAN','CLEAN','CLEAN']);
+   assert.ok(!exempt.calls.some(c=>c.label.startsWith('B3 admission')),'project-less tracks stay exempt');
+ },
+ async()=>{
+   // Negative control for case 31: the same moved main, but the track's closure digest changed.
+   const live='7'.repeat(40),digest='sha256:'+'9'.repeat(64);
+   const variants=[
+     ['closure changed',{report:rep=>{rep.candidates[0].closure_evidence_digest=digest;}}],
+     ['graph changed',{report:rep=>{rep.graph_digest=digest;}}],
+     ['closure changed',{report:rep=>{rep.candidates[0].mode='LOCAL_RECONCILIATION';rep.delta.added_nodes=[{id:'T-1',issue_ref:'T-1'}];}}],
+     ['validated main is not an ancestor of live main',{obs:o=>{o.ancestor_exit=1;}}],
+     ['PR head does not merge cleanly with live main',{obs:o=>{o.merge_tree_exit=1;}}],
+     ['has no eligible build admission at live main',{report:rep=>{rep.main_sha='a'.repeat(40);}}],
+     ['has no eligible build admission at live main',{report:rep=>{rep.candidates[0].state='BLOCKED';}}],
+     ['has no eligible build admission at live main',{obs:o=>{o.admission_report='not json';}}],
+     ['stopped: fetch failed',{obs:o=>{Object.assign(o,{state:'STOPPED',stop_reason:'fetch failed',main_sha:null,checked_at:null});}}],
+     ['returned invalid live main evidence',{obs:o=>{o.checked_at='2026-10-05T11:00:00Z';}}],
+   ];
+   for(const [reason,change] of variants){
+     const r=await run('build',(f,a)=>{movedAdmission(f,a,'T-1',live,change);});
+     assert.equal(r.result.state,'COMPLETE');
+     assert.deepEqual(r.result.tracks.map(t=>t.state),['BLOCKED','CLEAN','CLEAN'],reason);
+     assert.ok(!r.calls.some(c=>c.label==='B3 review T-1'),reason+': no review round may run');
+     const review=r.result.tracks[0].review;
+     assert.equal(review.rounds,0);
+     assert.ok(review.open_findings[0].startsWith('B3 admission: T-1 '+reason),review.open_findings[0]);
+     assert.match(review.open_findings[0],/repeat condition analysis and plan approval/);
+     assert.ok(r.result.evidence.includes(review.open_findings[0]));
+   }
+   const dropped=await run('build',f=>{f.responses['B3 admission T-1']=null;});
+   assert.deepEqual(dropped.result.tracks.map(t=>t.state),['BLOCKED','CLEAN','CLEAN']);
+   assert.match(dropped.result.tracks[0].review.open_findings[0],/returned no matching admission record/);
  }
 ];
+// B3 admission observes live main after B1; a moved main carries fresh evidence.
+const movedAdmission=(f,a,id,live,change={})=>{
+  const report={...clone(a.graph_admission[0]),main_sha:live,graph_sha:live,checked_at:'2026-10-05T13:30:00Z'};
+  const obs=Object.assign(f.responses['B3 admission '+id],{main_sha:live,checked_at:'2026-10-05T13:31:00Z',
+    ancestor_exit:0,merge_tree_exit:0,head_sha:'9'.repeat(40)});
+  change.report?.(report);
+  obs.admission_report=JSON.stringify(report);
+  change.obs?.(obs);
+};
 function seamIntegration(){
  const temp=mkdtempSync(join(tmpdir(),'wave-seam-'));
  try{
@@ -399,5 +466,12 @@ if(process.argv.includes('--mutation-check') && !failed){
  try {const r=await run('build',stopped,mutated);assert.ok(!r.calls.some(c=>c.label==='B3 review T-1'));}catch{detected=true;}
  assert.ok(detected,'case 6 must fail when STOPPED guard is removed');
  console.log('PASS mutation: removing STOPPED guard makes case 6 fail; original source untouched');
+ // Remove the B3 closure digest comparison. Case 32's closure variant must detect it.
+ const closureMutant=executable.replace('now.candidate.closure_evidence_digest!==current.candidate.closure_evidence_digest ||','');
+ assert.notEqual(closureMutant,executable,'closure mutation target must exist');
+ const closureRun=await run('build',(f,a)=>{movedAdmission(f,a,'T-1','7'.repeat(40),
+   {report:rep=>{rep.candidates[0].closure_evidence_digest='sha256:'+'9'.repeat(64);}});},closureMutant);
+ assert.equal(closureRun.result.tracks[0].state,'CLEAN','closure mutant must let the changed closure through');
+ console.log('PASS mutation: removing the B3 closure digest check makes case 32 fail; original source untouched');
 }
 process.exitCode=failed?1:0;

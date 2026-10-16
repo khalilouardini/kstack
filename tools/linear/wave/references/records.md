@@ -33,6 +33,16 @@ branch tips, with evidence and verified (still current) or stale (superseded).
 Questions lacking that check remain explicit in unverified_questions; they
 must never acquire a fabricated verification label.
 
+READMISSION is the read-only B3 admission observation for one project-linked
+track, taken immediately before its pr-loop. main_sha and checked_at are the
+live main read. When main equals Run B's validated main, the remaining evidence
+fields are null. Otherwise ancestor_exit and merge_tree_exit are the exact exit
+codes of `git merge-base --is-ancestor` and `git merge-tree --write-tree`,
+head_sha is the PR head that merge-tree tested, and admission_report is the
+graph-admission helper's complete JSON output as a string, because the report
+is not a fixed-shape record. The script parses and validates it; a BLOCKED
+admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
+
 ```json
 {
   "TRACK": {
@@ -381,6 +391,86 @@ must never acquire a fabricated verification label.
       "open_findings",
       "model_routing",
       "open_questions"
+    ],
+    "additionalProperties": false
+  },
+  "READMISSION": {
+    "type": "object",
+    "properties": {
+      "issue_id": {
+        "type": "string"
+      },
+      "pr": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "OBSERVED",
+          "STOPPED"
+        ]
+      },
+      "main_sha": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "checked_at": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "ancestor_exit": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "merge_tree_exit": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "head_sha": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "admission_report": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "stop_reason": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "evidence": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "issue_id",
+      "pr",
+      "state",
+      "main_sha",
+      "checked_at",
+      "ancestor_exit",
+      "merge_tree_exit",
+      "head_sha",
+      "admission_report",
+      "stop_reason",
+      "evidence"
     ],
     "additionalProperties": false
   },

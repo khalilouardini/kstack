@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.5.1
+version: 0.6.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -163,11 +163,12 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    sequenced or already-active issues. Agent nulls/exceptions become explicit
    stopped records or a wave refusal, with logs and evidence.
 
-**Internal node rule:** A2, A3 and B2 read this skill only for their assigned
-scan, contract or seam operation below. The numbered caller procedure, including
-the Workflow invocation, is caller-only: a node never recursively invokes it.
-A2 reads issues/scopes and returns literals; A3 prepares only the contract and
-its test via land; B2 runs seam-check and verifies questions. All are prompt-level.
+**Internal node rule:** A2, A3, B2 and B3 admission read this skill only for their
+assigned scan, contract, seam or admission operation below. The numbered caller
+procedure, including the Workflow invocation, is caller-only: a node never
+recursively invokes it. A2 reads issues/scopes and returns literals; A3 prepares
+only the contract and its test via land; B2 runs seam-check and verifies questions;
+B3 admission only observes. All are prompt-level.
 
 Run A selects (A1), scans shared literals in issue descriptions and scopes (A2),
 then, only if necessary, prepares a contract PR (A3) before dispatch plans (A4).
@@ -187,13 +188,24 @@ base. It emits a literal × branch × file table; nonzero exit or absent evidenc
 blocks affected tracks. No contract → B2 does not run and the report says so.
 B3 reads `tools/github/pr-loop/SKILL.md` top to bottom with the round cap and
 parses its existing verdict report; it has no new adaptation. Review concurrency
-limits only B3. Do not give Workflow agents `isolation: 'worktree'`: that would
+limits only B3, so a later track's review can start long after B1 validated main.
+Before each project-linked track's pr-loop, a read-only B3 admission node returns
+READMISSION: the live main SHA and, when it differs from Run B's validated main,
+the exit codes of `git merge-base --is-ancestor <validated> <live>` and
+`git merge-tree --write-tree <live> <PR head>` plus a fresh build-transition
+graph-admission report at live main. The script proceeds only when the validated
+main is an ancestor, the merge is clean, and the fresh report admits the track
+with Run B's graph digest, closure evidence digest and mode; the review node then
+uses live main as its pin. Any other result, including a missing record, makes the
+track BLOCKED with rounds 0 and no review write. A move during the loop still stops
+the loop. Project-less tracks have no admission node. Do not give Workflow agents `isolation: 'worktree'`: that would
 lose the dispatch workspace and its evidence.
 
 All node policy guarantees — no merge, human approval, tracker boundaries,
 canonical composition, truthful worktree use and refusal on ambiguity — are
-**prompt-level**. The approval filter and stopped/mismatch review filters are
-script checks verified by the offline harness, not tool restrictions on agents.
+**prompt-level**. The approval filter, stopped/mismatch review filters and the
+B3 admission comparison are script checks verified by the offline harness, not
+tool restrictions on agents; the B3 admission observation itself is prompt-level.
 No-merge is prompt-level, backed by harness case 9's script/prompt scan. The seam
 checker is deterministic evidence, not a hook. Contract verification, gates and
 read-back still depend on nodes faithfully following the canonical procedures.
@@ -231,5 +243,7 @@ overlaps in `PLAN.risks`. SELECT/RUN_A do not retain `/next`'s unused-PR or
 excluded-candidate overlap reports, including EMPTY runs; say so explicitly.
 Direct `/next` and Codex's A1-only output retain those reports.
 With N=3, Run A normally uses 6 agents (3+N with contract), or 5 without A3;
-Run B uses 7 (2N+1 with B2), or 6 without B2, before stopped-track reductions.
+Run B uses 10 (3N+1 with B2), or 9 without B2: one B1, one B3 admission and one B3
+review per project-linked track. Project-less tracks have no admission node.
+Counts are before stopped-track reductions.
 There is no implicit retry past terminal review verdicts.
