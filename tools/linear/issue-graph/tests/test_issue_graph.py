@@ -66,6 +66,90 @@ def provenance():
 
 
 class ProjectionTests(unittest.TestCase):
+    def checkpoint_sample(self, status="historical", kind="merge", target="review"):
+        sample = evidence()
+        sample["checkpoints"] = [{
+            "node_id": target, "manifest_digest": provenance()["manifest_digest"],
+            "status": status, "summary": "Merged; independent review not verified",
+            "observed_at": NOW, "event_at": NOW,
+            "evidence": [{"kind": kind, "url": "https://github.com/example/repo/pull/7",
+                          "summary": "Merge commit reached main", "sha": "a" * 40}],
+        }]
+        return sample
+
+    def test_checkpoint_has_explicit_display_metadata_without_fake_assignee(self):
+        items, _ = graph.project_snapshot(record(), provenance(), "alpha", evidence())
+        review = next(i for i in items if i["identifier"] == "GATE-review")
+        self.assertEqual(review["raw"]["checkpoint"]["kind"], "human")
+        self.assertEqual(review["raw"]["checkpoint"]["status"], "unknown")
+        self.assertEqual(review["raw"]["checkpoint"]["linked_identifier"], "EXAMPLE-1")
+        self.assertIsNone(review["assignee"])
+
+    def test_observed_merge_is_historical_without_certifying_review(self):
+        source = record()
+        source["edges"][1].update(from_event="build", to_event="approve")
+        source["edges"][2].update(from_event="approve", to_event="merge")
+        items, _ = graph.project_snapshot(source, provenance(), "alpha", self.checkpoint_sample())
+        by_key = {i["identifier"]: i for i in items}
+        review = by_key["GATE-review"]
+        self.assertEqual(review["state"]["type"], "completed")
+        self.assertEqual(review["completedAt"], NOW)
+        self.assertEqual(review["raw"]["checkpoint"]["status"], "historical")
+        self.assertEqual(review["raw"]["checkpoint"]["evidence"][0]["sha"], "a" * 40)
+        self.assertEqual(by_key["GATE-evidence"]["state"]["type"], "triage")
+        self.assertIn("independent review not verified", review["raw"]["snapshotDescription"])
+
+    def test_stale_duplicate_or_unrelated_checkpoint_observation_is_rejected(self):
+        for change in [dict(manifest_digest="sha256:stale"), dict(node_id="missing"),
+                       dict(status="invented"), dict(evidence=[])]:
+            sample = self.checkpoint_sample()
+            sample["checkpoints"][0].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                graph.project_snapshot(record(), provenance(), "alpha", sample)
+        sample = self.checkpoint_sample()
+        sample["checkpoints"] *= 2
+        with self.assertRaises(ValueError):
+            graph.project_snapshot(record(), provenance(), "alpha", sample)
+
+    def test_merge_cannot_close_evaluation_or_release_checkpoint(self):
+        for target in ["evidence", "release"]:
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                graph.project_snapshot(record(), provenance(), "alpha",
+                                       self.checkpoint_sample(target=target))
+
+    def test_verified_evaluation_requires_evaluation_evidence(self):
+        sample = self.checkpoint_sample(status="verified", kind="evaluation", target="evidence")
+        sample["checkpoints"][0]["summary"] = "Independent evaluation passed at recorded SHA"
+        items, _ = graph.project_snapshot(record(), provenance(), "alpha", sample)
+        item = next(i for i in items if i["identifier"] == "GATE-evidence")
+        self.assertEqual(item["state"]["type"], "completed")
+        self.assertEqual(item["raw"]["checkpoint"]["status"], "verified")
+        sample["checkpoints"][0]["evidence"][0]["kind"] = "merge"
+        with self.assertRaises(ValueError):
+            graph.project_snapshot(record(), provenance(), "alpha", sample)
+
+    def test_verified_review_requires_matching_head_and_human_authorization(self):
+        source = record()
+        source["edges"][1].update(from_event="build", to_event="approve")
+        source["edges"][2].update(from_event="approve", to_event="merge")
+        sample = self.checkpoint_sample(status="verified")
+        proofs = sample["checkpoints"][0]["evidence"]
+        proofs[0]["head_sha"] = "b" * 40
+        proofs += [{"kind": "review", "url": "https://github.com/example/repo/pull/7#review",
+                    "summary": "No findings at the merged head", "sha": "b" * 40},
+                   {"kind": "human_decision", "url": "https://github.com/example/repo/pull/7",
+                    "summary": "Authorized owner merged the reviewed head"}]
+        items, _ = graph.project_snapshot(source, provenance(), "alpha", sample)
+        self.assertEqual(next(i for i in items if i["identifier"] == "GATE-review")
+                         ["raw"]["checkpoint"]["status"], "verified")
+        proofs[1]["sha"] = "c" * 40
+        with self.assertRaisesRegex(ValueError, "head"):
+            graph.project_snapshot(source, provenance(), "alpha", sample)
+        proofs[1]["sha"] = "b" * 40
+        proofs.pop()
+        with self.assertRaises(ValueError):
+            graph.project_snapshot(source, provenance(), "alpha", sample)
+
     def test_preserves_conditions_and_keeps_completed_ticket_separate_from_checkpoint(self):
         source = record()
         before = copy.deepcopy(source)

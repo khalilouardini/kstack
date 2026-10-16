@@ -46,7 +46,10 @@ actually fetched. Do not invent comments or change tracker relations.
 
 Unit/external/contextual issue cards use their actual issue key when unique.
 Human, evidence and release cards use stable `GATE-<manifest-node-id>` keys and
-an unverified triage state even when they link to a completed ticket. If a ticket
+explicit `raw.checkpoint` display metadata. The viewer renders these as roadmap
+checkpoints, without a ticket key, priority or unassigned-user footer. Without
+separate observations they remain unverified, even when their linked ticket is
+Done. A linked issue's state alone never verifies an approval or evaluation. If a ticket
 has several unit representations, stable `VIEW-<node-id>` keys avoid collapsing
 them. Unlinked units use `PROPOSED-<node-id>` and a Proposed unit label; unlinked
 external prerequisites use `EXTERNAL-<node-id>` and an External prerequisite
@@ -57,6 +60,32 @@ source, project admission, incoming/outgoing events and their sources.
 
 The viewer's generic Blocks/Blocked by counts project event-specific conditions
 onto one relation model. They are not scheduling/readiness calculations.
+
+## Reconcile checkpoint evidence
+
+The snapshot may include a `checkpoints` array. Each entry names `node_id`, the
+exact `manifest_digest`, `status`, `summary`, `observed_at`, and nonempty
+`evidence` entries with `kind`, HTTPS `url` and `summary`. A completed entry also
+requires its original `event_at`. Duplicate, unknown, unrelated and stale-digest
+observations fail the import. Observations are display evidence, not execution
+admission or new approval records. Preserve original actors, dates, reviewed
+SHAs and acceptance boundaries in their source explanations.
+
+Statuses are `verified`, `historical`, `pending`, `failed` and `unknown`.
+`verified` requires human-decision evidence for a human node, evaluation evidence
+for an evidence node, and release evidence for a release node. Review-and-merge
+checkpoints additionally require merge and review evidence, with every merge
+entry's `head_sha` matching a review entry's `sha`. Read the actual review verdict,
+author and exact head; a populated review list is not a clean review.
+
+`historical` applies only to a human review checkpoint with an outgoing merge
+authorization for its linked engineering unit and observed merge evidence. It
+displays as **Merge recorded** and completed history, while explicitly retaining
+unverified review requirements in its summary. A merge cannot verify an eval or
+release node. Use `pending` or `failed` only with evidence explaining the unmet
+condition; absent evidence stays `unknown`, rather than asserting new work exists.
+Review the existing scope/decision records and original evidence before changing
+a checkpoint's status; never close all checkpoints merely because tickets are Done.
 
 Preview is read-only and reports additions/removals, source digest, observation
 time and resulting counts. Apply refuses a changed on-disk source before writing,
