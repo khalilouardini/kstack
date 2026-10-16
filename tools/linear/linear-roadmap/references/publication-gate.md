@@ -65,11 +65,15 @@ For every proposed, resumed or reviewed implementation unit:
    prohibit an otherwise eligible build. PLAN_ONLY remains a separate next/dispatch
    outcome and cannot enter wave's implementation tracks.
 
-Indexed validation, installed source pin, graph/event-cycle checks, scope, active
+Indexed schema validation, clean installed source, graph/event-cycle checks, scope, active
 session checks, independence, plan/review approval and release gates remain
 mandatory. Legacy graphs require the same cited closure audit by the skill;
 `graph-admission` cannot grant deterministic admission without a typed index.
 A legacy missing unit or dependency repair requires a reviewed graph update.
+The index's `source_revision` records adoption provenance. A different installed
+kstack HEAD alone is not an admission failure or a reason for a graph-only repin
+PR; supported index/manifest schemas determine compatibility. Unsupported schemas
+require migration. Preserve provenance and all scope/dependency/approval checks.
 
 For indexed graphs, use `bin/graph-admission` beside `bin/graph-coverage`:
 
@@ -169,14 +173,16 @@ scope or prerequisites to manufacture completeness.
 
 Retain this repeatable flag for a specific pending **reviewed** graph update.
 Validate positive decimal numbers, deduplicate, and verify OPEN, base main,
-stable exact head, affected projects, indexed validation/source pin and review
+stable exact head, affected projects, indexed schema validation/clean source and review
 evidence at that head. Report coverage gaps separately and require verified
 selected units and closure on that head; unrelated omissions do not veto it. Review must come from the configured reviewer
 or authorized human; scope decisions require the authorized owner independently.
 Fetch and validate the exact PR head; `--main-ref <fresh-main-ref>` with
 `graph-admission` records both SHAs (snapshot also supplies `graph_sha`). The flag
 waives publication on main only. It cannot waive review, scope, blockers or gates.
-Closed, merged, unrelated, invalid, unreviewed or moving heads refuse;
+Closed, merged, unrelated, invalid or unreviewed heads refuse. A head moving
+within an invocation stops the node before writes; a later invocation requires
+fresh exact-head review and admission, then compares approved meaning;
 incomplete selected scope/closure evidence refuses too; after
 merge omit the flag and recheck main. Never base implementation on the graph PR.
 
@@ -209,11 +215,12 @@ writes, B1 before implementation and B3 before implementer fixes. Run B obtains
 fresh reports and compares effective graph and relevant closure digests with Run
 A before building. Main SHA equality between the runs is not required: merging
 the wave contract PR moves main, and matching digests show Run A's analysis still
-holds. B1 verifies Run A's main is an ancestor of the fetched default branch; an
-accepted graph PR number/head or project that differs from Run A still refuses.
+holds. B1 verifies Run A's main is an ancestor of the fetched default branch.
+A changed project or graph/closure meaning still refuses; current pending graph
+heads require this invocation's explicit flag and exact-head review.
 Coverage counts and routine tracker timestamp/status changes alone do not
 invalidate approval; full fresh observations remain in the audit record. Relevant
-digests cover scope path/line/quote, node identity, ownership, acceptance, incoming
+digests cover scope path/quote (line remains a verified locator), node identity, ownership, acceptance, incoming
 prerequisites, issue id/identifier/description/url/prerequisites, and current event
 node_id/event/state. Event facts are sorted by node_id/event before hashing.
 Agent-written scope rationales and proof/event source explanations remain required
@@ -221,5 +228,20 @@ and fully retained in evidence.request but are excluded from the factual digest;
 rewording them alone cannot invalidate approval. The calling skills still verify
 source truth on each transition. Future gate definitions stay protected by the
 graph digest. A changed coverage count alone does not invalidate approval;
-a changed graph, relevant closure or SHA requires reanalysis and plan approval.
+a changed graph or relevant closure requires reanalysis and plan approval.
+SHA movement alone requires a fresh audit at the new SHA, not new plan approval:
+the required wave contract merge and unrelated commits naturally advance main.
+Bind each historical candidate to its original publication main/graph SHA and
+date, then compare its issue/node identity, effective graph and factual closure
+digest with fresh ELIGIBLE evidence for the approved work. An accepted graph PR
+may reach main, or an identical local repair may be published, without changing
+plan meaning. For LOCAL_RECONCILIATION -> PUBLISHED, compare the saved
+`published_closure_evidence_digest` over the repair itself and its ancestors
+with the fresh published closure digest. Continue validating origin evidence
+and comparing full closures while both audits are local. Reverse transitions
+require a new plan. Scope line numbers are verified locators; digest scope
+identity is path plus exact quote. Current pending graph heads still require explicit flags and fresh
+exact-head review. Never carry an old audit onto a new SHA. Missing or ambiguous
+historical/current evidence refuses the entire wave build invocation before agents run. Record both snapshots; keep
+contract merge/content verification, rebase, scope and human approval checks.
 These caller observations are evidence, not durable human approval records.

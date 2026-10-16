@@ -79,6 +79,16 @@ def ancestors(graph, roots):
     return found
 
 
+def closure_nodes(nodes, events):
+    found = {key for key, _ in events}
+    for key in list(found):
+        parent = nodes[key]['unit_of']
+        while parent:
+            found.add(parent)
+            parent = nodes[parent]['unit_of']
+    return found
+
+
 def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
     coverage = COVERAGE['check'](repo, ref, snapshot)
     sha = coverage['sha']
@@ -93,9 +103,9 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
     if index_text is None:
         raise ValueError('typed index required for deterministic admission; use the documented legacy audit')
     index = json.loads(index_text)
-    # Same installed-source guard as validate-index, without using a mutable checkout.
-    if index['source_revision'] != GRAPH['installed_revision']():
-        raise ValueError('source revision mismatch: reconcile installed stack and reviewed graph')
+    # Coverage validated both schemas from immutable blobs. Adoption provenance
+    # need not match today's stack HEAD; still refuse uncommitted source.
+    GRAPH['installed_revision']()
     base = GRAPH['validate'](json.loads(COVERAGE['read_blob'](repo, sha, index['manifest'])))
     graph = copy.deepcopy(base) if proposed is None else GRAPH['validate'](proposed)
     selected = request.get('selected')
@@ -133,6 +143,7 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
         node = matches[0]
         origin = origins.get(node['id'])
         roots = {(node['id'], e) for e in ('plan', 'build', 'merge')}
+        published_closure = closure_nodes(nodes, ancestors(graph, roots))
         if origin:
             roots.update((origin, e) for e in ('plan', 'build', 'merge'))
         closure_events = ancestors(graph, roots)
@@ -189,21 +200,28 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
             required_text(observation.get('source'), 'event evidence source')
             if observation['state'] != 'SATISFIED':
                 unmet.append({'node_id': event[0], 'event': event[1], 'state': observation['state']})
+        def evidence_digest(keys, required_events):
+            return digest({
+                'nodes': [{'node_id': key,
+                           'scope': {field: proofs[key]['scope'][field] for field in ('path', 'quote')},
+                           'owner': proofs[key]['owner'], 'acceptance': proofs[key]['acceptance'],
+                           'prerequisites': proofs[key]['prerequisites']} for key in sorted(keys)],
+                'issues': [{field: issues[nodes[k]['issue_ref']][1][field]
+                            for field in ('id', 'identifier', 'description', 'url', 'prerequisites')}
+                           for k in sorted(keys) if nodes[k]['issue_ref']],
+                'events': [{'node_id': key, 'event': event, 'state': observed[(key, event)]['state']}
+                           for key, event in sorted(required_events)]})
+        # Origin facts are still validated and gate local repairs. Retain their
+        # full digest for local->local comparisons, and a separate own-closure
+        # digest for the one-way transition to the identical reviewed publication.
+        published_required = {e for e in ancestors(graph, {(node['id'], transition)}) if e[0] != node['id']}
         candidates.append({'issue_id': iid, 'identifier': issues[iid][1]['identifier'],
                            'project_id': projects[node['project']]['linear_id'],
                            'state': 'BLOCKED' if unmet else 'ELIGIBLE',
                            'mode': 'LOCAL_RECONCILIATION' if origin else 'PUBLISHED',
                            'node_id': node['id'], 'closure': sorted(closure),
-                           'closure_evidence_digest': digest({
-                               'nodes': [{'node_id': key,
-                                          'scope': {field: proofs[key]['scope'][field] for field in ('path', 'line', 'quote')},
-                                          'owner': proofs[key]['owner'], 'acceptance': proofs[key]['acceptance'],
-                                          'prerequisites': proofs[key]['prerequisites']} for key in sorted(closure)],
-                               'issues': [{field: issues[nodes[k]['issue_ref']][1][field]
-                                           for field in ('id', 'identifier', 'description', 'url', 'prerequisites')}
-                                          for k in sorted(closure) if nodes[k]['issue_ref']],
-                               'events': [{'node_id': key, 'event': event, 'state': observed[(key, event)]['state']}
-                                          for key, event in sorted(required)]}),
+                           'closure_evidence_digest': evidence_digest(closure, required),
+                           'published_closure_evidence_digest': evidence_digest(published_closure, published_required),
                            'unmet': unmet})
     return {'schema_version': 1, 'main_sha': main_sha, 'graph_sha': sha, 'checked_at': snapshot['checked_at'],
             'transition': transition, 'coverage': coverage,

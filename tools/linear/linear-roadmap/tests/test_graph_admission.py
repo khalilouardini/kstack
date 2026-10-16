@@ -98,6 +98,35 @@ class AdmissionTests(unittest.TestCase):
         changed = self.audit()
         self.assertNotEqual(r['candidates'][0]['closure_evidence_digest'], changed['candidates'][0]['closure_evidence_digest'])
 
+    def test_stack_update_keeps_admission_and_graph_provenance_unchanged(self):
+        index = self.repo / 'orchestration/index.json'
+        before_index = index.read_bytes()
+        before = self.audit()
+        API['GRAPH']['installed_revision'] = lambda: 'b' * 40
+        self.assertEqual(self.audit(), before)
+        self.snapshot['projects'][0]['issues'].append({'id': REPAIR_ID, 'identifier': 'T-474'})
+        after = self.audit()
+        self.assertEqual(after['state'], 'ELIGIBLE')
+        self.assertEqual(after['coverage']['state'], 'UPDATE_REQUIRED')
+        self.assertEqual(after['candidates'], before['candidates'])
+        self.assertEqual(index.read_bytes(), before_index)
+
+    def test_stack_update_does_not_accept_unsupported_graph_schema(self):
+        API['GRAPH']['installed_revision'] = lambda: 'b' * 40
+        for name in ('index.json', 'graph.json'):
+            with self.subTest(name=name):
+                path = self.repo / 'orchestration' / name
+                value = json.loads(path.read_text())
+                value['schema_version'] = 2
+                path.write_text(json.dumps(value))
+                self.git('add', '.')
+                self.git('commit', '-m', 'unsupported graph format')
+                self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+                with self.assertRaisesRegex(ValueError, 'expected 1'):
+                    self.audit()
+                value['schema_version'] = 1
+                path.write_text(json.dumps(value))
+
     def test_reworded_proof_prose_preserves_factual_digest_and_full_record(self):
         before = copy.deepcopy(self.audit())
         for proof in self.request['nodes']:
@@ -151,6 +180,49 @@ class AdmissionTests(unittest.TestCase):
         self.assertIn('scope', r['candidates'][0]['closure'])
         self.assertNotEqual(r['base_digest'], r['graph_digest'])
         self.assertEqual(r, self.audit(graph))
+
+    def test_real_repair_publication_digests_match_wave_fixture(self):
+        graph = self.repair()
+        local = self.audit(graph)
+        origin_event = next(e for e in self.request['events'] if e['node_id'] == 'scope')
+        origin_event['state'] = 'UNKNOWN'
+        blocked = self.audit(graph)
+        self.assertEqual(blocked['state'], 'BLOCKED')
+        self.assertNotEqual(local['candidates'][0]['closure_evidence_digest'],
+                            blocked['candidates'][0]['closure_evidence_digest'])
+        self.assertEqual(local['candidates'][0]['published_closure_evidence_digest'],
+                         blocked['candidates'][0]['published_closure_evidence_digest'])
+        origin_event['state'] = 'SATISFIED'
+        (self.repo / 'orchestration/graph.json').write_text(json.dumps(graph))
+        (self.repo / 'docs/project.md').write_text('```mermaid\n' + API['GRAPH']['render'](graph) + '```\n')
+        self.git('add', '.')
+        self.git('commit', '-m', 'publish identical repair')
+        self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+        self.request.pop('repairs')
+        published = self.audit()
+        self.assertEqual(local['graph_digest'], published['graph_digest'])
+        self.assertNotEqual(local['candidates'][0]['closure_evidence_digest'],
+                            published['candidates'][0]['closure_evidence_digest'])
+        self.assertEqual(local['candidates'][0]['published_closure_evidence_digest'],
+                         published['candidates'][0]['closure_evidence_digest'])
+        pair = {name: {'graph_digest': report['graph_digest'], 'base_digest': report['base_digest'],
+                       'candidate': {k: report['candidates'][0][k] for k in
+                                     ('mode', 'closure_evidence_digest', 'published_closure_evidence_digest')}}
+                for name, report in [('local', local), ('published', published)]}
+        fixture = ROOT.parent / 'wave/tests/fixtures/repair-publication.json'
+        self.assertEqual(pair, json.loads(fixture.read_text()))
+
+    def test_scope_line_movement_preserves_digest_but_stale_line_refuses(self):
+        before = self.audit()
+        (self.repo / 'docs/scope.md').write_text('Unrelated introduction.\n' + QUOTE + '\n')
+        self.git('add', 'docs/scope.md')
+        self.git('commit', '-m', 'add unrelated introduction')
+        self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+        with self.assertRaisesRegex(ValueError, 'scope citation'):
+            self.audit()
+        for proof in self.request['nodes']:
+            proof['scope']['line'] = 2
+        self.assertEqual(before['candidates'], self.audit()['candidates'])
 
     def test_scope_expansion_dependency_release_and_human_changes_require_publication(self):
         for kind in ('scope', 'edge', 'release', 'human', 'feature', 'ownership'):
@@ -213,7 +285,7 @@ class AdmissionTests(unittest.TestCase):
                     self.audit()
 
     def test_partial_missing_or_stale_evidence_refuses(self):
-        for change in ('pagination', 'relations', 'body', 'owner', 'acceptance', 'quote', 'event', 'sha', 'stale', 'pin'):
+        for change in ('pagination', 'relations', 'body', 'owner', 'acceptance', 'quote', 'event', 'sha', 'stale', 'dirty_source'):
             with self.subTest(change=change):
                 self.setUp()
                 if change == 'pagination':
@@ -235,7 +307,9 @@ class AdmissionTests(unittest.TestCase):
                 elif change == 'stale':
                     self.snapshot['checked_at'] = (NOW - timedelta(hours=2)).isoformat().replace('+00:00', 'Z')
                 else:
-                    API['GRAPH']['installed_revision'] = lambda: 'b' * 40
+                    def dirty_source():
+                        raise ValueError('installed lifecycle/roadmap source has uncommitted changes')
+                    API['GRAPH']['installed_revision'] = dirty_source
                 with self.assertRaises(ValueError):
                     self.audit()
 

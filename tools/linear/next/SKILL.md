@@ -1,6 +1,6 @@
 ---
 name: next
-version: 0.8.1
+version: 0.8.2
 description: Read Linear and recommend one scoped issue, or up to five independent tracks with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. --accept-graph-update accepts a reviewed pending graph PR. --accept-overlap accepts named PR file overlap. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
@@ -284,7 +284,9 @@ pointer and use its canonical target. Obtain `<stack-root>` with
 `git -C <physical-next-directory> rev-parse --show-toplevel`. Read
 `<stack-root>/ORCHESTRATION.md` and the roadmap `references/contract.md` beneath
 that root, then run `python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <graph-checkout>/orchestration/index.json`. Unreadable,
-invalid or mismatched pins stop the covered-project recommendation; never auto-repin.
+invalid or unsupported schemas and dirty lifecycle/roadmap source stop the
+covered-project recommendation. `source_revision` is adoption provenance;
+an installed HEAD mismatch alone never blocks selection or requires repinning.
 Absent index keeps the legacy procedure only where the root graph does not claim
 adoption. If the root claims adoption but lacks its index, stop recommendations
 for the affected projects until the index is repaired; never fall back around

@@ -1,6 +1,6 @@
 ---
 name: linear-roadmap
-version: 0.5.0
+version: 0.5.1
 description: Build a typed orchestration roadmap and Mermaid graph from existing Linear work or draft a proposed graph from a prompt. Reports main coverage warnings; small in-scope repairs use bounded local evidence, semantic changes require reviewed graph PRs. Creates or updates the local scope contract; tracker reads only. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap <project|spec|prompt>". Does not launch sessions or create tickets. (kstack)
 ---
 
@@ -115,8 +115,10 @@ contract's existence, completeness or approval.
    that record in place and preserve stable IDs; do not create per-subunit overlays.
    On first adoption, write `orchestration/<slug>.json` and the index using the
    template `project-template/orchestration-index.json`. Record the explicitly
-   adopted reviewed stack HEAD as `source_revision`; never auto-repin an existing
-   index. Refuse a source mismatch until the owner reconciles it. Root
+   adopted reviewed stack HEAD as `source_revision`, which records adoption
+   provenance. Preserve it on stack upgrades; compatibility is determined by the
+   supported index/manifest schema versions, not equality with installed HEAD.
+   Do not request a repin PR solely because kstack changed. Root
    `ORCHESTRATION.md` links this machine-readable index and its one manifest.
 3. Encode prerequisites with source and target events. `start_after` targets a
    unit's plan/build event; `merge_after` targets merge; `release_after` targets
@@ -125,7 +127,7 @@ contract's existence, completeness or approval.
    `review_after` orders a human review. Every condition cites its source. Do not convert a merge-only condition into a native start blocker.
 4. Run `python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <absolute-consuming-root>/orchestration/index.json`, then the
    same full command with `render-index`. Read exit codes and the manifest digest.
-   Pin/structure failure stops the handoff; fix from evidence, never remove the
+   Schema/structure or dirty-source failure stops the handoff; fix from evidence, never remove the
    failing prerequisite. Plain `validate`/`render` accept a manifest for draft
    checks only and cannot substitute for indexed validation before `/next`.
 5. Put the rendered project graph, a condition/source table, unknowns and links
@@ -137,7 +139,7 @@ contract's existence, completeness or approval.
    retain the main SHA, full live evidence and exact delta. Coverage bookkeeping
    can accompany the implementation PR or a later requested roadmap refresh.
    A local draft without that audit is never execution admission.
-   Report artifact paths, source pin, manifest digest, resolved project IDs,
+   Report artifact paths, source provenance, manifest digest, resolved project IDs,
    missing tickets/scope, conflicting conditions and remaining human decisions.
    Never publish or link Linear documents from this skill. Return artifacts for
    the human maintainer's separate manual publish/read-back step. Graph updates

@@ -1446,17 +1446,25 @@ const validAdmissionReports=(reports,pins,date) => Array.isArray(reports) ? repo
 ) : [];
 // Incomplete unrelated reports and plan-only reports cannot shadow eligible builds.
 const validAdmissions=validAdmissionReports(admissions,publication,args.date);
-const candidateAdmission=track => {
+// Historical reports use their own publication pins; a merged graph PR need not
+// remain OPEN today. Current pending graphs still require this invocation's flags.
+const candidateAdmission=(track,reports=validAdmissions,pins=publication,updates=graphUpdates) => {
   if (track.project===null) return {exempt:true};
-  const projects=publication.projects.filter(p=>p.project_id===track.project || p.project_name===track.project);
-  if (projects.length!==1 || projects[0].state==='UNKNOWN' ||
-      (projects[0].state==='ACCEPTED_UPDATE' && !graphUpdates.has(projects[0].pr_number))) return null;
-  const matches=validAdmissions.flatMap(report=>report.candidates.map(candidate=>({report,candidate})))
+  if (!Array.isArray(pins?.projects) || !/^[0-9a-f]{40}$/.test(pins.main_sha || '')) return null;
+  const projects=pins.projects.filter(p=>p && (p.project_id===track.project || p.project_name===track.project));
+  if (projects.length!==1 || !projectUUID.test(projects[0].project_id || '') ||
+      !['CURRENT','UPDATE_REQUIRED','ACCEPTED_UPDATE'].includes(projects[0].state)) return null;
+  const project=projects[0];
+  if (project.state==='ACCEPTED_UPDATE' &&
+      (!Number.isSafeInteger(project.pr_number) || project.pr_number<1 ||
+       !/^[0-9a-f]{40}$/.test(project.head_sha || '') || (updates && !updates.has(project.pr_number)))) return null;
+  const matches=reports.flatMap(report=>report.candidates.map(candidate=>({report,candidate})))
     .filter(({candidate:c})=>c && c.project_id===projects[0].project_id && c.identifier===track.issue_id);
   if (matches.length!==1) return null;
   const {report,candidate:c}=matches[0];
-  if (report.graph_sha!==(projects[0].state==='ACCEPTED_UPDATE' ? projects[0].head_sha : publication.main_sha) ||
+  if (report.graph_sha!==(project.state==='ACCEPTED_UPDATE' ? project.head_sha : pins.main_sha) ||
       report.transition!=='build' || c.state!=='ELIGIBLE' ||
+      typeof c.issue_id!=='string' || !c.issue_id || typeof c.node_id!=='string' || !c.node_id ||
       !['PUBLISHED','LOCAL_RECONCILIATION'].includes(c.mode) ||
       !Array.isArray(c.closure) || !c.closure.includes(c.node_id) ||
       !shaDigest(c.closure_evidence_digest) || !Array.isArray(c.unmet) || c.unmet.length ||
@@ -1473,9 +1481,15 @@ Validated graph publication evidence: ${JSON.stringify(publication)}.
 Validated candidate admission reports: ${JSON.stringify(validAdmissions)}.
 Other missing/incomplete audits do not authorize their candidates; report them separately.
 Validated accepted PR snapshots: ${JSON.stringify([...graphUpdates.values()])}.
-Require live main SHA to equal the validated main_sha, and each accepted PR head
-SHA to equal its validated head_sha. If either moved, return STOPPED before any
-write and require fresh condition analysis/plan approval; never silently use a new head.
+Require live main SHA to equal the fresh audit's main_sha before writes. If main
+moved, refresh main and candidate audits, then compare effective graph and approved
+candidate closure digests with the saved baseline. Unchanged digests preserve plan
+approval, including a required contract merge or an unrelated commit. Record old
+and new SHAs and rebase onto the freshly audited base; never reuse stale evidence
+at a new SHA. Changed graph/closure or unavailable fresh evidence stops the affected
+work for analysis and approval. Each accepted PR head must match its fresh validated
+and reviewed head; if it moves during a node, return STOPPED before any write.
+The caller must obtain a new exact-head review and fresh admission before retrying.
 Explicit graph bypass tokens from THIS invocation: ${JSON.stringify(graphFlags)}.
 Forward only these tokens to composed dispatch/land/review-comments/pr-loop procedures.
 Do not inherit a bypass from an earlier plan or approval. Revalidate candidate eligibility
@@ -1608,21 +1622,13 @@ if (!Array.isArray(ids) || !ids.length || ids.some(id=>!a.plans.some(p=>p.issue_
   return refuse('approve must name existing PLANNED issues, or all');
 const approved=a.tracks.filter(t=>ids.includes(t.issue_id));
 if (approved.some(t=>!candidateEligible(t))) return refuse('graph publication: an approved track has no unambiguous eligible candidate audit');
-// Run B must implement the graph used for Run A condition analysis, not a newer head.
-// main itself may move: B1 requires A3's contract PR to be merged first. The graph
-// and closure digest comparison below decides whether Run A's analysis still holds.
+// Bind each run's audits to its own source snapshot, then compare graph/closure
+// meaning. Main must advance when the required contract PR is merged.
 const priorEvidence=a.evidence?.find(e=>e.startsWith('Graph publication evidence: '));
 let priorPublication;
 try { priorPublication=priorEvidence && JSON.parse(priorEvidence.slice('Graph publication evidence: '.length)); }
 catch { return refuse('graph publication: invalid Run A SHA evidence'); }
 const projectTracks=approved.filter(t=>t.project!==null);
-for (const t of projectTracks) {
-  const now=publication.projects.find(p=>p.project_id===t.project || p.project_name===t.project);
-  const prior=Array.isArray(priorPublication?.projects) && priorPublication.projects.find(p=>p.project_id===now.project_id);
-  if (!prior || !/^[0-9a-f]{40}$/.test(priorPublication.main_sha || '') ||
-      prior.pr_number!==now.pr_number || prior.head_sha!==now.head_sha)
-    return refuse(`graph publication: ${t.project} changed since Run A; repeat condition analysis and plan approval`);
-}
 let priorAdmissions;
 try { priorAdmissions=JSON.parse(a.evidence?.find(e=>e.startsWith('Graph admission evidence: '))?.slice('Graph admission evidence: '.length)); }
 catch { return refuse('graph admission: missing Run A candidate evidence'); }
@@ -1630,11 +1636,18 @@ const priorDate=validUTC(priorPublication?.checked_at) ? priorPublication.checke
 const validPriorAdmissions=validAdmissionReports(priorAdmissions,priorPublication,priorDate);
 for (const t of projectTracks) {
   const current=candidateAdmission(t);
-  const prior=validPriorAdmissions.flatMap(r=>r.candidates.map(c=>({r,c})))
-    .filter(({c})=>c && c.identifier===t.issue_id && c.project_id===current.candidate.project_id);
-  if (prior.length!==1 || prior[0].r.graph_digest!==current.report.graph_digest ||
-      prior[0].c.closure_evidence_digest!==current.candidate.closure_evidence_digest ||
-      prior[0].c.mode!==current.candidate.mode)
+  const prior=candidateAdmission(t,validPriorAdmissions,priorPublication,null);
+  const publishedRepair=prior?.candidate.mode==='LOCAL_RECONCILIATION' && current.candidate.mode==='PUBLISHED';
+  const sameEvidence=publishedRepair ?
+    shaDigest(prior.candidate.published_closure_evidence_digest) &&
+    prior.candidate.published_closure_evidence_digest===current.candidate.closure_evidence_digest :
+    prior?.candidate.mode===current.candidate.mode &&
+    prior?.candidate.closure_evidence_digest===current.candidate.closure_evidence_digest;
+  if (!prior || prior.report.graph_digest!==current.report.graph_digest ||
+      prior.candidate.project_id!==current.candidate.project_id ||
+      prior.candidate.issue_id!==current.candidate.issue_id ||
+      prior.candidate.node_id!==current.candidate.node_id ||
+      !sameEvidence)
     return refuse(`graph admission: ${t.issue_id} changed since Run A; repeat reconciliation and plan approval`);
 }
 const mainMoved=projectTracks.length>0 && priorPublication.main_sha!==publication.main_sha;
@@ -1645,6 +1658,9 @@ if not, return STOPPED before any write.\n` : '';
 const report={state:'COMPLETE',run_ids:[a.run_id,args.run_id],wave_id:a.wave_id,
   approved:ids,tracks:[],seam_check:{state:'NOT_RUN',table:[],reason:'A2 found no shared literals'},
   open_questions:[],unverified_questions:[],stop_reason:null,evidence:[graphEvidence,admissionEvidence,...(mainMove ? [mainMove] : [])]};
+if (approved.some(t=>t.project!==null)) report.evidence.push(
+  'Run A graph publication evidence: '+JSON.stringify(priorPublication),
+  'Run A graph admission evidence: '+JSON.stringify(priorAdmissions));
 if (mainMove) log(mainMove);
 for (const t of a.tracks) if (!ids.includes(t.issue_id)) log(`${t.issue_id}: skipped; not approved`);
 phase('Build');
