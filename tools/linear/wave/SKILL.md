@@ -142,7 +142,10 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    Both runs match candidates only in validated build-transition reports. Run B
    validates stored reports using Run A's publication SHA/date, then compares
    effective graph and selected factual closure digests before implementation.
-   Full rationales and source explanations remain in the evidence; prose rewording
+   A newer main, such as the merged A3 contract PR, does not invalidate approval
+   when those digests match; B1 then verifies Run A's main is an ancestor of the
+   fetched default branch. A moved accepted graph PR/head or a different project
+   still refuses. Full rationales and source explanations remain in the evidence; prose rewording
    and changed coverage counts alone do not invalidate plans.
    A3 rechecks before contract publication; pass the same explicit
    graph flags to composed land, dispatch, review-comments and B3 pr-loop invocations. These

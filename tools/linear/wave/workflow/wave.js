@@ -1609,14 +1609,17 @@ if (!Array.isArray(ids) || !ids.length || ids.some(id=>!a.plans.some(p=>p.issue_
 const approved=a.tracks.filter(t=>ids.includes(t.issue_id));
 if (approved.some(t=>!candidateEligible(t))) return refuse('graph publication: an approved track has no unambiguous eligible candidate audit');
 // Run B must implement the graph used for Run A condition analysis, not a newer head.
+// main itself may move: B1 requires A3's contract PR to be merged first. The graph
+// and closure digest comparison below decides whether Run A's analysis still holds.
 const priorEvidence=a.evidence?.find(e=>e.startsWith('Graph publication evidence: '));
 let priorPublication;
 try { priorPublication=priorEvidence && JSON.parse(priorEvidence.slice('Graph publication evidence: '.length)); }
 catch { return refuse('graph publication: invalid Run A SHA evidence'); }
-for (const t of approved.filter(t=>t.project!==null)) {
+const projectTracks=approved.filter(t=>t.project!==null);
+for (const t of projectTracks) {
   const now=publication.projects.find(p=>p.project_id===t.project || p.project_name===t.project);
   const prior=Array.isArray(priorPublication?.projects) && priorPublication.projects.find(p=>p.project_id===now.project_id);
-  if (!prior || priorPublication.main_sha!==publication.main_sha ||
+  if (!prior || !/^[0-9a-f]{40}$/.test(priorPublication.main_sha || '') ||
       prior.pr_number!==now.pr_number || prior.head_sha!==now.head_sha)
     return refuse(`graph publication: ${t.project} changed since Run A; repeat condition analysis and plan approval`);
 }
@@ -1625,7 +1628,7 @@ try { priorAdmissions=JSON.parse(a.evidence?.find(e=>e.startsWith('Graph admissi
 catch { return refuse('graph admission: missing Run A candidate evidence'); }
 const priorDate=validUTC(priorPublication?.checked_at) ? priorPublication.checked_at.slice(0,10) : null;
 const validPriorAdmissions=validAdmissionReports(priorAdmissions,priorPublication,priorDate);
-for (const t of approved.filter(t=>t.project!==null)) {
+for (const t of projectTracks) {
   const current=candidateAdmission(t);
   const prior=validPriorAdmissions.flatMap(r=>r.candidates.map(c=>({r,c})))
     .filter(({c})=>c && c.identifier===t.issue_id && c.project_id===current.candidate.project_id);
@@ -1634,14 +1637,20 @@ for (const t of approved.filter(t=>t.project!==null)) {
       prior[0].c.mode!==current.candidate.mode)
     return refuse(`graph admission: ${t.issue_id} changed since Run A; repeat reconciliation and plan approval`);
 }
+const mainMoved=projectTracks.length>0 && priorPublication.main_sha!==publication.main_sha;
+const mainMove=mainMoved ? `Main moved since Run A: ${priorPublication.main_sha} -> ${publication.main_sha}; approved graph and closure digests unchanged` : null;
+const mainPrompt=mainMoved ? `Run A pinned main ${priorPublication.main_sha}; Run B validated main ${publication.main_sha}
+with unchanged graph and closure digests. Verify ${priorPublication.main_sha} is an ancestor of the fetched ${args.default_branch};
+if not, return STOPPED before any write.\n` : '';
 const report={state:'COMPLETE',run_ids:[a.run_id,args.run_id],wave_id:a.wave_id,
   approved:ids,tracks:[],seam_check:{state:'NOT_RUN',table:[],reason:'A2 found no shared literals'},
-  open_questions:[],unverified_questions:[],stop_reason:null,evidence:[graphEvidence,admissionEvidence]};
+  open_questions:[],unverified_questions:[],stop_reason:null,evidence:[graphEvidence,admissionEvidence,...(mainMove ? [mainMove] : [])]};
+if (mainMove) log(mainMove);
 for (const t of a.tracks) if (!ids.includes(t.issue_id)) log(`${t.issue_id}: skipped; not approved`);
 phase('Build');
 const built=await pipeline(approved, async (_prev,t) => {
   const plan=a.plans.find(p=>p.issue_id===t.issue_id);
-  const r=await call(`B1 build ${t.issue_id}`, `${graphPrompt}${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
+  const r=await call(`B1 build ${t.issue_id}`, `${graphPrompt}${mainPrompt}${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
 ${read(args.paths.land, 'headless land returns STOPPED with evidence instead of waiting')}
 Human approval: ${JSON.stringify(ids)} for wave ${a.wave_id}. Approved plan: ${JSON.stringify(plan)}.
 Use the existing dispatch worktree ${t.worktree}, branch ${t.branch}. Read back the

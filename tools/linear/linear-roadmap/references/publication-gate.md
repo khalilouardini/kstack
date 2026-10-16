@@ -207,7 +207,11 @@ Persist both coverage and admission reports in existing record.evidence; do not
 add RUN_A/WAVE_REPORT schema fields. A1 rechecks before selection, A3/A4 before
 writes, B1 before implementation and B3 before implementer fixes. Run B obtains
 fresh reports and compares effective graph and relevant closure digests with Run
-A before building. Coverage counts and routine tracker timestamp/status changes alone do not
+A before building. Main SHA equality between the runs is not required: merging
+the wave contract PR moves main, and matching digests show Run A's analysis still
+holds. B1 verifies Run A's main is an ancestor of the fetched default branch; an
+accepted graph PR number/head or project that differs from Run A still refuses.
+Coverage counts and routine tracker timestamp/status changes alone do not
 invalidate approval; full fresh observations remain in the audit record. Relevant
 digests cover scope path/line/quote, node identity, ownership, acceptance, incoming
 prerequisites, issue id/identifier/description/url/prerequisites, and current event
