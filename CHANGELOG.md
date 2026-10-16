@@ -9,6 +9,18 @@ A read-only installation audit detects stale targets/frontmatter, missing or
 orphaned adapters, and bounded project-local copies; `--check` never fetches or
 installs. Updates are manually invoked, with no schedule or merge hook.
 
+`/wave` Run B no longer refuses because main moved after Run A. When A2 finds
+shared literals, B1 requires A3's contract PR on the default branch, so merging
+it always moved main and no wave with a contract could build. Run B now decides
+on the graph and closure digests it already compared; a changed digest, a moved
+accepted graph PR/head or a different project still refuses, and B1 verifies
+Run A's main is an ancestor of the fetched default branch.
+
+`graph-admission` compares a closure issue's live `prerequisites` once per issue:
+the edges into every node sharing its `issue_ref`, in manifest order. A unit and
+its human review node with one `issue_ref` could not both match before, so no
+such candidate was admissible. Live-dependency drift still refuses.
+
 `/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
 retains contradictory same-head findings and unknown severities as holds, and
 reports ledger/container provenance. Shared project-resolution and complete-file

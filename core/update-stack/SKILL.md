@@ -1,6 +1,6 @@
 ---
 name: update-stack
-version: 0.1.0
+version: 0.1.1
 description: Update the installed kstack checkout from main, reinstall Claude Code and Codex adapters, and report stale links and project-local copies. Use when asked to "update kstack", "reinstall kstack", "refresh the shared skills", or "/update-stack [--check]". (kstack)
 ---
 
@@ -34,7 +34,7 @@ access or consuming-project gate commands are required.
 
 ## Inspect and preserve local work
 
-Record canonical branch, HEAD, upstream and `git status --porcelain=v1
+Record canonical branch, HEAD, upstream and `GIT_OPTIONAL_LOCKS=0 git status --porcelain=v1
 --untracked-files=all`. Run the read-only helper at
 `core/update-stack/bin/installation-status --root <canonical-root>` from the
 physical skill checkout. For project coverage, add explicit `--project <path>`
@@ -62,7 +62,7 @@ branch name. Fetch `refs/heads/<default>` into
 `refs/remotes/origin/<default>` and pin its exact SHA. Set the local
 `origin/HEAD` alias to that verified default with `git remote set-head origin
 <default>` so subsequent audits inspect the same ref. The canonical branch must
-be the default branch or track `origin/<default-branch>`, and its HEAD must be an
+be the default branch itself, and its HEAD must be an
 ancestor of the fetched SHA. Ahead/divergent/wrong branch → stop, naming both
 SHAs; never rebase, force or change branches. Check branch/HEAD/cleanliness again
 immediately before the write, then fast-forward only to the pinned SHA:
@@ -72,10 +72,23 @@ git -C "<canonical-root>" merge --ff-only "<fetched-default-SHA>"
 ```
 
 Verify HEAD equals the pinned SHA and the checkout remains clean. Run the
-**updated checkout's** normal installer, sequentially, stopping on any failure:
+**updated checkout's** Claude installer in dry-run mode without force first:
 
 ```bash
-"<canonical-root>/bin/install" --host claude --force
+"<canonical-root>/bin/install" --host claude --dry-run
+```
+
+Inspect every skipped row and the helper's current symlink `target`. A foreign
+symlink may be refreshed only after verifying that its target is the corresponding
+skill in another checkout of this same Git repository (check that checkout's
+Git common directory or origin and canonical skill path). A matching skill name
+alone is insufficient. Any custom, unreadable or unverified foreign target holds
+the reinstall before either host changes. Preserve real files and directories.
+Use `--force` only if every skipped symlink is a verified kstack target; otherwise
+omit it. Then run the installers sequentially, stopping on any failure:
+
+```bash
+"<canonical-root>/bin/install" --host claude [--force]
 "<canonical-root>/bin/install" --host codex
 ```
 
@@ -111,3 +124,9 @@ It is read-only and never fetches or installs. Update/refusal rules and host
 refresh behavior are **prompt-level**; the helper verifies filesystem/git facts,
 not loaded agent context. Rechecks reduce shared-checkout races but do not lock
 out other agent sessions. Stop if concurrent changes are detected.
+
+Prunable registrations whose checkout directories are absent appear separately
+under `projects.prunable_worktrees`; they are informational and do not affect
+the exit code. Existing unreadable paths remain errors. The recorded root is a
+location hint, not proof that a feature worktree is suitable: the default-branch,
+cleanliness and ancestry checks apply even when the record names that worktree.

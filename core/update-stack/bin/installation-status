@@ -34,8 +34,10 @@ def metadata(path: Path) -> dict[str, str]:
 
 def skills(root: Path) -> dict[str, Path]:
     found = {}
-    for tier in ['router', 'core', 'roles', 'tools']:
-        for path in sorted((root / tier).rglob('SKILL.md')):
+    tiers = [root / tier for tier in ['router', 'core', 'roles']]
+    tiers.extend(path for path in (root / 'tools').glob('*') if path.is_dir())
+    for tier in tiers:
+        for path in sorted([*tier.glob('*/SKILL.md'), *tier.glob('*/*/SKILL.md')]):
             name = path.parent.name
             if name in found:
                 raise ValueError(f'duplicate canonical skill: {name}')
@@ -77,10 +79,11 @@ def host_status(expected: dict[str, Path], root: Path, home: Path, codex_home: P
                 else:
                     issue = pointer_issue(entry / 'SKILL.md', canonical)
                 if issue:
-                    issues.append({'skill': name, 'path': str(entry), 'reason': issue})
+                    issues.append({'skill': name, 'path': str(entry), 'reason': issue,
+                                   'target': os.readlink(entry) if entry.is_symlink() else None})
                 else:
                     current += 1
-            except (OSError, ValueError) as error:
+            except (OSError, ValueError, RuntimeError) as error:
                 issues.append({'skill': name, 'path': str(entry), 'reason': str(error)})
         if base.is_dir():
             for entry in sorted(base.iterdir()):
@@ -94,16 +97,16 @@ def host_status(expected: dict[str, Path], root: Path, home: Path, codex_home: P
                         owned = entry.is_symlink() and entry.resolve().is_relative_to(root)
                     if owned:
                         issues.append({'skill': entry.name, 'path': str(entry), 'reason': 'orphaned kstack adapter'})
-                except OSError as error:
+                except (OSError, ValueError, RuntimeError) as error:
                     issues.append({'path': str(entry), 'reason': str(error)})
         hosts[host] = {'directory': str(base), 'expected': len(expected), 'current': current,
                        'issues': issues}
     return hosts
 
 
-def project_roots(root: Path, projects: list[Path], projects_under: list[Path]) -> tuple[list[Path], list[str]]:
+def project_roots(root: Path, projects: list[Path], projects_under: list[Path]) -> tuple[list[Path], list[str], list[str]]:
     """Bounded sibling discovery plus registered worktrees; never recurse data dirs."""
-    candidates, errors = {root.resolve()}, []
+    candidates, errors, prunable = {root.resolve()}, [], []
     for path in projects:
         if path.is_dir():
             candidates.add(path.resolve())
@@ -126,16 +129,21 @@ def project_roots(root: Path, projects: list[Path], projects_under: list[Path]) 
             if common in seen_common:
                 continue
             seen_common.add(common)
-            for item in git(candidate, 'worktree', 'list', '--porcelain', '-z').split('\0'):
-                if item.startswith('worktree '):
-                    path = Path(item[len('worktree '):])
-                    if path.is_dir():
-                        candidates.add(path.resolve())
-                    else:
-                        errors.append(f'registered worktree unavailable: {path}')
+            for record in git(candidate, 'worktree', 'list', '--porcelain', '-z').split('\0\0'):
+                fields = record.split('\0')
+                location = next((item[len('worktree '):] for item in fields if item.startswith('worktree ')), None)
+                if location is None:
+                    continue
+                path = Path(location)
+                if path.is_dir():
+                    candidates.add(path.resolve())
+                elif any(item == 'prunable' or item.startswith('prunable ') for item in fields):
+                    prunable.append(str(path))
+                else:
+                    errors.append(f'registered worktree unavailable: {path}')
         except ValueError as error:
             errors.append(f'{candidate}: {error}')
-    return sorted(candidates), errors
+    return sorted(candidates), errors, sorted(prunable)
 
 
 def project_status(expected: dict[str, Path], roots: list[Path]) -> tuple[list[dict], list[str]]:
@@ -147,7 +155,7 @@ def project_status(expected: dict[str, Path], roots: list[Path]) -> tuple[list[d
                 try:
                     if not entry.exists() and not entry.is_symlink():
                         continue
-                    if entry.is_symlink() and entry.resolve() == canonical.parent:
+                    if entry.is_symlink() and entry.resolve(strict=True) == canonical.parent:
                         continue  # a live project link to this canonical source
                     file = entry / 'SKILL.md'
                     if file.is_file() and pointer_issue(file, canonical) is None:
@@ -155,7 +163,7 @@ def project_status(expected: dict[str, Path], roots: list[Path]) -> tuple[list[d
                     overrides.append({'project': str(root), 'skill': name, 'path': str(entry),
                                       'kind': 'local copy or distinct adapter' if not entry.is_symlink() else 'different/broken link',
                                       'target': str(entry.resolve()) if entry.is_symlink() else None})
-                except (OSError, ValueError) as error:
+                except (OSError, ValueError, RuntimeError) as error:
                     errors.append(f'{entry}: {error}')
     return overrides, errors
 
@@ -177,11 +185,12 @@ def audit(root: Path, home: Path, codex_home: Path, state: Path,
     operations = [name for name in ['MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD']
                   if Path(git(root, 'rev-parse', '--path-format=absolute', '--git-path', name)).exists()]
     recorded = (state / 'stack-root').read_text().strip() if (state / 'stack-root').is_file() else None
-    roots, errors = project_roots(root, projects, projects_under)
+    roots, errors, prunable = project_roots(root, projects, projects_under)
     overrides, scan_errors = project_status(expected, roots)
     errors.extend(scan_errors)
     hosts = host_status(expected, root, home, codex_home)
-    shared_current = (bool(branch) and not dirty and not operations and head == tracking_sha and recorded is not None
+    shared_current = (tracking is not None and branch == tracking.removeprefix('origin/')
+                      and not dirty and not operations and head == tracking_sha and recorded is not None
                       and Path(recorded).is_absolute() and Path(recorded).resolve() == root
                       and all(not info['issues'] for info in hosts.values()))
     return {'shared_status': 'CURRENT' if shared_current else 'NEEDS_ATTENTION',
@@ -192,7 +201,8 @@ def audit(root: Path, home: Path, codex_home: Path, state: Path,
             'hosts': hosts,
             'projects': {'scope': {'explicit': list(map(str, projects)), 'parents': list(map(str, projects_under)),
                                    'registered_worktrees': True},
-                         'checked': list(map(str, roots)), 'overrides': overrides, 'errors': errors},
+                         'checked': list(map(str, roots)), 'overrides': overrides, 'errors': errors,
+                         'prunable_worktrees': prunable},
             'complete_machine_audit': False}
 
 
@@ -204,18 +214,18 @@ def main() -> int:
                         help='scan immediate sibling repos here; repeatable, plus their registered worktrees')
     args = parser.parse_args()
     home = Path.home()
-    state = Path(os.environ.get('KSTACK_STATE', home / '.kstack'))
+    state = Path(os.environ.get('KSTACK_STATE') or home / '.kstack')
     try:
         record = state / 'stack-root'
         if args.root is None and (not record.is_file() or not record.read_text().strip()):
             raise ValueError(f'missing canonical root: {record}; supply --root explicitly')
         root = args.root or Path(record.read_text().strip())
-        result = audit(root.expanduser(), home, Path(os.environ.get('CODEX_HOME', home / '.codex')),
+        result = audit(root.expanduser(), home, Path(os.environ.get('CODEX_HOME') or home / '.codex'),
                        state, args.project, args.projects_under)
         print(json.dumps(result, indent=2))
         return 0 if (result['shared_status'] == 'CURRENT' and not result['projects']['overrides']
                      and not result['projects']['errors']) else 1
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, RuntimeError) as error:
         print(json.dumps({'status': 'UNKNOWN', 'error': str(error)}, indent=2))
         return 2
 

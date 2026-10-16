@@ -114,5 +114,9 @@
   {
     "number": 17,
     "name": "all plans stopped returns STOPPED without build command"
+  },
+  {
+    "number": 30,
+    "name": "contract merged between plan and build"
   }
 ]

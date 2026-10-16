@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import shutil
+import sys
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader
 from pathlib import Path
@@ -112,6 +115,53 @@ class InstallationStatus(unittest.TestCase):
             path.unlink()
             path.symlink_to(target)
         self.assertEqual(self.audit()['hosts']['claude']['current'], 0)
+        self.assertEqual(self.audit()['hosts']['claude']['issues'][0]['target'], str(self.base / 'other'))
+
+    def test_non_utf8_custom_pointer_is_a_path_specific_issue(self):
+        path = self.codex / 'skills/custom/SKILL.md'
+        path.parent.mkdir()
+        path.write_bytes(b'custom caf\xe9')
+        result = self.audit()
+        self.assertEqual(result['hosts']['codex']['current'], 2)
+        self.assertEqual(result['hosts']['codex']['issues'][0]['path'], str(path.parent))
+
+    def test_symlink_loops_are_contained_for_both_hosts_and_projects(self):
+        for base in [self.home / '.claude/skills', self.codex / 'skills', self.root / '.agents/skills']:
+            base.mkdir(parents=True, exist_ok=True)
+            entry = base / 'example-one'
+            if entry.is_symlink():
+                entry.unlink()
+            elif entry.exists():
+                shutil.rmtree(entry)
+            entry.symlink_to(entry.name)
+        result = self.audit()
+        self.assertEqual(len(result['hosts']['claude']['issues']), 1)
+        self.assertEqual(len(result['hosts']['codex']['issues']), 1)
+        self.assertIn('example-one', result['projects']['errors'][0])
+
+    def test_prunable_missing_worktree_is_informational_in_cli(self):
+        worktree = self.base / 'gone-worktree'
+        self.git('worktree', 'add', '--detach', '-q', str(worktree))
+        shutil.rmtree(worktree)
+        proc = subprocess.run([sys.executable, str(HELPER), '--root', str(self.root)],
+                              env={**os.environ, 'HOME': str(self.home), 'CODEX_HOME': '', 'KSTACK_STATE': ''},
+                              text=True, capture_output=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        result = json.loads(proc.stdout)
+        self.assertEqual(result['projects']['prunable_worktrees'], [str(worktree)])
+        self.assertEqual(result['projects']['errors'], [])
+
+    def test_feature_branch_tracking_main_is_not_current(self):
+        self.git('switch', '-c', 'feature')
+        self.git('config', 'branch.feature.remote', 'origin')
+        self.git('config', 'branch.feature.merge', 'refs/heads/main')
+        self.assertEqual(self.audit()['shared_status'], 'NEEDS_ATTENTION')
+
+    def test_skill_enumeration_matches_installer_depth(self):
+        nested = self.root / 'core/example-one/tests/fixtures/SKILL.md'
+        nested.parent.mkdir(parents=True)
+        nested.write_text('not an installable skill')
+        self.assertEqual(set(module.skills(self.root)), set(self.canonical))
 
     def test_existing_claude_directory_is_preserved_and_reported(self):
         path = self.home / '.claude/skills/example-one'
@@ -213,10 +263,18 @@ class InstallationStatus(unittest.TestCase):
         self.assertFalse(result['complete_machine_audit'])
 
     def test_audit_writes_no_adapters_state_or_worktree_files(self):
+        worktree = self.base / 'prunable-readonly'
+        self.git('worktree', 'add', '--detach', '-q', str(worktree))
+        shutil.rmtree(worktree)
         def snapshot():
-            return {str(p):hashlib.sha256(p.read_bytes()).hexdigest()
+            files = {str(p): ('link', os.readlink(p)) if p.is_symlink() else ('file', hashlib.sha256(p.read_bytes()).hexdigest())
                     for base in [self.home, self.root] for p in base.rglob('*')
-                    if p.is_file() and '.git' not in p.parts}
+                    if (p.is_symlink() or p.is_file()) and '.git' not in p.parts}
+            index = Path(self.git('rev-parse', '--git-path', 'index'))
+            if not index.is_absolute():
+                index = self.root / index
+            return (files, self.git('for-each-ref'), self.git('worktree', 'list', '--porcelain'),
+                    hashlib.sha256(index.read_bytes()).hexdigest())
         before = snapshot()
         self.audit(parents=[self.root.parent])
         self.assertEqual(snapshot(), before)
