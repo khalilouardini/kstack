@@ -68,6 +68,20 @@ const overlapPR=(number,file)=>({number,title:'Accepted PR '+number,author:'main
 const overlapArgs=(_f,a)=>{a.selection=clone(overlapSelection);
   a.accepted_prs=[overlapPR(479,'file1.txt'),overlapPR(470,'file2.txt')];};
 const promptOverlaps=p=>JSON.parse(p.match(/Relevant accepted overlaps from caller preflight: (\[[^\n]*\])\./)[1]);
+const advanceMain=a=>{
+  const old=a.graph_publication.main_sha;
+  a.graph_publication.main_sha='f'.repeat(40);
+  for(const r of a.graph_admission) {
+    r.main_sha=a.graph_publication.main_sha;
+    if(r.graph_sha===old) r.graph_sha=a.graph_publication.main_sha;
+  }
+};
+const changeStored=(a,kind,change)=>{
+  const prefix=`Graph ${kind} evidence: `;
+  const i=a.plan_record.evidence.findIndex(e=>e.startsWith(prefix));
+  const value=JSON.parse(a.plan_record.evidence[i].slice(prefix.length));
+  change(value);a.plan_record.evidence[i]=prefix+JSON.stringify(value);
+};
 const tests=[
  async()=>{
    const planned=await run('plan',(_f,a)=>{
@@ -124,6 +138,12 @@ const tests=[
    assert.match(drift.result.stop_reason,/repeat reconciliation/);
    const dep=await run('plan',(_f,a)=>{local(a);a.graph_admission[0].delta.changed_edges=[{}];});
    assert.equal(dep.result.state,'STOPPED');assert.equal(dep.calls.length,1);
+   const published=await run('build',(_f,a)=>{
+     local(a);advanceMain(a);a.graph_admission[0].candidates[0].mode='PUBLISHED';
+     a.graph_admission[0].delta.added_nodes=[];
+     a.graph_admission[0].base_digest=a.graph_admission[0].graph_digest;
+   });
+   assert.equal(published.result.state,'COMPLETE','publishing an identical audited repair preserves approval');
  },
 
  async()=>{
@@ -184,11 +204,17 @@ const tests=[
    const drift=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;
      a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify({...a.graph_publication,main_sha:'d'.repeat(40)})];});
    assert.equal(drift.result.state,'STOPPED');assert.equal(drift.calls.length,0);
-   assert.match(drift.result.stop_reason,/changed since Run A/);
+   assert.match(drift.result.stop_reason,/Run A/);
    const movedHead=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;
      a.graph_publication.projects[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].reviewed_head_sha='c'.repeat(40);a.graph_admission[0].graph_sha='c'.repeat(40);});
-   assert.equal(movedHead.result.state,'STOPPED');assert.equal(movedHead.calls.length,0);
-   assert.match(movedHead.result.stop_reason,/changed since Run A/);
+   assert.equal(movedHead.result.state,'COMPLETE','a freshly reviewed new head with identical graph/closure preserves approval');
+   const merged=await run('build',(_f,a)=>{a.plan_record=plan.result;advanceMain(a);});
+   assert.equal(merged.result.state,'COMPLETE','an accepted graph PR may reach main without invalidating its unchanged plans');
+   assert.ok(merged.calls.filter(c=>c.label.startsWith('B1')).every(c=>c.prompt.includes('f'.repeat(40))));
+   const semantic=await run('build',(_f,a)=>{a.plan_record=plan.result;advanceMain(a);
+     a.graph_admission[0].graph_digest='sha256:'+'9'.repeat(64);});
+   assert.equal(semantic.result.state,'STOPPED');assert.equal(semantic.calls.length,0);
+   assert.match(semantic.result.stop_reason,/changed since Run A/);
    const inherited=await run('build',(_f,a)=>{accept(a);a.selection.push(...flags);});
    assert.equal(inherited.result.state,'STOPPED');assert.equal(inherited.calls.length,0);
    const warning=await run('plan',(_f,a)=>{accept(a);a.selection.push(...flags);
@@ -244,7 +270,63 @@ const tests=[
  },
  async()=>{const r=await run('plan',f=>{f.responses['A1 select'].tracks=[];});assert.equal(r.result.state,'EMPTY');assert.equal(r.calls.length,1);},
  async()=>{const r=await run('plan');assert.equal(r.result.plans.length,3);assert.equal(r.result.state,'AWAITING_APPROVAL');assert.ok(!r.calls.some(c=>c.label.startsWith('A3')));},
- async()=>{const r=await run('plan',f=>{f.responses['A2 shared-literal scan'].literals=f.literals;});const end=r.events.indexOf('end A3 contract');assert.ok(end>=0);for(const t of fixture.tracks) assert.ok(r.events.indexOf('start A4 plan '+t.issue_id)>end);},
+ async()=>{
+   const r=await run('plan',f=>{f.responses['A2 shared-literal scan'].literals=f.literals;});
+   const end=r.events.indexOf('end A3 contract');assert.ok(end>=0);
+   for(const t of fixture.tracks) assert.ok(r.events.indexOf('start A4 plan '+t.issue_id)>end);
+   for(const nextDay of [false,true]) {
+     const built=await run('build',(f,a)=>{
+       a.plan_record=r.result;a.approve=['T-1','T-2'];advanceMain(a);
+       if(nextDay) {
+         a.date='2026-10-06';a.graph_publication.checked_at='2026-10-06T12:00:00Z';
+         a.graph_admission[0].checked_at=a.graph_publication.checked_at;
+       }
+       // A4 planned this track, but it was not approved for implementation.
+       a.graph_admission[0].candidates[2].state='BLOCKED';
+       a.graph_admission[0].candidates[2].closure_evidence_digest='sha256:'+'9'.repeat(64);
+       f.responses['B2 seam check'].table=seamTable(f).filter(row=>row.branch!=='codex/t-3');
+     });
+     assert.equal(built.result.state,'COMPLETE','merging the required contract must not invalidate unchanged approved plans');
+     assert.deepEqual(built.result.approved,['T-1','T-2']);
+     assert.equal(built.result.tracks[2].state,'NOT_APPROVED');
+     assert.equal(built.result.seam_check.state,'PASSED');
+     assert.ok(built.result.evidence.some(e=>e.startsWith('Run A graph publication evidence: ')&&e.includes('a'.repeat(40))));
+     assert.ok(built.result.evidence.some(e=>e.startsWith('Graph publication evidence: ')&&e.includes('f'.repeat(40))));
+     assert.equal(built.calls.filter(c=>c.label.startsWith('B1')).length,2);
+     for(const call of built.calls.filter(c=>c.label.startsWith('B1'))) {
+       assert.ok(call.prompt.includes('f'.repeat(40)));
+       assert.match(call.prompt,/first verify its PR is merged/);
+       assert.match(call.prompt,/Verify exact contract contents/);
+     }
+   }
+   // An unrelated commit follows the same refreshed-main path without a contract.
+   const plain=await run('build',(_f,a)=>{advanceMain(a);});
+   assert.equal(plain.result.state,'COMPLETE');
+   for(const field of ['graph_digest','closure_evidence_digest','issue_id','stale','missing']) {
+     const changed=await run('build',(_f,a)=>{
+       advanceMain(a);
+       if(field==='graph_digest') a.graph_admission[0].graph_digest='sha256:'+'9'.repeat(64);
+       if(field==='closure_evidence_digest') a.graph_admission[0].candidates[0].closure_evidence_digest='sha256:'+'9'.repeat(64);
+       if(field==='issue_id') a.graph_admission[0].candidates[0].issue_id='another-issue';
+       if(field==='stale') a.graph_admission[0].main_sha='a'.repeat(40);
+       if(field==='missing') a.graph_admission=[];
+     });
+     assert.equal(changed.result.state,'STOPPED',field);assert.equal(changed.calls.length,0,field);
+   }
+   for(const change of ['main','date','duplicate_project','graph_sha','blocked','closure','local_delta']) {
+     const invalid=await run('build',(_f,a)=>{
+       advanceMain(a);
+       if(change==='main') changeStored(a,'publication',p=>{p.main_sha='invalid';});
+       if(change==='date') changeStored(a,'publication',p=>{p.checked_at='invalid';});
+       if(change==='duplicate_project') changeStored(a,'publication',p=>{p.projects.push(clone(p.projects[0]));});
+       if(change==='graph_sha') changeStored(a,'admission',r=>{r[0].graph_sha='b'.repeat(40);});
+       if(change==='blocked') changeStored(a,'admission',r=>{r[0].candidates[0].state='BLOCKED';});
+       if(change==='closure') changeStored(a,'admission',r=>{r[0].candidates[0].closure=[];});
+       if(change==='local_delta') changeStored(a,'admission',r=>{r[0].candidates[0].mode='LOCAL_RECONCILIATION';});
+     });
+     assert.equal(invalid.result.state,'STOPPED',change);assert.equal(invalid.calls.length,0,change);
+   }
+ },
  async()=>{const r=await run('plan',(f,a)=>{f.responses['A2 shared-literal scan'].literals=f.literals;a.wave.contract_dir=null;});assert.equal(r.result.state,'STOPPED');assert.match(r.result.stop_reason,/wave.contract_dir/);assert.equal(r.calls.length,2);},
  async()=>{const r=await run('build',(_f,a)=>{a.approve=['T-2'];});assert.deepEqual(r.calls.filter(c=>c.label.startsWith('B1')).map(c=>c.label),['B1 build T-2']);assert.equal(r.result.tracks[0].state,'NOT_APPROVED');
  const invalid=await run('build',(_f,a)=>{a.approve=['unknown'];});assert.equal(invalid.result.state,'STOPPED');assert.equal(invalid.calls.length,0);assert.ok(invalid.result.evidence.length);

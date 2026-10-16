@@ -10,6 +10,18 @@ unsupported schemas, scope, dependency and approval checks still refuse as befor
 Regression fixtures verify unchanged admission across stack updates, preserved
 provenance and unrelated coverage warnings.
 
+`/wave` 0.5.2 preserves plan approval across the required contract merge and other
+main/graph-PR SHA movement when fresh audits confirm the same effective graph and
+approved issue closure. Historical reports are validated against their own pins;
+current pending graphs still require explicit flags and exact-head review. Covers
+contract plan/build round trips, later-day resumes, graph publication and malformed
+historical evidence without relaxing scope, contract or changed-evidence checks.
+
+`graph-admission` compares a closure issue's live `prerequisites` once per issue:
+the edges into every node sharing its `issue_ref`, in manifest order. A unit and
+its human review node with one `issue_ref` could not both match before, so no
+such candidate was admissible. Live-dependency drift still refuses.
+
 `/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
 retains contradictory same-head findings and unknown severities as holds, and
 reports ledger/container provenance. Shared project-resolution and complete-file

@@ -85,7 +85,9 @@ It reads immutable Git blobs and does not fetch, write, dispatch or grant human
 approval. Add `main_sha` and `checked_at` to the coverage snapshot. Closure issues
 also require full `description`, `url`, `updated_at`, `relations_complete: true`,
 and `prerequisites` containing all incoming manifest edge objects in manifest
-order, after checking both prose and native relations. Do not use truncated list
+order, after checking both prose and native relations. The list is per issue:
+when several nodes share one `issue_ref` (a unit and its human review node), it
+holds every edge into any of those nodes, in manifest order. Do not use truncated list
 responses as full bodies. Evidence expires after one hour and must be refreshed
 before each transition. A changed SHA or relevant evidence requires reanalysis.
 
@@ -219,5 +221,15 @@ and fully retained in evidence.request but are excluded from the factual digest;
 rewording them alone cannot invalidate approval. The calling skills still verify
 source truth on each transition. Future gate definitions stay protected by the
 graph digest. A changed coverage count alone does not invalidate approval;
-a changed graph, relevant closure or SHA requires reanalysis and plan approval.
+a changed graph or relevant closure requires reanalysis and plan approval.
+SHA movement alone requires a fresh audit at the new SHA, not new plan approval:
+the required wave contract merge and unrelated commits naturally advance main.
+Bind each historical candidate to its original publication main/graph SHA and
+date, then compare its issue/node identity, effective graph and factual closure
+digest with fresh ELIGIBLE evidence for the approved work. An accepted graph PR
+may reach main, or an identical local repair may be published, without changing
+plan meaning. Current pending graph heads still require explicit flags and fresh
+exact-head review. Never carry an old audit onto a new SHA. Missing or ambiguous
+historical/current evidence stops affected work. Record both snapshots; keep
+contract merge/content verification, rebase, scope and human approval checks.
 These caller observations are evidence, not durable human approval records.
