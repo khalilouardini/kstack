@@ -90,6 +90,10 @@ const tests=[
      assert.match(call.prompt,/missing fresh evidence returns STOPPED for this track before any write/);
    }
    assert.ok(planned.calls.every(c=>!c.prompt.includes('Run A approved observations')));
+   const renamed=await run('build',(_f,a)=>{
+     a.plan_record=planned.result;a.graph_publication.projects[0].project_name='Renamed project';
+   });
+   assert.equal(renamed.result.state,'COMPLETE','project display rename retains canonical project identity');
    for(const change of ['legacy','main_pin','issue_type','node_type']) {
      const r=await run('build',(_f,a)=>{
        const prefix='Graph admission evidence: ',i=a.plan_record.evidence.findIndex(e=>e.startsWith(prefix));

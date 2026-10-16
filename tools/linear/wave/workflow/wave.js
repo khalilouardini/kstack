@@ -1646,8 +1646,10 @@ and fresh graph SHAs and recheck their full relevant sections, including exclusi
 Exact quote equality alone does not prove scope applicability.\n`;
 const preflightStops=new Map();
 for (const t of approved.filter(t=>t.project!==null)) {
-  const current=candidateAdmission(t);
   const prior=candidateAdmission(t,validPriorAdmissions,priorPublication,false);
+  // Display names may change between runs; the approved canonical project ID
+  // binds the current audit without allowing an issue to change projects.
+  const current=candidateAdmission(prior ? {...t,project:prior.candidate.project_id} : t);
   if (!current || !prior)
     preflightStops.set(t.issue_id,`graph publication/admission: ${t.issue_id} has no unambiguous eligible candidate audit for both runs; repeat condition analysis and plan approval`);
   else {
