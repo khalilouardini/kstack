@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+`/wave` 0.6.0: a B3 review no longer stops before round 1 because main moved
+after B1. With the default `review_concurrency` of 1, a later track's review
+starts after earlier tracks' rounds, and any merge in that window moved main and
+made the node return BLOCKED with rounds 0. A read-only B3 admission node now
+observes live main before each project-linked track's pr-loop. When main moved,
+it re-runs graph-admission at live main; the script proceeds only when the
+validated main is an ancestor, `git merge-tree --write-tree` merges the PR head
+cleanly and the graph digest, closure evidence digest and mode are unchanged.
+Anything else stays BLOCKED before any write. New READMISSION record.
+
 `/wave` Run B no longer refuses because main moved after Run A. When A2 finds
 shared literals, B1 requires A3's contract PR on the default branch, so merging
 it always moved main and no wave with a contract could build. Run B now decides

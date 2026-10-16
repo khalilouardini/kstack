@@ -205,9 +205,15 @@ an unrelated project's warning or an unselected candidate's block does not stop 
 project/issue identity, main/graph pins, closure evidence and the bounded delta.
 Persist both coverage and admission reports in existing record.evidence; do not
 add RUN_A/WAVE_REPORT schema fields. A1 rechecks before selection, A3/A4 before
-writes, B1 before implementation and B3 before implementer fixes. Run B obtains
-fresh reports and compares effective graph and relevant closure digests with Run
-A before building. Main SHA equality between the runs is not required: merging
+writes, B1 before implementation and B3 before implementer fixes. Review
+concurrency serializes B3, so main can move between B1 and a track's first round.
+B3 admission records live main; when it moved, it re-runs graph-admission for the
+track at live main. The script proceeds only when Run B's main is an ancestor of
+live main, `git merge-tree --write-tree` merges the PR head cleanly, and the fresh
+report keeps Run B's graph digest, the track's closure evidence digest and mode;
+the review then pins live main. Otherwise the track is BLOCKED before any write.
+Run B obtains fresh reports and compares effective graph and relevant closure
+digests with Run A before building. Main SHA equality between the runs is not required: merging
 the wave contract PR moves main, and matching digests show Run A's analysis still
 holds. B1 verifies Run A's main is an ancestor of the fetched default branch; an
 accepted graph PR number/head or project that differs from Run A still refuses.
@@ -221,5 +227,6 @@ and fully retained in evidence.request but are excluded from the factual digest;
 rewording them alone cannot invalidate approval. The calling skills still verify
 source truth on each transition. Future gate definitions stay protected by the
 graph digest. A changed coverage count alone does not invalidate approval;
-a changed graph, relevant closure or SHA requires reanalysis and plan approval.
+a changed graph, relevant closure, accepted graph PR head or a main that does not
+descend from the validated one requires reanalysis and plan approval.
 These caller observations are evidence, not durable human approval records.
