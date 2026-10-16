@@ -58,15 +58,61 @@ class AdmissionTests(unittest.TestCase):
         for event in API['GRAPH']['EVENTS'][node['kind']]:
             self.request['events'].append({'node_id': node['id'], 'event': event, 'state': 'SATISFIED',
                                            'source': 'Verified fixture event evidence at ' + self.sha})
-        if node['issue_ref']:
-            self.snapshot['projects'][0]['issues'].append({
-                'id': node['issue_ref'], 'identifier': 'T-' + str(len(self.snapshot['projects'][0]['issues']) + 1),
+        issues = self.snapshot['projects'][0]['issues']
+        if node['issue_ref'] and all(i['id'] != node['issue_ref'] for i in issues):
+            # One live issue carries the edges into every node that maps to it.
+            shared = {n['id'] for n in graph['nodes'] if n['issue_ref'] == node['issue_ref']}
+            issues.append({
+                'id': node['issue_ref'], 'identifier': 'T-' + str(len(issues) + 1),
                 'description': 'Full live issue body: acceptance and prerequisites read',
                 'url': 'https://linear.example/issue/' + node['issue_ref'], 'updated_at': self.snapshot['checked_at'],
-                'relations_complete': True, 'prerequisites': copy.deepcopy(incoming)})
+                'relations_complete': True,
+                'prerequisites': copy.deepcopy([e for e in graph['edges'] if e['to'] in shared])})
 
     def audit(self, proposed=None):
         return API['audit'](self.repo, 'main', self.snapshot, self.request, proposed, now=NOW)
+
+    def test_outside_event_edges_and_display_renames_preserve_candidate_digests(self):
+        for change in ('edge', 'node_title', 'project_title', 'issue_url'):
+            with self.subTest(change=change):
+                self.setUp()
+                before = self.audit()['candidates'][0]
+                if change == 'edge':
+                    extra = {**self.base['nodes'][2], 'id': 'extra', 'issue_ref': REPAIR_ID}
+                    self.base['nodes'].append(extra)
+                    self.base['edges'].append({'from': 'extra', 'from_event': 'merge', 'to': 'ui',
+                                               'to_event': 'merge', 'type': 'merge_after', 'source': 'Unrelated dependency'})
+                    self.request['nodes'] = []
+                    self.request['events'] = []
+                    self.snapshot['projects'][0]['issues'] = []
+                    for node in self.base['nodes']:
+                        self.prove(node, self.base)
+                elif change == 'node_title':
+                    self.base['nodes'][2]['title'] = 'Renamed display title'
+                elif change == 'project_title':
+                    self.base['projects'][0]['title'] = 'Renamed project title'
+                else:
+                    self.snapshot['projects'][0]['issues'][0]['url'] += '/renamed-title'
+                (self.repo / 'orchestration/graph.json').write_text(json.dumps(self.base))
+                (self.repo / 'docs/project.md').write_text('```mermaid\n' + API['GRAPH']['render'](self.base) + '```\n')
+                self.git('add', '.')
+                self.git('commit', '--allow-empty', '-m', 'unrelated metadata refresh')
+                self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+                after = self.audit()['candidates'][0]
+                for field in ('closure_graph_digest', 'closure_evidence_digest'):
+                    self.assertEqual(before[field], after[field], field)
+
+    def test_scope_line_movement_preserves_digests_but_stale_line_refuses(self):
+        before = self.audit()['candidates'][0]
+        (self.repo / 'docs/scope.md').write_text('Unrelated introduction.\n' + QUOTE + '\n')
+        self.git('add', 'docs/scope.md')
+        self.git('commit', '-m', 'insert unrelated introduction')
+        self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+        with self.assertRaisesRegex(ValueError, 'scope citation'):
+            self.audit()
+        for proof in self.request['nodes']:
+            proof['scope']['line'] = 2
+        self.assertEqual(before, self.audit()['candidates'][0])
 
     def repair(self):
         graph = copy.deepcopy(self.base)
@@ -221,6 +267,40 @@ class AdmissionTests(unittest.TestCase):
             'type': 'merge_after', 'source': 'New live dependency'})
         with self.assertRaisesRegex(ValueError, 'live dependencies differ'):
             self.audit()
+
+    def test_unit_and_human_review_node_sharing_issue_ref_compare_issue_level_prerequisites(self):
+        api = self.base['nodes'][3]
+        self.base['nodes'].append({**self.base['nodes'][0], 'id': 'review_api', 'title': 'Review Report API',
+                                   'issue_ref': api['issue_ref']})
+        self.base['edges'] += [
+            {'from': 'api', 'from_event': 'build', 'to': 'review_api', 'to_event': 'approve',
+             'type': 'review_after', 'source': 'Cited prerequisite'},
+            {'from': 'review_api', 'from_event': 'approve', 'to': 'api', 'to_event': 'merge',
+             'type': 'human_decision', 'source': 'Cited prerequisite'}]
+        (self.repo / 'orchestration/graph.json').write_text(json.dumps(self.base))
+        (self.repo / 'docs/project.md').write_text('```mermaid\n' + API['GRAPH']['render'](self.base) + '```\n')
+        self.git('add', '.')
+        self.git('commit', '-m', 'approved review gate on the api issue')
+        self.sha = self.git('rev-parse', 'main')
+        self.snapshot.update(main_sha=self.sha)
+        self.snapshot['projects'][0]['issues'], self.request['nodes'], self.request['events'] = [], [], []
+        for n in self.base['nodes']:
+            self.prove(n, self.base)
+        r = self.audit()
+        self.assertEqual(r['state'], 'ELIGIBLE')
+        self.assertIn('review_api', r['candidates'][0]['closure'])
+        issue = next(i for i in self.snapshot['projects'][0]['issues'] if i['id'] == api['issue_ref'])
+        union = [e for e in self.base['edges'] if e['to'] in ('api', 'review_api')]
+        self.assertEqual(issue['prerequisites'], union)
+        drift = {'from': 'ui', 'from_event': 'merge', 'to': 'api', 'to_event': 'merge',
+                 'type': 'merge_after', 'source': 'New live dependency'}
+        for label, value in (('unit edges only', [e for e in union if e['to'] == 'api']),
+                             ('review edges only', [e for e in union if e['to'] == 'review_api']),
+                             ('not manifest order', union[::-1]), ('live drift', union + [drift])):
+            with self.subTest(prerequisites=label):
+                issue['prerequisites'] = copy.deepcopy(value)
+                with self.assertRaisesRegex(ValueError, 'REVIEWED_PUBLICATION_REQUIRED: live dependencies differ'):
+                    self.audit()
 
     def test_partial_missing_or_stale_evidence_refuses(self):
         for change in ('pagination', 'relations', 'body', 'owner', 'acceptance', 'quote', 'event', 'sha', 'stale', 'pin'):

@@ -85,13 +85,14 @@ flowchart LR
       labels["/pr-label-sweep"]
       steward["/linear-steward"]
       audit["/linear-release-audit"]
+      issueGraph["/issue-graph"]
     end
 
     classDef route fill:#f6e6cf,stroke:#b8690c,color:#16292b
     classDef phase fill:#ddeeec,stroke:#1d6a63,color:#16292b
     classDef stopStyle fill:#f6dee5,stroke:#a04360,color:#16292b
     class router route
-    class spec,next,triage,intake,roadmap,roles,dispatch,investigate,controls,explain,produce,respond,loop,landSkill,health,retro,titles,labels,steward,audit phase
+    class spec,next,triage,intake,roadmap,roles,dispatch,investigate,controls,explain,produce,respond,loop,landSkill,health,retro,titles,labels,steward,audit,issueGraph phase
     class human stopStyle
 ```
 
@@ -116,7 +117,7 @@ flowchart TB
     gates --> gatedCore["land · health"]
     scope --> roleSkills["spec · triage<br/>four role contracts"]
     identities --> githubSkills["review skills · delivery-retro<br/>session-titles · pr-label-sweep"]
-    workspace --> linearSkills["next · dispatch-implementation<br/>feature-intake · linear-roadmap<br/>steward · release-audit"]
+    workspace --> linearSkills["next · dispatch-implementation<br/>feature-intake · linear-roadmap<br/>steward · release-audit · issue-graph"]
 
     classDef source fill:#f6e6cf,stroke:#b8690c,color:#16292b
     classDef coreStyle fill:#ddeeec,stroke:#1d6a63,color:#16292b
@@ -137,6 +138,10 @@ flowchart TB
 | Roles | `scope_doc` | [`/spec`](../roles/spec/SKILL.md), [`/triage`](../roles/triage/SKILL.md), [`product-manager`](../roles/product-manager.md), [`tech-lead`](../roles/tech-lead.md), [`designer`](../roles/designer.md), [`qa`](../roles/qa.md) |
 | GitHub | `gh` plus configured identities or issue prefix | [`/review-claude-pr`](../tools/github/review-claude-pr/SKILL.md), [`/review-comments`](../tools/github/review-comments/SKILL.md), [`/pr-loop`](../tools/github/pr-loop/SKILL.md), [`/delivery-retro`](../tools/github/delivery-retro/SKILL.md), [`/session-titles`](../tools/github/session-titles/SKILL.md), [`/pr-label-sweep`](../tools/github/pr-label-sweep/SKILL.md) |
 | Linear | Linear workspace + `workspace_contract` | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/wave`](../tools/linear/wave/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-roadmap`](../tools/linear/linear-roadmap/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md) |
+
+[`/issue-graph`](../tools/linear/issue-graph/SKILL.md) opens an existing local viewer
+without tracker access; refreshing it also needs fresh Linear reads. It projects
+the existing indexed roadmap without changing its scope or dependencies.
 
 Missing configuration is a supported state. A skill either asks for the missing
 judgment or refuses and names the exact key; it never silently invents a value.

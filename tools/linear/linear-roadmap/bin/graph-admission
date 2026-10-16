@@ -83,8 +83,10 @@ def closure_graph(graph, events, closure):
     """Protect this unit's conditions, including future merge gates, not siblings."""
     projects = {n['project'] for n in graph['nodes'] if n['id'] in closure}
     return {'schema_version': graph['schema_version'], 'policy': graph['policy'],
-            'projects': sorted((p for p in graph['projects'] if p['key'] in projects), key=lambda p: p['key']),
-            'nodes': sorted((n for n in graph['nodes'] if n['id'] in closure), key=lambda n: n['id']),
+            'projects': sorted(({k: v for k, v in p.items() if k != 'title'}
+                                for p in graph['projects'] if p['key'] in projects), key=lambda p: p['key']),
+            'nodes': sorted(({k: v for k, v in n.items() if k != 'title'}
+                             for n in graph['nodes'] if n['id'] in closure), key=lambda n: n['id']),
             'edges': sorted((e for e in graph['edges'] if (e['to'], e['to_event']) in events),
                             key=lambda e: json.dumps(e, sort_keys=True))}
 
@@ -120,6 +122,11 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
     elif request.get('repairs'):
         raise ValueError('repair evidence has no exact graph delta')
     nodes = {n['id']: n for n in graph['nodes']}
+    # A unit and its human review node may share one issue: compare the union of their incoming edges.
+    issue_edges = {}
+    for edge in graph['edges']:
+        if nodes[edge['to']]['issue_ref']:
+            issue_edges.setdefault(nodes[edge['to']]['issue_ref'], []).append(edge)
     projects = {p['key']: p for p in graph['projects']}
     issues = {i['id']: (p, i) for p in snapshot['projects'] for i in p['issues']}
     proof_list = request.get('nodes', [])
@@ -177,7 +184,7 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
                     required_text(issue.get(field), 'live issue ' + field)
                 if issue.get('relations_complete') is not True:
                     raise ValueError('complete live relations and issue-body prerequisite read required')
-                if issue.get('prerequisites') != incoming:
+                if issue.get('prerequisites') != issue_edges.get(n['issue_ref'], []):
                     raise ValueError('REVIEWED_PUBLICATION_REQUIRED: live dependencies differ from reviewed graph')
                 if issue['identifier'] in next(p for p in coverage['projects'] if p['project_id'] == entry[0]['project_id'])['missing_view'] and key not in origins:
                     raise ValueError('selected closure node is absent from published Markdown; reviewed repair required')
@@ -202,11 +209,14 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
                            'closure_graph_digest': digest(closure_graph(graph, closure_events, closure)),
                            'closure_evidence_digest': digest({
                                'nodes': [{'node_id': key,
-                                          'scope': {field: proofs[key]['scope'][field] for field in ('path', 'line', 'quote')},
+                                          'scope': {field: proofs[key]['scope'][field] for field in ('path', 'quote')},
                                           'owner': proofs[key]['owner'], 'acceptance': proofs[key]['acceptance'],
-                                          'prerequisites': proofs[key]['prerequisites']} for key in sorted(closure)],
-                               'issues': [{field: issues[nodes[k]['issue_ref']][1][field]
-                                           for field in ('id', 'identifier', 'description', 'url', 'prerequisites')}
+                                          'prerequisites': [e for e in proofs[key]['prerequisites']
+                                                            if (e['to'], e['to_event']) in closure_events]} for key in sorted(closure)],
+                               'issues': [{**{field: issues[nodes[k]['issue_ref']][1][field]
+                                              for field in ('id', 'identifier', 'description')},
+                                           'prerequisites': [e for e in issues[nodes[k]['issue_ref']][1]['prerequisites']
+                                                             if (e['to'], e['to_event']) in closure_events]}
                                           for k in sorted(closure) if nodes[k]['issue_ref']],
                                'events': [{'node_id': key, 'event': event, 'state': observed[(key, event)]['state']}
                                           for key, event in sorted(required)]}),

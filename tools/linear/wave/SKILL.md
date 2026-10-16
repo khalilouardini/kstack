@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.6.0
+version: 0.6.1
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -142,18 +142,28 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    For plan preserve graph flag/value tokens in `selection`; for build populate
    `graph_update_flags` only from the human's current build invocation. Reject
    malformed/missing values and unreviewed/invalid PR graphs before Workflow;
-   unrelated PR coverage gaps stay warnings. Missing or blocked selected closure
-   evidence excludes/stops that track, preserving independently audited siblings.
+   unrelated PR coverage gaps stay warnings. In plan, reject known missing or
+   blocked selected closure evidence before Workflow; if A1 nevertheless returns
+   an invalid selected track, stop the planning invocation before A3 writes.
+   In build, missing or blocked closure evidence stops only that approved track,
+   preserving independently audited siblings.
    Supply full `graph_admission` helper reports for candidate groups. Evaluate
    each selected/approved issue's ELIGIBLE build state and relevant closure;
    UPDATE_REQUIRED is a warning, never project-wide exclusion. Project-less tracks
    remain exempt. Require valid UTC checked_at on args.date. Carry main/graph SHA,
    full admission evidence, exact local delta and digests into every node and the
    existing record.evidence array; moved pins require fresh audits and changed
-   relevant conditions stop only affected tracks.
+   relevant conditions stop only affected build tracks. Planning nodes stop the
+   planning invocation when conditions change before contract publication.
    Both runs match candidates only in validated build-transition reports. Run B
    validates stored reports using Run A's publication SHA/date, then compares
    each candidate's graph and factual closure digests before implementation.
+   B1 and B3 receive each track's explicit Run A baseline, main/graph pins and
+   both candidate digests. B1 verifies Run A's main is an ancestor of fetched
+   main; unchanged candidate conditions permit a merged contract or unrelated
+   main commit. Preserve both runs' observations and changed field values in
+   stop evidence. Re-read full relevant scope sections, including exclusions;
+   matching citation text alone does not establish scope applicability.
    Full rationales and source explanations remain in the evidence; prose rewording
    and changed coverage counts alone do not invalidate plans.
    A3 rechecks before contract publication; pass the same explicit

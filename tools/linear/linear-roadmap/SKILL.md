@@ -1,6 +1,6 @@
 ---
 name: linear-roadmap
-version: 0.6.0
+version: 0.6.1
 description: Map existing Linear work or a proposed plan into local orchestration JSON, Markdown and a scope contract. Local updates are the default; --publish explicitly opens or updates the graph PR. Reports coverage separately from execution eligibility. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap PROJECT [--publish]". Tracker reads only; does not launch sessions or create tickets. (kstack)
 ---
 
@@ -173,9 +173,13 @@ contract's existence, completeness or approval.
 
 Return DRAFT or MAPPED, the scope contract path and change status, local JSON
 and root graph paths, validator exit code, main coverage SHA/missing ticket keys,
-publication result (`LOCAL_ONLY`, `UNCHANGED` or `PR_OPEN`), PR URL/head when present,
+publication result (`LOCAL_ONLY`, `UNCHANGED`, `PR_OPEN` or `STOPPED`), PR URL/head when present,
 and affected execution eligibility,
 source observations and up to three next actions. MAPPED means existing records
 were mapped, not that their work is ready. Actual readiness needs live evidence,
 source freshness and the explicit controller's admission checks. `/wave` keeps
 its existing human plan checkpoint until that controller path is implemented.
+
+When `--publish` is requested but a guard or `/land` gate refuses, report
+`STOPPED` with the exact stop reason and evidence, preserved local artifacts,
+and any existing PR URL/head. `LOCAL_ONLY` means publication was not requested.

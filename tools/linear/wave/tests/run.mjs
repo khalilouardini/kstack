@@ -83,9 +83,34 @@ const tests=[
    assert.deepEqual(built.calls.filter(c=>c.label.startsWith('B1')).map(c=>c.label),
      ['B1 build T-1','B1 build T-2','B1 build T-3']);
    assert.ok(built.result.evidence.some(e=>e.includes('b'.repeat(40))));
+   for(const call of built.calls.filter(c=>/^B[13]/.test(c.label))) {
+     assert.ok(call.prompt.includes('Run A approved observations for '));
+     assert.ok(call.prompt.includes('closure_graph_digest') && call.prompt.includes('closure_evidence_digest'));
+     assert.match(call.prompt,/return(?:s)? STOPPED[^\n]*before any write/);
+     assert.match(call.prompt,/missing fresh evidence returns STOPPED for this track before any write/);
+   }
+   assert.ok(planned.calls.every(c=>!c.prompt.includes('Run A approved observations')));
+   for(const change of ['legacy','main_pin','issue_type','node_type']) {
+     const r=await run('build',(_f,a)=>{
+       const prefix='Graph admission evidence: ',i=a.plan_record.evidence.findIndex(e=>e.startsWith(prefix));
+       const reports=JSON.parse(a.plan_record.evidence[i].slice(prefix.length));
+       for(const report of reports) {
+         if(change==='main_pin') report.main_sha='9'.repeat(40);
+         for(const c of report.candidates) {
+           if(change==='legacy') delete c.closure_graph_digest;
+           if(change==='issue_type') c.issue_id=null;
+           if(change==='node_type') c.node_id=null;
+         }
+       }
+       a.plan_record.evidence[i]=prefix+JSON.stringify(reports);
+     });
+     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+     assert.ok(r.result.evidence.some(e=>e.startsWith('Run A graph admission evidence: ')));
+   }
+
  },
  async()=>{
-   for (const change of ['constraints','evidence','blocked','missing','unmapped']) {
+   for (const change of ['constraints','evidence','blocked','missing','unmapped','mode','issue_id','node_id']) {
      const r=await run('build',(_f,a)=>{
        const report=a.graph_admission[0],c=report.candidates[0];
        if(change==='constraints') c.closure_graph_digest='sha256:'+'1'.repeat(64);
@@ -93,6 +118,9 @@ const tests=[
        if(change==='blocked') {c.state='BLOCKED';c.unmet=[{node_id:'new-blocker',event:'merge',state:'UNKNOWN'}];}
        if(change==='missing') delete c.closure_graph_digest;
        if(change==='unmapped') report.candidates.shift();
+       if(change==='mode') {c.mode='LOCAL_RECONCILIATION';report.delta.added_nodes=[{id:c.node_id,issue_ref:c.issue_id}];}
+       if(change==='issue_id') c.issue_id='different';
+       if(change==='node_id') {c.node_id='different';c.closure.push('different');}
      });
      assert.equal(r.result.state,'COMPLETE');
      assert.equal(r.result.tracks[0].state,'STOPPED');
@@ -219,10 +247,16 @@ const tests=[
    }
    assert.ok(plan.result.evidence.some(e=>e.includes('a'.repeat(40))&&e.includes('b'.repeat(40))));
    assert.ok(build.result.evidence.some(e=>e.includes('a'.repeat(40))&&e.includes('b'.repeat(40))));
-   const drift=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;
-     a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify({...a.graph_publication,main_sha:'d'.repeat(40)})];});
+   // A moved main alone does not invalidate the accepted head; a changed graph digest does.
+   const priorAt=(a,graph_digest)=>{const main_sha='d'.repeat(40);
+     a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify({...a.graph_publication,main_sha}),
+       'Graph admission evidence: '+JSON.stringify(a.graph_admission.map(r=>({...r,main_sha,candidates:r.candidates.map(c=>({...c,closure_graph_digest:graph_digest || c.closure_graph_digest}))})))];};
+   const moved=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;priorAt(a);});
+   assert.equal(moved.result.state,'COMPLETE');
+   assert.ok(moved.calls.filter(c=>c.label.startsWith('B1')).every(c=>c.prompt.includes('Run A pinned main '+'d'.repeat(40))));
+   const drift=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;priorAt(a,'sha256:'+'1'.repeat(64));});
    assert.equal(drift.result.state,'STOPPED');assert.equal(drift.calls.length,0);
-   assert.match(drift.result.stop_reason,/missing Run A candidate evidence/);
+   assert.match(drift.result.stop_reason,/changed since Run A/);
    const movedHead=await run('build',(_f,a)=>{accept(a);a.graph_update_flags=flags;
      a.graph_publication.projects[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].reviewed_head_sha='c'.repeat(40);a.graph_admission[0].graph_sha='c'.repeat(40);});
    assert.equal(movedHead.result.state,'COMPLETE',
@@ -363,6 +397,46 @@ const tests=[
    assert.equal(mixed.result.state,'AWAITING_APPROVAL');assert.equal(mixed.result.build_command,'/wave build --approve all');
    const build=await run('build',(_f,a)=>{a.plan_record=mixed.result;});
    assert.deepEqual(build.result.approved,['T-2','T-3']);assert.ok(!build.calls.some(c=>c.label==='B1 build T-1'));
+ },
+ async()=>{
+   // B1 requires A3's contract PR on the default branch, so merging it moves main
+   // between Run A and Run B while the graph and closure digests stay the same.
+   const planned=await run('plan',f=>{f.responses['A2 shared-literal scan'].literals=f.literals;});
+   assert.equal(planned.result.state,'AWAITING_APPROVAL');assert.equal(planned.result.contract.state,'PR_OPEN');
+   const pinned='a'.repeat(40),merged='f'.repeat(40);
+   const build=(change=()=>{},prior=planned.result)=>run('build',(f,a)=>{
+     a.plan_record=clone(prior);f.responses['B2 seam check'].table=seamTable(f);
+     a.graph_publication.main_sha=merged;Object.assign(a.graph_admission[0],{main_sha:merged,graph_sha:merged});
+     change(a.graph_admission[0]);
+   });
+   const r=await build();
+   assert.equal(r.result.state,'COMPLETE');assert.equal(r.result.seam_check.state,'PASSED');
+   const b1=r.calls.filter(c=>c.label.startsWith('B1'));
+   assert.equal(b1.length,fixture.tracks.length);
+   for(const c of b1){
+     assert.ok(c.prompt.includes(JSON.stringify(planned.result.contract)));
+     assert.ok(c.prompt.includes(`Run A pinned main ${pinned}`)&&c.prompt.includes(merged));
+     assert.match(c.prompt,/is an ancestor of the fetched origin\/main/);
+   }
+   assert.equal(r.calls.filter(c=>c.label.startsWith('B3')).length,fixture.tracks.length);
+   assert.ok(r.result.evidence.some(e=>e.includes(pinned)&&e.includes(merged)&&/digests unchanged/.test(e)));
+   const same=await run('build',(f,a)=>{a.plan_record=clone(planned.result);f.responses['B2 seam check'].table=seamTable(f);});
+   assert.equal(same.result.state,'COMPLETE');
+   assert.ok(same.calls.filter(c=>/^B[13]/.test(c.label)).every(c=>c.prompt.includes('Run A approved observations')));
+   for(const change of [rep=>{rep.candidates.forEach(c=>c.closure_graph_digest='sha256:'+'9'.repeat(64));},
+                        rep=>{rep.candidates[0].closure_evidence_digest='sha256:'+'9'.repeat(64);}]){
+     const changed=await build(change);
+     assert.ok(changed.result.state==='STOPPED' || changed.result.tracks[0].state==='STOPPED');
+     assert.ok(!changed.calls.some(c=>c.label.endsWith('T-1')));
+     assert.match(changed.result.stop_reason || changed.result.tracks[0].result.stop_reason,/T-1 changed since Run A/);
+   }
+   const other=clone(planned.result);
+   const pub=JSON.parse(other.evidence[0].slice('Graph publication evidence: '.length));
+   pub.projects[0].project_id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+   other.evidence[0]='Graph publication evidence: '+JSON.stringify(pub);
+   const project=await build(()=>{},other);
+   assert.equal(project.result.state,'STOPPED');assert.equal(project.calls.length,0);
+   assert.match(project.result.stop_reason,/no unambiguous eligible candidate audit/);
  }
 ];
 function seamIntegration(){

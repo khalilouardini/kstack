@@ -1,0 +1,414 @@
+#!/usr/bin/env python3
+"""Open, inspect or replace a local snapshot viewer's selected roadmap cache."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import os
+import re
+import runpy
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import time
+from contextlib import closing, contextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlencode, urlsplit
+from urllib.request import urlopen
+
+STACK_ROOT = Path(__file__).resolve().parents[4]
+META_KEY = "kstack_issue_graph"
+UUID = re.compile(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+STATES = {"triage", "backlog", "unstarted", "started", "completed", "canceled"}
+
+
+def digest(data):
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def timestamp(value):
+    date = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if date.tzinfo is None:
+        raise ValueError("observation/ticket timestamps must include a timezone")
+    return date
+
+
+def json_file(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def resolve_path(value, base):
+    path = Path(value).expanduser()
+    return (path if path.is_absolute() else base / path).resolve()
+
+
+def load_binding(path, key):
+    cfg = json_file(path)
+    if cfg.get("schema_version") != 1:
+        raise ValueError("unsupported viewer binding schema_version")
+    cfg["viewer_root"] = resolve_path(cfg["viewer_root"], path.resolve().parent)
+    if not cfg["viewer_root"].is_dir():
+        raise ValueError("issue_graph viewer_root does not exist")
+    url = urlsplit(cfg["url"])
+    if (url.scheme != "http" or url.hostname not in {"127.0.0.1", "localhost"}
+            or url.username or url.password or url.query or url.fragment
+            or url.path not in {"", "/"}):
+        raise ValueError("viewer url must be a loopback HTTP origin")
+    entry = cfg["projects"].get(key)
+    if not entry:
+        raise ValueError(f"no issue_graph binding for project {key}")
+    wid = entry["workspace"]
+    if not re.fullmatch(r"[a-z][a-z0-9_-]*", wid):
+        raise ValueError("invalid viewer workspace id")
+    cfg["workspace"] = wid
+    cfg["view_url"] = cfg["url"].rstrip("/") + "/?" + urlencode(
+        {"w": wid, "view": "dependency", "state": "any",
+         "hideCompleted": "0", "hideCanceled": "0"})
+    cfg["database"] = cfg["viewer_root"] / "data" / "workspaces" / wid / "graph.db"
+    with connect(cfg["viewer_root"] / "data" / "workspaces.db", readonly=True) as db:
+        row = db.execute(
+            "SELECT id, api_key, webhook_secret FROM workspace WHERE id=?", (wid,)
+        ).fetchone()
+    if row is None:
+        raise ValueError("bound viewer workspace does not exist")
+    cfg["credential_backed"] = bool(row[1] or row[2])
+    return cfg
+
+
+@contextmanager
+def connect(path, readonly=False):
+    if not path.is_file():
+        raise ValueError(f"viewer database missing: {path}")
+    db = sqlite3.connect(path.as_uri() + ("?mode=ro" if readonly else "?mode=rw"),
+                         uri=True, timeout=10)
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def load_roadmap(repo):
+    index_path = repo.resolve() / "orchestration" / "index.json"
+    index_bytes = index_path.read_bytes()
+    index = json.loads(index_bytes)
+    validator = runpy.run_path(str(STACK_ROOT / "tools/linear/linear-roadmap/bin/graph-record"))
+    validator["check_schema"](index, json_file(
+        STACK_ROOT / "tools/linear/linear-roadmap/references/index.schema.json"))
+    manifest_path = (repo.resolve() / index["manifest"]).resolve()
+    if not manifest_path.is_relative_to(index_path.parent):
+        raise ValueError("manifest escapes consuming orchestration directory")
+    manifest_bytes = manifest_path.read_bytes()
+    record = validator["validate"](json.loads(manifest_bytes))
+    provenance = {
+        "repository": str(repo.resolve()), "manifest": str(manifest_path),
+        "manifest_digest": digest(manifest_bytes), "index_digest": digest(index_bytes),
+        "source_revision": index["source_revision"], "source_pin_checked": False,
+    }
+    return record, provenance
+
+
+def select_nodes(record, key):
+    projects = {p["key"]: p for p in record["projects"]}
+    if key not in projects:
+        raise ValueError(f"project {key} absent from indexed roadmap")
+    nodes = {n["id"]: n for n in record["nodes"]}
+    selected = {n["id"] for n in nodes.values()
+                if n["project"] == key and (n["kind"] != "group" or n["issue_ref"])}
+    # Preserve upstream dependencies to the graph's explicit boundary.
+    while True:
+        upstream = {e["from"] for e in record["edges"] if e["to"] in selected}
+        expanded = selected | upstream
+        if expanded == selected:
+            break
+        selected = expanded
+    if not selected:
+        raise ValueError("selected project has no displayable nodes")
+    return [n for n in record["nodes"] if n["id"] in selected], [
+        e for e in record["edges"] if e["from"] in selected and e["to"] in selected]
+
+
+def validate_evidence(evidence):
+    if evidence.get("complete") is not True:
+        raise ValueError("Linear evidence incomplete; previous view preserved")
+    timestamp(evidence["observed_at"])
+    by_id, identifiers = {}, set()
+    for item in evidence["issues"]:
+        for field in ("id", "identifier", "title", "url", "description", "state",
+                      "priority", "assignee", "labels", "project", "createdAt",
+                      "updatedAt", "completedAt"):
+            if field not in item:
+                raise ValueError(f"missing Linear issue field {field}")
+        if not UUID.fullmatch(item["id"]) or item["id"] in by_id:
+            raise ValueError("invalid or duplicate Linear issue UUID")
+        if not isinstance(item["identifier"], str) or not item["identifier"]:
+            raise ValueError("missing Linear issue identifier")
+        if item["identifier"] in identifiers:
+            raise ValueError("duplicate Linear issue identifier")
+        if not isinstance(item["description"], str):
+            raise ValueError("full Linear description was not fetched")
+        if item["state"].get("type") not in STATES or not item["state"].get("name"):
+            raise ValueError("unknown Linear workflow status type")
+        if type(item["priority"]) is not int or not 0 <= item["priority"] <= 4:
+            raise ValueError("Linear priority must be an integer from 0 to 4")
+        for field in ("createdAt", "updatedAt", "completedAt"):
+            if item[field] is not None:
+                timestamp(item[field])
+            elif field != "completedAt":
+                raise ValueError(f"missing Linear timestamp {field}")
+        for label in item["labels"]:
+            if not all(k in label for k in ("id", "name", "color", "group")):
+                raise ValueError("incomplete Linear label")
+        if item["assignee"] is not None and not all(
+                k in item["assignee"] for k in ("id", "displayName")):
+            raise ValueError("incomplete Linear assignee")
+        if item["project"] is not None and not all(
+                k in item["project"] for k in ("id", "name")):
+            raise ValueError("incomplete Linear project")
+        by_id[item["id"]] = item
+        identifiers.add(item["identifier"])
+    return by_id
+
+
+def project_snapshot(record, provenance, key, evidence):
+    nodes, edges = select_nodes(record, key)
+    by_id = validate_evidence(evidence)
+    missing = sorted({n["issue_ref"] for n in nodes
+                      if n["issue_ref"] and n["issue_ref"] not in by_id})
+    if missing:
+        raise ValueError("Linear evidence missing referenced UUIDs: " + ", ".join(missing))
+    projects = {p["key"]: p for p in record["projects"]}
+    counts = {}
+    for n in nodes:
+        if n["kind"] in {"unit", "external", "group"} and n["issue_ref"]:
+            counts[n["issue_ref"]] = counts.get(n["issue_ref"], 0) + 1
+    items = {}
+    for node in nodes:
+        linked = by_id.get(node["issue_ref"])
+        is_ticket = node["kind"] in {"unit", "external", "group"} and linked is not None
+        if is_ticket:
+            item = copy.deepcopy(linked)
+            identifier = (linked["identifier"] if counts[node["issue_ref"]] == 1
+                          else "VIEW-" + node["id"])
+        else:
+            if node["kind"] in {"human", "evidence", "release"}:
+                prefix, label_id, label_name, state_name = (
+                    "GATE-", "checkpoint", "Roadmap checkpoint", "Checkpoint — unverified")
+                project = {"id": "gates-" + key, "name": "Roadmap checkpoints"}
+            else:
+                prefix, label_id, label_name, state_name = {
+                    "unit": ("PROPOSED-", "proposed-unit", "Proposed unit", "Proposed unit — unverified"),
+                    "external": ("EXTERNAL-", "external-prerequisite", "External prerequisite",
+                                 "External prerequisite — unverified"),
+                    "group": ("CONTEXT-", "roadmap-context", "Roadmap context", "Context — unverified"),
+                }[node["kind"]]
+                owner_project = projects[node["project"]]
+                project = {"id": owner_project.get("linear_id") or "roadmap-" + node["project"],
+                           "name": owner_project["title"]}
+            identifier = prefix + node["id"]
+            item = {
+                "id": identifier, "title": node["title"],
+                "url": linked["url"] if linked else "", "priority": 0,
+                "state": {"name": state_name, "type": "triage"},
+                "assignee": None,
+                "labels": [{"id": label_id, "name": label_name,
+                            "color": "#a78bfa", "group": None}],
+                "project": project,
+                "createdAt": evidence["observed_at"], "updatedAt": evidence["observed_at"],
+                "completedAt": None,
+            }
+        item.update(identifier=identifier, relations=[], parent=None, children=[])
+        raw = {
+            "origin": "Indexed roadmap with Linear snapshot",
+            "manifestNode": copy.deepcopy(node),
+            "projectAuthorization": projects[node["project"]]["authorization"],
+            "linkedIssue": copy.deepcopy(linked), "provenance": copy.deepcopy(provenance),
+            "linearObservedAt": evidence["observed_at"],
+            "snapshotComments": copy.deepcopy(linked.get("comments", [])) if linked else [],
+        }
+        detail = [
+            "# " + node["title"], "Manifest node: " + node["id"],
+            "Kind: " + node["kind"], "Project: " + projects[node["project"]]["title"],
+            "Scope admission: " + projects[node["project"]]["authorization"],
+            "Source: " + node["source"], "Manifest: " + provenance["manifest_digest"],
+            "Linear observed: " + evidence["observed_at"],
+            "Display snapshot; execution and release readiness unverified.",
+            "## Acceptance", *node["acceptance"],
+        ]
+        if linked:
+            detail += ["## Linked Linear ticket: " + linked["identifier"],
+                       "Linear state: " + linked["state"]["name"], linked["description"]]
+        for heading, field, opposite in (
+                ("Orchestration prerequisites", "to", "from"),
+                ("Downstream coordination", "from", "to")):
+            conditions = [e for e in edges if e[field] == node["id"]]
+            detail.append("## " + heading)
+            detail += [f"- {e[opposite]} — {e['type']}: {e['from_event']} to "
+                       f"{e['to_event']}\n  Source: {e['source']}" for e in conditions]
+        raw["snapshotDescription"] = "\n\n".join(detail)
+        item["raw"] = raw
+        items[node["id"]] = item
+    for edge in edges:
+        items[edge["from"]]["relations"].append({
+            "type": "blocks", "targetIdentifier": items[edge["to"]]["identifier"],
+            "orchestrationType": edge["type"],
+            "orchestrationLabel": f"{edge['type']}: {edge['from_event']} to {edge['to_event']}",
+            "source": edge["source"], "fromEvent": edge["from_event"],
+            "toEvent": edge["to_event"],
+        })
+    result = list(items.values())
+    if len({i["identifier"] for i in result}) != len(result):
+        raise ValueError("projected identifiers collide")
+    meta = dict(provenance, project=key, linear_observed_at=evidence["observed_at"],
+                nodes=len(result), conditions=len(edges))
+    return result, meta
+
+
+def cached(cfg):
+    with connect(cfg["database"], readonly=True) as db:
+        identifiers = {r[0] for r in db.execute("SELECT identifier FROM issue_cache")}
+        row = db.execute("SELECT value FROM cache_meta WHERE key=?", (META_KEY,)).fetchone()
+    return identifiers, json.loads(row[0]) if row else None
+
+
+def replace_cache(cfg, issues, provenance):
+    if cfg["credential_backed"]:
+        raise ValueError("refusing to replace an API-key/webhook-backed workspace")
+    built = cfg["viewer_root"] / "build/backend/routes"
+    graph = (built / "graph.js").read_text(encoding="utf-8")
+    detail = (built / "issue.js").read_text(encoding="utf-8")
+    if "MVP_SNAPSHOT_MODE" not in graph or "snapshotDescription" not in detail:
+        raise ValueError("installed viewer lacks the required snapshot adapter")
+    labels = {label["id"]: label for i in issues for label in i["labels"]}
+    with connect(cfg["database"]) as db:
+        # Fail before replacing caches if the installed schema is incompatible.
+        for table, expected in {
+            "issue_cache": {"identifier", "payload", "fetched_at"},
+            "label_cache": {"id", "payload"}, "cache_meta": {"key", "value"},
+        }.items():
+            actual = {r[1] for r in db.execute("PRAGMA table_info(" + table + ")")}
+            if actual != expected:
+                raise ValueError("unsupported viewer database schema: " + table)
+        backup_dir = cfg["viewer_root"] / "data/kstack-backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        fd, name = tempfile.mkstemp(prefix=cfg["workspace"] + "-", suffix=".db", dir=backup_dir)
+        os.close(fd)
+        backup = Path(name)
+        with closing(sqlite3.connect(backup)) as dest:
+            db.backup(dest)
+        now = int(time.time() * 1000)
+        with db:
+            db.execute("DELETE FROM issue_cache")
+            db.execute("DELETE FROM label_cache")
+            db.executemany("INSERT INTO issue_cache(identifier,payload,fetched_at) VALUES(?,?,?)",
+                           [(i["identifier"], json.dumps(i, ensure_ascii=False), now) for i in issues])
+            db.executemany("INSERT INTO label_cache(id,payload) VALUES(?,?)",
+                           [(key, json.dumps(value)) for key, value in labels.items()])
+            db.executemany("INSERT OR REPLACE INTO cache_meta(key,value) VALUES(?,?)", [
+                (META_KEY, json.dumps(provenance)), ("last_sync_ms", str(now)),
+            ])
+    return str(backup)
+
+
+def api_status(cfg):
+    try:
+        url = cfg["url"].rstrip("/") + "/api/graph?" + urlencode({"w": cfg["workspace"]})
+        with urlopen(url, timeout=5) as response:
+            data = json.load(response)
+        issues = data["data"]["issues"]
+        return {"running": True, "nodes": len(issues),
+                "conditions": sum(len(i["relations"]) for i in issues),
+                "identifiers": sorted(i["identifier"] for i in issues)}
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return {"running": False, "error": str(error)}
+
+
+def start_service(cfg, config_path):
+    service = cfg["service"]
+    if sys.platform != "darwin" or service is None:
+        raise ValueError("viewer offline; no supported issue_graph.service configured")
+    label = service["label"]
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", label):
+        raise ValueError("invalid LaunchAgent label")
+    domain = f"gui/{os.getuid()}"
+    target = domain + "/" + label
+    if subprocess.run(["launchctl", "print", target], capture_output=True).returncode:
+        plist = resolve_path(service["plist"], config_path.resolve().parent)
+        subprocess.run(["launchctl", "bootstrap", domain, str(plist)],
+                       check=True, capture_output=True)
+    subprocess.run(["launchctl", "kickstart", target], check=True, capture_output=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=("open", "status", "requirements", "refresh"))
+    parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument("--project", required=True)
+    parser.add_argument("--repo", required=True, type=Path)
+    parser.add_argument("--issues", type=Path)
+    parser.add_argument("--apply", action="store_true")
+    args = parser.parse_args()
+    try:
+        if args.apply and args.action != "refresh":
+            raise ValueError("--apply is only valid with refresh")
+        cfg = load_binding(args.config, args.project)
+        previous_ids, previous = cached(cfg)
+        result = {"url": cfg["view_url"], "workspace": cfg["workspace"], "project": args.project}
+        if args.action == "requirements":
+            record, provenance = load_roadmap(args.repo)
+            nodes, edges = select_nodes(record, args.project)
+            result.update(state="REQUIREMENTS", provenance=provenance,
+                          issue_refs=sorted({n["issue_ref"] for n in nodes if n["issue_ref"]}),
+                          nodes=len(nodes), conditions=len(edges))
+        elif args.action == "refresh":
+            if args.issues is None:
+                raise ValueError("refresh requires --issues with fresh Linear evidence")
+            record, provenance = load_roadmap(args.repo)
+            issues, meta = project_snapshot(record, provenance, args.project, json_file(args.issues))
+            new_ids = {i["identifier"] for i in issues}
+            result.update(state="PREVIEW", provenance=meta,
+                          added=sorted(new_ids - previous_ids), removed=sorted(previous_ids - new_ids))
+            if args.apply:
+                _, current = load_roadmap(args.repo)
+                if current != provenance:
+                    raise ValueError("roadmap changed during projection; repeat with current evidence")
+                result["backup"] = replace_cache(cfg, issues, meta)
+                result["state"] = "IMPORTED"
+        else:
+            health = api_status(cfg)
+            if args.action == "open" and not health["running"]:
+                start_service(cfg, args.config)
+                for _ in range(6):
+                    time.sleep(0.5)
+                    health = api_status(cfg)
+                    if health["running"]:
+                        break
+            result["service"] = health
+            result["provenance"] = previous
+            result["state"] = "UNKNOWN"
+            try:
+                _, current = load_roadmap(args.repo)
+                if previous:
+                    matches = (previous.get("project") == args.project
+                               and all(previous.get(k) == current[k]
+                                       for k in ("manifest_digest", "index_digest")))
+                    result["state"] = "CURRENT" if matches else "STALE"
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                result["roadmap_error"] = str(error)
+            if health["running"] and set(health["identifiers"]) != previous_ids:
+                result["state"] = "UNKNOWN"
+                result["service"]["error"] = "API does not match the bound workspace cache"
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if args.action in {"requirements", "refresh"} or result["service"]["running"] else 1
+    except (OSError, ValueError, KeyError, TypeError, sqlite3.Error,
+            subprocess.CalledProcessError) as error:
+        print("ERROR: " + str(error), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

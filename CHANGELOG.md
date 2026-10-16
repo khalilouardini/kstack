@@ -10,6 +10,18 @@ and build instead of locking approval to the whole graph or main SHA. Unrelated
 graph/ticket/main changes preserve approval after a fresh audit; changed or
 missing relevant evidence stops only the affected track, not independent siblings.
 
+`/wave` Run B no longer refuses because main moved after Run A. When A2 finds
+shared literals, B1 requires A3's contract PR on the default branch, so merging
+it always moved main and no wave with a contract could build. Run B now decides
+on the graph and closure digests it already compared; a changed digest, a moved
+accepted graph PR/head or a different project still refuses, and B1 verifies
+Run A's main is an ancestor of the fetched default branch.
+
+`graph-admission` compares a closure issue's live `prerequisites` once per issue:
+the edges into every node sharing its `issue_ref`, in manifest order. A unit and
+its human review node with one `issue_ref` could not both match before, so no
+such candidate was admissible. Live-dependency drift still refuses.
+
 `/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
 retains contradictory same-head findings and unknown severities as holds, and
 reports ledger/container provenance. Shared project-resolution and complete-file
@@ -30,6 +42,11 @@ project lookup fails closed, and branch/worktree passes remain separate.
 Synthetic offline fixtures and prompt-reference checks run in `bin/check-stack`;
 they do not enforce live agent behavior. Router and README preserve invocation
 filters. Refresh adapters through `bin/install --host codex` after deployment.
+
+Add `/issue-graph open|status|refresh` for an installed local roadmap viewer.
+Refresh derives views from the indexed JSON and fresh Linear evidence, preserves
+typed event conditions and unverified checkpoints, and backs up one workspace
+before replacing its caches without changing saved views or notes.
 
 `/pr-loop` 0.6.0: `CLEAN` requires CI. After a finding-free review, step 3a
 reads the PR's checks at the reviewed head, waits up to `--ci-wait` minutes

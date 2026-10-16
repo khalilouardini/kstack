@@ -344,6 +344,17 @@ def main(argv: list[str]) -> int:
         if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
             r.fail("roles/triage/tests", "harness", "triage fixtures failed or none discovered")
 
+    viewer_tests = REPO / "tools/linear/issue-graph/tests"
+    if viewer_tests.is_dir():
+        out = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(viewer_tests)],
+            capture_output=True, text=True,
+        )
+        print(out.stdout, end="")
+        print(out.stderr, end="")
+        if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+            r.fail("tools/linear/issue-graph/tests", "harness", "viewer tests failed or none discovered")
+
     for where, check, msg in r.warns:
         print(f"WARN  {where}  [{check}] {msg}")
     for where, check, msg in r.fails:

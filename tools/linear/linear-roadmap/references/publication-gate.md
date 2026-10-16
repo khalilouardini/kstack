@@ -87,7 +87,9 @@ It reads immutable Git blobs and does not fetch, write, dispatch or grant human
 approval. Add `main_sha` and `checked_at` to the coverage snapshot. Closure issues
 also require full `description`, `url`, `updated_at`, `relations_complete: true`,
 and `prerequisites` containing all incoming manifest edge objects in manifest
-order, after checking both prose and native relations. Do not use truncated list
+order, after checking both prose and native relations. The list is per issue:
+when several nodes share one `issue_ref` (a unit and its human review node), it
+holds every edge into any of those nodes, in manifest order. Do not use truncated list
 responses as full bodies. Evidence expires after one hour and must be refreshed
 before each transition. A changed SHA requires a fresh audit. Only changed
 relevant conditions/evidence invalidate a track's approval; unrelated graph
@@ -182,7 +184,9 @@ or authorized human; scope decisions require the authorized owner independently.
 Fetch and validate the exact PR head; `--main-ref <fresh-main-ref>` with
 `graph-admission` records both SHAs (snapshot also supplies `graph_sha`). The flag
 waives publication on main only. It cannot waive review, scope, blockers or gates.
-Closed, merged, unrelated, invalid, unreviewed or moving heads refuse;
+Closed, merged, unrelated, invalid or unreviewed heads refuse. A head moving
+during a node returns STOPPED before writes; later invocations require fresh
+exact-head review and admission, then compare approved candidate conditions;
 incomplete selected scope/closure evidence refuses too; after
 merge omit the flag and recheck main. Never base implementation on the graph PR.
 
@@ -216,12 +220,12 @@ fresh reports and compares each candidate's `closure_graph_digest` and relevant
 `closure_evidence_digest` with Run A before building. The graph digest covers the
 selected unit, its containers, prerequisite events/nodes (including future merge
 gates), their project scope/authorization and execution policy. Unrelated nodes,
-edges, projects and graph display title are excluded. Full graph digests and
+edges, projects and display titles (graph, project and node) are excluded. Full graph digests and
 SHAs remain audit observations, not whole-wave approval locks. Coverage counts
 and routine tracker timestamp/status changes alone do not
 invalidate approval; full fresh observations remain in the audit record. Relevant
-digests cover scope path/line/quote, node identity, ownership, acceptance, incoming
-prerequisites, issue id/identifier/description/url/prerequisites, and current event
+digests cover scope path/quote (line is a freshly verified locator), node identity, ownership, acceptance, incoming
+prerequisites within the candidate event closure, issue id/identifier/description/prerequisites, and current event
 node_id/event/state. Event facts are sorted by node_id/event before hashing.
 Agent-written scope rationales and proof/event source explanations remain required
 and fully retained in evidence.request but are excluded from the factual digest;
@@ -229,9 +233,22 @@ rewording them alone cannot invalidate approval. The calling skills still verify
 source truth on each transition. Future merge gate definitions stay protected
 by the candidate graph digest; release conditions are verified at release.
 Changed relevant constraints or evidence require reanalysis and plan approval
-for that track. A missing/blocked/changed candidate stops only that track;
+for that track. During build a missing/blocked/changed candidate stops only that track;
 independently verified siblings continue. If no approved track is eligible,
 return STOPPED with all reasons. Do not replace stopped tracks with new tickets.
 Older Run A records lacking candidate graph digests need a new plan audit;
 never substitute the full graph digest or invent missing evidence.
+B1 and B3 receive the saved Run A main/graph pins and per-track digests, alongside
+fresh Run B reports. Preserve both snapshots and changed fields with old/new
+values on refusals. B1 verifies Run A main ancestry before writes. Planning has
+no prior approval: caller preflight rejects known ineligible selections before
+Workflow, and unexpected invalid A1 selections stop before A3 writes.
+
+A LOCAL_RECONCILIATION -> PUBLISHED transition intentionally needs a new plan
+in this per-candidate flow: publication removes the separately audited origin
+closure and changes mode. SHA movement alone still permits fresh admission.
+Issue URLs are verified locators, retained in raw evidence but excluded from
+identity digests regardless of provider slug format. Scope applicability is a
+semantic check over the full relevant sections, including exclusions; a quote
+digest alone cannot establish it. Nodes compare saved/fresh scope sources.
 These caller observations are evidence, not durable human approval records.
