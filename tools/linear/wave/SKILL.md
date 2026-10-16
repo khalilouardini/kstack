@@ -147,7 +147,8 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    effective graph and selected factual closure digests before implementation.
    Do not require Run A and Run B main/PR SHAs or publication modes to match.
    A contract merge, unrelated commit, accepted graph reaching main, or publication
-   of an identical local repair is permitted with fresh eligible audits. Validate
+   of an identical local repair is permitted with fresh eligible audits. B1 verifies
+   Run A's main is an ancestor of the fetched default branch. Validate
    historical candidates against their own saved main/graph pins and date; pending
    graphs still need this build invocation's explicit flags and exact-head review.
    Missing/ambiguous/stale audits or changed graph, issue identity or selected

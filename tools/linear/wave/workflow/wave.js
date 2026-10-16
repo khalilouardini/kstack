@@ -1627,12 +1627,13 @@ const priorEvidence=a.evidence?.find(e=>e.startsWith('Graph publication evidence
 let priorPublication;
 try { priorPublication=priorEvidence && JSON.parse(priorEvidence.slice('Graph publication evidence: '.length)); }
 catch { return refuse('graph publication: invalid Run A SHA evidence'); }
+const projectTracks=approved.filter(t=>t.project!==null);
 let priorAdmissions;
 try { priorAdmissions=JSON.parse(a.evidence?.find(e=>e.startsWith('Graph admission evidence: '))?.slice('Graph admission evidence: '.length)); }
 catch { return refuse('graph admission: missing Run A candidate evidence'); }
 const priorDate=validUTC(priorPublication?.checked_at) ? priorPublication.checked_at.slice(0,10) : null;
 const validPriorAdmissions=validAdmissionReports(priorAdmissions,priorPublication,priorDate);
-for (const t of approved.filter(t=>t.project!==null)) {
+for (const t of projectTracks) {
   const current=candidateAdmission(t);
   const prior=candidateAdmission(t,validPriorAdmissions,priorPublication,null);
   if (!prior || prior.report.graph_digest!==current.report.graph_digest ||
@@ -1642,17 +1643,23 @@ for (const t of approved.filter(t=>t.project!==null)) {
       prior.candidate.closure_evidence_digest!==current.candidate.closure_evidence_digest)
     return refuse(`graph admission: ${t.issue_id} changed since Run A; repeat reconciliation and plan approval`);
 }
+const mainMoved=projectTracks.length>0 && priorPublication.main_sha!==publication.main_sha;
+const mainMove=mainMoved ? `Main moved since Run A: ${priorPublication.main_sha} -> ${publication.main_sha}; approved graph and closure digests unchanged` : null;
+const mainPrompt=mainMoved ? `Run A pinned main ${priorPublication.main_sha}; Run B validated main ${publication.main_sha}
+with unchanged graph and closure digests. Verify ${priorPublication.main_sha} is an ancestor of the fetched ${args.default_branch};
+if not, return STOPPED before any write.\n` : '';
 const report={state:'COMPLETE',run_ids:[a.run_id,args.run_id],wave_id:a.wave_id,
   approved:ids,tracks:[],seam_check:{state:'NOT_RUN',table:[],reason:'A2 found no shared literals'},
-  open_questions:[],unverified_questions:[],stop_reason:null,evidence:[graphEvidence,admissionEvidence]};
+  open_questions:[],unverified_questions:[],stop_reason:null,evidence:[graphEvidence,admissionEvidence,...(mainMove ? [mainMove] : [])]};
 if (approved.some(t=>t.project!==null)) report.evidence.push(
   'Run A graph publication evidence: '+JSON.stringify(priorPublication),
   'Run A graph admission evidence: '+JSON.stringify(priorAdmissions));
+if (mainMove) log(mainMove);
 for (const t of a.tracks) if (!ids.includes(t.issue_id)) log(`${t.issue_id}: skipped; not approved`);
 phase('Build');
 const built=await pipeline(approved, async (_prev,t) => {
   const plan=a.plans.find(p=>p.issue_id===t.issue_id);
-  const r=await call(`B1 build ${t.issue_id}`, `${graphPrompt}${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
+  const r=await call(`B1 build ${t.issue_id}`, `${graphPrompt}${mainPrompt}${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
 ${read(args.paths.land, 'headless land returns STOPPED with evidence instead of waiting')}
 Human approval: ${JSON.stringify(ids)} for wave ${a.wave_id}. Approved plan: ${JSON.stringify(plan)}.
 Use the existing dispatch worktree ${t.worktree}, branch ${t.branch}. Read back the

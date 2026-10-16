@@ -17,6 +17,13 @@ current pending graphs still require explicit flags and exact-head review. Cover
 contract plan/build round trips, later-day resumes, graph publication and malformed
 historical evidence without relaxing scope, contract or changed-evidence checks.
 
+`/wave` Run B no longer refuses because main moved after Run A. When A2 finds
+shared literals, B1 requires A3's contract PR on the default branch, so merging
+it always moved main and no wave with a contract could build. Run B now decides
+on the graph and closure digests it already compared; a changed digest or a
+different project still refuses, and B1 verifies
+Run A's main is an ancestor of the fetched default branch.
+
 `graph-admission` compares a closure issue's live `prerequisites` once per issue:
 the edges into every node sharing its `issue_ref`, in manifest order. A unit and
 its human review node with one `issue_ref` could not both match before, so no
