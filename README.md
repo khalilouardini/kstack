@@ -81,7 +81,7 @@ when needed. The contract explains the project’s purpose, boundaries, release
 gates and impact on the whole product; its title and filename are flexible.
 The shared lifecycle lives once at the stack root, with a versioned schema and
 one indexed manifest containing each repo's projects/subunits. Indexed validation
-checks the source pin; `/next` gives plan-only work a planning kickoff and excludes
+checks supported schemas and source cleanliness; the pin records adoption provenance; `/next` gives plan-only work a planning kickoff and excludes
 it from wave batches. The human publishes Linear views manually under workspace
 rules. Preparing a roadmap grants no execution permission.
 

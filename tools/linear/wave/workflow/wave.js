@@ -1488,7 +1488,8 @@ approval, including a required contract merge or an unrelated commit. Record old
 and new SHAs and rebase onto the freshly audited base; never reuse stale evidence
 at a new SHA. Changed graph/closure or unavailable fresh evidence stops the affected
 work for analysis and approval. Each accepted PR head must match its fresh validated
-and reviewed head; a moved PR head requires new exact-head review/admission evidence.
+and reviewed head; if it moves during a node, return STOPPED before any write.
+The caller must obtain a new exact-head review and fresh admission before retrying.
 Explicit graph bypass tokens from THIS invocation: ${JSON.stringify(graphFlags)}.
 Forward only these tokens to composed dispatch/land/review-comments/pr-loop procedures.
 Do not inherit a bypass from an earlier plan or approval. Revalidate candidate eligibility
@@ -1636,11 +1637,17 @@ const validPriorAdmissions=validAdmissionReports(priorAdmissions,priorPublicatio
 for (const t of projectTracks) {
   const current=candidateAdmission(t);
   const prior=candidateAdmission(t,validPriorAdmissions,priorPublication,null);
+  const publishedRepair=prior?.candidate.mode==='LOCAL_RECONCILIATION' && current.candidate.mode==='PUBLISHED';
+  const sameEvidence=publishedRepair ?
+    shaDigest(prior.candidate.published_closure_evidence_digest) &&
+    prior.candidate.published_closure_evidence_digest===current.candidate.closure_evidence_digest :
+    prior?.candidate.mode===current.candidate.mode &&
+    prior?.candidate.closure_evidence_digest===current.candidate.closure_evidence_digest;
   if (!prior || prior.report.graph_digest!==current.report.graph_digest ||
       prior.candidate.project_id!==current.candidate.project_id ||
       prior.candidate.issue_id!==current.candidate.issue_id ||
       prior.candidate.node_id!==current.candidate.node_id ||
-      prior.candidate.closure_evidence_digest!==current.candidate.closure_evidence_digest)
+      !sameEvidence)
     return refuse(`graph admission: ${t.issue_id} changed since Run A; repeat reconciliation and plan approval`);
 }
 const mainMoved=projectTracks.length>0 && priorPublication.main_sha!==publication.main_sha;

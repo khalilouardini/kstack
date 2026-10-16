@@ -233,7 +233,7 @@ Keep the shared lifecycle at the installed stack's root; copy/adapt
 [`ORCHESTRATION.md`](ORCHESTRATION.md) and [`orchestration.json`](orchestration.json)
 into the consuming root and the one active `orchestration/<slug>.json`. Adapt
 [`orchestration-index.json`](orchestration-index.json) into `orchestration/index.json`;
-its required source pin is checked against the physical installed stack HEAD. Groups describe subunits without new sessions; one
+its source pin records adoption provenance; supported schemas and a clean installed source determine compatibility. Groups describe subunits without new sessions; one
 executable issue maps to one persistent session. `/next` reads indexed conditions
 and checks live evidence. `/wave` retains its current human plan checkpoint.
 

@@ -180,7 +180,9 @@ or authorized human; scope decisions require the authorized owner independently.
 Fetch and validate the exact PR head; `--main-ref <fresh-main-ref>` with
 `graph-admission` records both SHAs (snapshot also supplies `graph_sha`). The flag
 waives publication on main only. It cannot waive review, scope, blockers or gates.
-Closed, merged, unrelated, invalid, unreviewed or moving heads refuse;
+Closed, merged, unrelated, invalid or unreviewed heads refuse. A head moving
+within an invocation stops the node before writes; a later invocation requires
+fresh exact-head review and admission, then compares approved meaning;
 incomplete selected scope/closure evidence refuses too; after
 merge omit the flag and recheck main. Never base implementation on the graph PR.
 
@@ -218,7 +220,7 @@ A changed project or graph/closure meaning still refuses; current pending graph
 heads require this invocation's explicit flag and exact-head review.
 Coverage counts and routine tracker timestamp/status changes alone do not
 invalidate approval; full fresh observations remain in the audit record. Relevant
-digests cover scope path/line/quote, node identity, ownership, acceptance, incoming
+digests cover scope path/quote (line remains a verified locator), node identity, ownership, acceptance, incoming
 prerequisites, issue id/identifier/description/url/prerequisites, and current event
 node_id/event/state. Event facts are sorted by node_id/event before hashing.
 Agent-written scope rationales and proof/event source explanations remain required
@@ -233,8 +235,13 @@ Bind each historical candidate to its original publication main/graph SHA and
 date, then compare its issue/node identity, effective graph and factual closure
 digest with fresh ELIGIBLE evidence for the approved work. An accepted graph PR
 may reach main, or an identical local repair may be published, without changing
-plan meaning. Current pending graph heads still require explicit flags and fresh
+plan meaning. For LOCAL_RECONCILIATION -> PUBLISHED, compare the saved
+`published_closure_evidence_digest` over the repair itself and its ancestors
+with the fresh published closure digest. Continue validating origin evidence
+and comparing full closures while both audits are local. Reverse transitions
+require a new plan. Scope line numbers are verified locators; digest scope
+identity is path plus exact quote. Current pending graph heads still require explicit flags and fresh
 exact-head review. Never carry an old audit onto a new SHA. Missing or ambiguous
-historical/current evidence stops affected work. Record both snapshots; keep
+historical/current evidence refuses the entire wave build invocation before agents run. Record both snapshots; keep
 contract merge/content verification, rebase, scope and human approval checks.
 These caller observations are evidence, not durable human approval records.

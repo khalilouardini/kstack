@@ -126,6 +126,7 @@ const tests=[
    const local=a=>{
      const r=a.graph_admission[0],c=r.candidates[0];
      c.mode='LOCAL_RECONCILIATION';r.delta.added_nodes=[{id:c.node_id,issue_ref:c.issue_id}];
+     c.published_closure_evidence_digest='sha256:'+'b'.repeat(64);
      a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(a.graph_publication),'Graph admission evidence: '+JSON.stringify(a.graph_admission)];
    };
    for(const stage of ['plan','build']) {
@@ -140,10 +141,29 @@ const tests=[
    assert.equal(dep.result.state,'STOPPED');assert.equal(dep.calls.length,1);
    const published=await run('build',(_f,a)=>{
      local(a);advanceMain(a);a.graph_admission[0].candidates[0].mode='PUBLISHED';
+     a.graph_admission[0].candidates[0].closure_evidence_digest='sha256:'+'b'.repeat(64);
      a.graph_admission[0].delta.added_nodes=[];
      a.graph_admission[0].base_digest=a.graph_admission[0].graph_digest;
    });
    assert.equal(published.result.state,'COMPLETE','publishing an identical audited repair preserves approval');
+   const realPair=JSON.parse(readFileSync(join(dir,'fixtures/repair-publication.json'),'utf8'));
+   for(const changed of [false,true]) {
+     const result=await run('build',(_f,a)=>{
+       const prior=clone(a.graph_admission[0]);
+       Object.assign(prior,{graph_digest:realPair.local.graph_digest,base_digest:realPair.local.base_digest});
+       Object.assign(prior.candidates[0],{mode:realPair.local.candidate.mode,
+         closure_evidence_digest:realPair.local.candidate.closure_evidence_digest,
+         published_closure_evidence_digest:realPair.local.candidate.published_closure_evidence_digest});
+       prior.delta.added_nodes=[{id:'T-1',issue_ref:'T-1'}];
+       a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(a.graph_publication),
+         'Graph admission evidence: '+JSON.stringify([prior])];
+       advanceMain(a);
+       a.graph_admission[0].graph_digest=realPair.published.graph_digest;
+       a.graph_admission[0].candidates[0].closure_evidence_digest=changed ? 'sha256:'+'0'.repeat(64) :
+         realPair.published.candidate.closure_evidence_digest;
+     });
+     assert.equal(result.result.state,changed?'STOPPED':'COMPLETE','real helper digest transition');
+   }
  },
 
  async()=>{

@@ -392,6 +392,11 @@ class RoadmapTests(unittest.TestCase):
                 self.assertEqual(record, fixture())
                 self.assertEqual(index.read_bytes(), before)
                 self.assertEqual(updated_revision, changed_revision)
+            with mock.patch.dict(API['load_index'].__globals__,
+                                 {'installed_revision': mock.Mock(side_effect=ValueError('dirty installed source'))}):
+                with self.assertRaisesRegex(ValueError, 'dirty installed source'):
+                    API['load_index'](index)
+            with mock.patch.dict(API['load_index'].__globals__,{'installed_revision':lambda:'b'*40}):
                 value = json.loads(before)
                 value['schema_version'] = 2
                 index.write_text(json.dumps(value), encoding='utf-8')

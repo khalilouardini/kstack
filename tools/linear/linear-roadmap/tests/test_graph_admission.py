@@ -181,6 +181,49 @@ class AdmissionTests(unittest.TestCase):
         self.assertNotEqual(r['base_digest'], r['graph_digest'])
         self.assertEqual(r, self.audit(graph))
 
+    def test_real_repair_publication_digests_match_wave_fixture(self):
+        graph = self.repair()
+        local = self.audit(graph)
+        origin_event = next(e for e in self.request['events'] if e['node_id'] == 'scope')
+        origin_event['state'] = 'UNKNOWN'
+        blocked = self.audit(graph)
+        self.assertEqual(blocked['state'], 'BLOCKED')
+        self.assertNotEqual(local['candidates'][0]['closure_evidence_digest'],
+                            blocked['candidates'][0]['closure_evidence_digest'])
+        self.assertEqual(local['candidates'][0]['published_closure_evidence_digest'],
+                         blocked['candidates'][0]['published_closure_evidence_digest'])
+        origin_event['state'] = 'SATISFIED'
+        (self.repo / 'orchestration/graph.json').write_text(json.dumps(graph))
+        (self.repo / 'docs/project.md').write_text('```mermaid\n' + API['GRAPH']['render'](graph) + '```\n')
+        self.git('add', '.')
+        self.git('commit', '-m', 'publish identical repair')
+        self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+        self.request.pop('repairs')
+        published = self.audit()
+        self.assertEqual(local['graph_digest'], published['graph_digest'])
+        self.assertNotEqual(local['candidates'][0]['closure_evidence_digest'],
+                            published['candidates'][0]['closure_evidence_digest'])
+        self.assertEqual(local['candidates'][0]['published_closure_evidence_digest'],
+                         published['candidates'][0]['closure_evidence_digest'])
+        pair = {name: {'graph_digest': report['graph_digest'], 'base_digest': report['base_digest'],
+                       'candidate': {k: report['candidates'][0][k] for k in
+                                     ('mode', 'closure_evidence_digest', 'published_closure_evidence_digest')}}
+                for name, report in [('local', local), ('published', published)]}
+        fixture = ROOT.parent / 'wave/tests/fixtures/repair-publication.json'
+        self.assertEqual(pair, json.loads(fixture.read_text()))
+
+    def test_scope_line_movement_preserves_digest_but_stale_line_refuses(self):
+        before = self.audit()
+        (self.repo / 'docs/scope.md').write_text('Unrelated introduction.\n' + QUOTE + '\n')
+        self.git('add', 'docs/scope.md')
+        self.git('commit', '-m', 'add unrelated introduction')
+        self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+        with self.assertRaisesRegex(ValueError, 'scope citation'):
+            self.audit()
+        for proof in self.request['nodes']:
+            proof['scope']['line'] = 2
+        self.assertEqual(before['candidates'], self.audit()['candidates'])
+
     def test_scope_expansion_dependency_release_and_human_changes_require_publication(self):
         for kind in ('scope', 'edge', 'release', 'human', 'feature', 'ownership'):
             with self.subTest(kind=kind):

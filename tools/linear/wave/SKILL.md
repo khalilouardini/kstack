@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.5.2
+version: 0.5.3
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -145,14 +145,18 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    Both runs match candidates only in validated build-transition reports. Run B
    validates stored reports using Run A's publication SHA/date, then compares
    effective graph and selected factual closure digests before implementation.
-   Do not require Run A and Run B main/PR SHAs or publication modes to match.
+   Do not require Run A and Run B main/PR SHAs to match. A local repair may
+   become published only when its saved `published_closure_evidence_digest`
+   equals the fresh published closure digest and the effective graph is identical.
+   Same-mode audits still compare the full closure, including origin evidence;
+   the reverse transition requires a new plan.
    A contract merge, unrelated commit, accepted graph reaching main, or publication
    of an identical local repair is permitted with fresh eligible audits. B1 verifies
    Run A's main is an ancestor of the fetched default branch. Validate
    historical candidates against their own saved main/graph pins and date; pending
    graphs still need this build invocation's explicit flags and exact-head review.
    Missing/ambiguous/stale audits or changed graph, issue identity or selected
-   closure evidence stop affected work for analysis and approval. Unapproved
+   closure evidence refuse the entire build invocation before agents run, requiring analysis and approval. Unapproved
    tracks' changes alone do not invalidate the approved tracks.
    Full rationales and source explanations remain in the evidence; prose rewording
    and changed coverage counts alone do not invalidate plans.
