@@ -1,5 +1,13 @@
 [
   {
+    "number": 30,
+    "name": "unrelated roadmap and main changes preserve approved wave"
+  },
+  {
+    "number": 31,
+    "name": "changed or unmapped track does not interrupt independent siblings"
+  },
+  {
     "number": 28,
     "name": "plan reports do not shadow build admission"
   },
@@ -116,7 +124,7 @@
     "name": "all plans stopped returns STOPPED without build command"
   },
   {
-    "number": 30,
+    "number": 32,
     "name": "contract merged between plan and build"
   }
 ]

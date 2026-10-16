@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+`/linear-roadmap` 0.6.0 refreshes local JSON, orchestration Markdown and scope
+files by default; `--publish` explicitly opens or updates the graph PR. Local
+mapping does not grant execution admission or alter a running wave's membership.
+`/wave` 0.6.0 compares per-candidate graph/evidence closure digests across plan
+and build instead of locking approval to the whole graph or main SHA. Unrelated
+graph/ticket/main changes preserve approval after a fresh audit; changed or
+missing relevant evidence stops only the affected track, not independent siblings.
+
 `/wave` Run B no longer refuses because main moved after Run A. When A2 finds
 shared literals, B1 requires A3's contract PR on the default branch, so merging
 it always moved main and no wave with a contract could build. Run B now decides

@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.5.1
+version: 0.6.1
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -39,6 +39,15 @@ delta. Semantic scope/dependency/release/human changes require reviewed publicat
 Only explicit --accept-graph-update can use a verified reviewed pending graph.
 Revalidate at A1, before A3/A4 writes, B1 implementation and B3 implementer fixes;
 Run A observations and --approve do not supply fresh evidence or a bypass.
+
+The wave's membership is fixed by Run A and the human-approved subset. Roadmap
+refreshes and newly created or closed tickets do not add tracks or cancel this
+wave. Compare each mapped track's `closure_graph_digest` and
+`closure_evidence_digest` after refreshing evidence; a different main SHA or full
+graph digest alone does not invalidate its approval. Changed relevant conditions
+or missing evidence stop that track; independently verified siblings continue.
+Future merge gates stay in the comparison and are enforced at merge. Release
+evidence is rechecked at release; project membership alone is no start condition.
 
 ## Project-level orchestration design
 
@@ -97,7 +106,8 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    nonpositive N, absent build approval, or an approval list containing unknown/stopped issues. N defaults
    to `/next`'s documented 3; announce the resolved count. Resolve repo root and
    fetched default branch for implementation; use its remote-tracking ref.
-   Graph publication independently checks literal main under the shared contract.
+   Graph admission independently audits literal main under the shared contract;
+   a moved SHA triggers a fresh audit, not automatic wave cancellation.
 2. Read `tools/linear/wave/references/records.md`. Resolve the physical installed
    skill directory with `cd <installed-wave-directory> && pwd -P`, then its stack
    root. Build absolute `paths` to canonical `wave`, `next`, `dispatch`, `land`,
@@ -131,21 +141,30 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    `accepted_graph_updates` snapshots under the shared publication contract.
    For plan preserve graph flag/value tokens in `selection`; for build populate
    `graph_update_flags` only from the human's current build invocation. Reject
-   malformed/missing values, unreviewed/invalid PR graphs and incomplete selected
-   closure evidence before Workflow; unrelated PR coverage gaps stay warnings.
+   malformed/missing values and unreviewed/invalid PR graphs before Workflow;
+   unrelated PR coverage gaps stay warnings. In plan, reject known missing or
+   blocked selected closure evidence before Workflow; if A1 nevertheless returns
+   an invalid selected track, stop the planning invocation before A3 writes.
+   In build, missing or blocked closure evidence stops only that approved track,
+   preserving independently audited siblings.
    Supply full `graph_admission` helper reports for candidate groups. Evaluate
    each selected/approved issue's ELIGIBLE build state and relevant closure;
    UPDATE_REQUIRED is a warning, never project-wide exclusion. Project-less tracks
    remain exempt. Require valid UTC checked_at on args.date. Carry main/graph SHA,
    full admission evidence, exact local delta and digests into every node and the
-   existing record.evidence array; nodes stop if live pins/relevant evidence move.
+   existing record.evidence array; moved pins require fresh audits and changed
+   relevant conditions stop only affected build tracks. Planning nodes stop the
+   planning invocation when conditions change before contract publication.
    Both runs match candidates only in validated build-transition reports. Run B
    validates stored reports using Run A's publication SHA/date, then compares
-   effective graph and selected factual closure digests before implementation.
-   A newer main, such as the merged A3 contract PR, does not invalidate approval
-   when those digests match; B1 then verifies Run A's main is an ancestor of the
-   fetched default branch. A moved accepted graph PR/head or a different project
-   still refuses. Full rationales and source explanations remain in the evidence; prose rewording
+   each candidate's graph and factual closure digests before implementation.
+   B1 and B3 receive each track's explicit Run A baseline, main/graph pins and
+   both candidate digests. B1 verifies Run A's main is an ancestor of fetched
+   main; unchanged candidate conditions permit a merged contract or unrelated
+   main commit. Preserve both runs' observations and changed field values in
+   stop evidence. Re-read full relevant scope sections, including exclusions;
+   matching citation text alone does not establish scope applicability.
+   Full rationales and source explanations remain in the evidence; prose rewording
    and changed coverage counts alone do not invalidate plans.
    A3 rechecks before contract publication; pass the same explicit
    graph flags to composed land, dispatch, review-comments and B3 pr-loop invocations. These
