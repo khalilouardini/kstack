@@ -68,6 +68,20 @@ const overlapPR=(number,file)=>({number,title:'Accepted PR '+number,author:'main
 const overlapArgs=(_f,a)=>{a.selection=clone(overlapSelection);
   a.accepted_prs=[overlapPR(479,'file1.txt'),overlapPR(470,'file2.txt')];};
 const promptOverlaps=p=>JSON.parse(p.match(/Relevant accepted overlaps from caller preflight: (\[[^\n]*\])\./)[1]);
+const advanceMain=a=>{
+  const old=a.graph_publication.main_sha;
+  a.graph_publication.main_sha='7'.repeat(40);
+  for(const r of a.graph_admission) {
+    r.main_sha=a.graph_publication.main_sha;
+    if(r.graph_sha===old) r.graph_sha=a.graph_publication.main_sha;
+  }
+};
+const changeStored=(a,kind,change)=>{
+  const prefix=`Graph ${kind} evidence: `;
+  const i=a.plan_record.evidence.findIndex(e=>e.startsWith(prefix));
+  const value=JSON.parse(a.plan_record.evidence[i].slice(prefix.length));
+  change(value);a.plan_record.evidence[i]=prefix+JSON.stringify(value);
+};
 const tests=[
  async()=>{
    const planned=await run('plan');
@@ -181,6 +195,8 @@ const tests=[
    const local=a=>{
      const r=a.graph_admission[0],c=r.candidates[0];
      c.mode='LOCAL_RECONCILIATION';r.delta.added_nodes=[{id:c.node_id,issue_ref:c.issue_id}];
+     c.published_closure_graph_digest='sha256:'+'b'.repeat(64);
+     c.published_closure_evidence_digest='sha256:'+'b'.repeat(64);
      a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(a.graph_publication),'Graph admission evidence: '+JSON.stringify(a.graph_admission)];
    };
    for(const stage of ['plan','build']) {
@@ -194,6 +210,59 @@ const tests=[
    assert.match(drift.result.tracks[0].result.stop_reason,/repeat reconciliation/);
    const dep=await run('plan',(_f,a)=>{local(a);a.graph_admission[0].delta.changed_edges=[{}];});
    assert.equal(dep.result.state,'STOPPED');assert.equal(dep.calls.length,1);
+   const published=await run('build',(_f,a)=>{
+     local(a);advanceMain(a);
+     Object.assign(a.graph_admission[0].candidates[0],{mode:'PUBLISHED',
+       closure_graph_digest:'sha256:'+'b'.repeat(64),closure_evidence_digest:'sha256:'+'b'.repeat(64)});
+     a.graph_admission[0].delta.added_nodes=[];
+     a.graph_admission[0].graph_digest='sha256:'+'9'.repeat(64);
+   });
+   assert.equal(published.result.state,'COMPLETE','publication compares the own closure, not the old origin or whole manifest');
+   for(const field of ['published_closure_graph_digest','published_closure_evidence_digest']) {
+     const missing=await run('build',(_f,a)=>{
+       local(a);changeStored(a,'admission',reports=>{delete reports[0].candidates[0][field];});
+       Object.assign(a.graph_admission[0].candidates[0],{mode:'PUBLISHED',
+         closure_graph_digest:'sha256:'+'b'.repeat(64),closure_evidence_digest:'sha256:'+'b'.repeat(64)});
+       a.graph_admission[0].delta.added_nodes=[];
+     });
+     assert.equal(missing.result.tracks[0].state,'STOPPED');
+     assert.deepEqual(missing.calls.filter(c=>c.label.startsWith('B1')).map(c=>c.label),['B1 build T-2','B1 build T-3']);
+   }
+   const generated=spawnSync('python3',[join(dir,'fixtures/repair-publication.py')],{encoding:'utf8'});
+   assert.equal(generated.status,0,generated.stderr);
+   const reports=JSON.parse(generated.stdout);
+   assert.notEqual(reports.local.graph_digest,reports.unrelated.graph_digest);
+   for(const report of Object.values(reports))
+     assert.equal(report.evidence.issues.main_sha,report.main_sha,'retain each real observation at its own pin');
+   assert.ok(reports.local.evidence.request.repairs.length);
+   assert.ok(!reports.published.evidence.request.repairs);
+   for(const change of ['published','unrelated','graph','evidence','origin','reverse']) {
+     const priorReport=clone(change==='reverse'?reports.published:reports.local);
+     const currentReport=clone(change==='origin'||change==='reverse'?reports[change==='origin'?'blocked':'local']:
+       reports[change==='unrelated'?'unrelated':'published']);
+     if(change==='graph') currentReport.candidates[0].closure_graph_digest='sha256:'+'0'.repeat(64);
+     if(change==='evidence') currentReport.candidates[0].closure_evidence_digest='sha256:'+'0'.repeat(64);
+     const result=await run('build',(f,a)=>{
+       const id=priorReport.candidates[0].identifier;
+       Object.assign(f,JSON.parse(JSON.stringify(f).replaceAll('T-1',id)));
+       a.plan_record=f.plan_record;a.plan_record.tracks[0].project=priorReport.candidates[0].project_id;
+       a.date=currentReport.checked_at.slice(0,10);
+       const originalProject=a.graph_publication.projects[0];
+       const pins=report=>({main_sha:report.main_sha,checked_at:report.checked_at,
+         projects:[originalProject,...report.evidence.issues.projects.map(p=>({project_id:p.project_id,
+           project_name:p.project_name,view_path:p.view_path,state:'UPDATE_REQUIRED'}))]});
+       const siblings=report=>({...clone(a.graph_admission[0]),main_sha:report.main_sha,
+         graph_sha:report.graph_sha,checked_at:report.checked_at,candidates:clone(a.graph_admission[0].candidates.slice(1))});
+       a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(pins(priorReport)),
+         'Graph admission evidence: '+JSON.stringify([priorReport,siblings(priorReport)])];
+       const currentSiblings=siblings(currentReport);
+       a.graph_publication=pins(currentReport);a.graph_admission=[currentReport,currentSiblings];
+     });
+     assert.equal(result.result.state,'COMPLETE');
+     assert.deepEqual(result.result.tracks.map(t=>t.state),
+       [change==='published'||change==='unrelated'?'CLEAN':'STOPPED','CLEAN','CLEAN'],change);
+   }
+
  },
 
  async()=>{
@@ -265,6 +334,21 @@ const tests=[
      a.graph_publication.projects[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].head_sha='c'.repeat(40);a.accepted_graph_updates[0].reviewed_head_sha='c'.repeat(40);a.graph_admission[0].graph_sha='c'.repeat(40);});
    assert.equal(movedHead.result.state,'COMPLETE',
      'a freshly reviewed accepted head with unchanged selected conditions preserves approval');
+   const merged=await run('build',(_f,a)=>{a.plan_record=plan.result;advanceMain(a);});
+   assert.equal(merged.result.state,'COMPLETE','accepted graph publication retains approval with fresh exact pins');
+   for(const change of ['main_pin','graph_pin','missing_pr','pr_head']) {
+     const invalid=await run('build',(_f,a)=>{
+       a.plan_record=clone(plan.result);advanceMain(a);
+       changeStored(a,change==='missing_pr'||change==='pr_head'?'publication':'admission',value=>{
+         if(change==='missing_pr') delete value.projects[0].pr_number;
+         if(change==='pr_head') value.projects[0].head_sha='9'.repeat(40);
+         if(change==='main_pin') value[0].main_sha='9'.repeat(40);
+         if(change==='graph_pin') value[0].graph_sha='9'.repeat(40);
+       });
+     });
+     assert.equal(invalid.result.state,'STOPPED');assert.equal(invalid.calls.length,0);
+   }
+
    const inherited=await run('build',(_f,a)=>{accept(a);a.selection.push(...flags);});
    assert.equal(inherited.result.state,'STOPPED');assert.equal(inherited.calls.length,0);
    const warning=await run('plan',(_f,a)=>{accept(a);a.selection.push(...flags);
@@ -490,5 +574,23 @@ if(process.argv.includes('--mutation-check') && !failed){
  try {const r=await run('build',stopped,mutated);assert.ok(!r.calls.some(c=>c.label==='B3 review T-1'));}catch{detected=true;}
  assert.ok(detected,'case 6 must fail when STOPPED guard is removed');
  console.log('PASS mutation: removing STOPPED guard makes case 6 fail; original source untouched');
+ const graphMutation=executable.replace("for (const field of ['closure_graph_digest','closure_evidence_digest'])",
+   "for (const field of ['closure_evidence_digest'])");
+ assert.notEqual(graphMutation,executable,'publication graph comparison mutation target must exist');
+ let graphDetected=false;
+ try {
+   const r=await run('build',(_f,a)=>{
+     const c=a.graph_admission[0].candidates[0];c.mode='LOCAL_RECONCILIATION';
+     c.published_closure_graph_digest='sha256:'+'1'.repeat(64);
+     c.published_closure_evidence_digest=c.closure_evidence_digest;
+     a.graph_admission[0].delta.added_nodes=[{id:c.node_id,issue_ref:c.issue_id}];
+     a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(a.graph_publication),
+       'Graph admission evidence: '+JSON.stringify(a.graph_admission)];
+     c.mode='PUBLISHED';a.graph_admission[0].delta.added_nodes=[];
+   },graphMutation);
+   assert.equal(r.result.tracks[0].state,'STOPPED');
+ } catch {graphDetected=true;}
+ assert.ok(graphDetected,'repair publication must detect removal of its graph comparison');
+ console.log('PASS mutation: removing repair publication graph comparison is detected; original source untouched');
 }
 process.exitCode=failed?1:0;

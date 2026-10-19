@@ -71,11 +71,15 @@ For every proposed, resumed or reviewed implementation unit:
    prohibit an otherwise eligible build. PLAN_ONLY remains a separate next/dispatch
    outcome and cannot enter wave's implementation tracks.
 
-Indexed validation, installed source pin, graph/event-cycle checks, scope, active
+Indexed schema validation, clean installed source, graph/event-cycle checks, scope, active
 session checks, independence, plan/review approval and release gates remain
 mandatory. Legacy graphs require the same cited closure audit by the skill;
 `graph-admission` cannot grant deterministic admission without a typed index.
 A legacy missing unit or dependency repair requires a reviewed graph update.
+
+`source_revision` records adoption provenance. Preserve it across stack upgrades;
+supported schemas and clean installed source determine compatibility. A different
+installed HEAD alone requires no graph-only repin PR.
 
 For indexed graphs, use `bin/graph-admission` beside `bin/graph-coverage`:
 
@@ -140,7 +144,7 @@ manifest in an isolated admission directory; never implicitly merge overlays
 into the active index or edit the shared authoritative graph. Reconstruct from
 pinned main plus the recorded delta, validate/render, and inspect the complete
 conditions. Any local manifest must match that exact recorded effective digest.
-A structural draft validation is not a substitute for the source-pin audit.
+A structural draft validation is not a substitute for indexed schema and clean-source validation.
 
 Re-fetch main and full closure issues before dispatch/status writes, build,
 commit/push and implementer review fixes. Re-run admission against current
@@ -177,7 +181,7 @@ scope or prerequisites to manufacture completeness.
 
 Retain this repeatable flag for a specific pending **reviewed** graph update.
 Validate positive decimal numbers, deduplicate, and verify OPEN, base main,
-stable exact head, affected projects, indexed validation/source pin and review
+stable exact head, affected projects, indexed schema/clean-source validation and review
 evidence at that head. Report coverage gaps separately and require verified
 selected units and closure on that head; unrelated omissions do not veto it. Review must come from the configured reviewer
 or authorized human; scope decisions require the authorized owner independently.
@@ -244,9 +248,14 @@ values on refusals. B1 verifies Run A main ancestry before writes. Planning has
 no prior approval: caller preflight rejects known ineligible selections before
 Workflow, and unexpected invalid A1 selections stop before A3 writes.
 
-A LOCAL_RECONCILIATION -> PUBLISHED transition intentionally needs a new plan
-in this per-candidate flow: publication removes the separately audited origin
-closure and changes mode. SHA movement alone still permits fresh admission.
+A LOCAL_RECONCILIATION -> PUBLISHED transition preserves approval only when the
+saved `published_closure_graph_digest` and `published_closure_evidence_digest`
+match the fresh published candidate's full graph/evidence digests. The helper
+computes both saved digests over the repair itself, its containers and its own
+prerequisites. The origin remains fully audited and binding while both runs are
+local. Missing saved publication digests or a reverse mode transition require a
+new plan for that track; never substitute a whole-manifest digest or invent a
+missing baseline. Unrelated graph changes still preserve independent tracks.
 Issue URLs are verified locators, retained in raw evidence but excluded from
 identity digests regardless of provider slug format. Scope applicability is a
 semantic check over the full relevant sections, including exclusions; a quote

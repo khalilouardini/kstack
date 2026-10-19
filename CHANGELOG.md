@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+`/wave` 0.7.0 reconciles per-track admission with compatible stack updates and
+repair publication. Saved own-closure graph and evidence digests permit a local
+repair to become published while retaining full origin checks during local
+execution. Missing or changed relevant evidence stops only the affected track;
+unrelated graph changes and independently verified siblings remain admissible.
+`/linear-roadmap` 0.6.2 preserves local refresh defaults and source provenance.
+
+Roadmap admission now treats `source_revision` as adoption provenance, rather than
+requiring equality with the installed kstack HEAD. `/linear-roadmap` 0.5.1,
+`/next` 0.8.2 and `/wave` 0.5.2 use supported index/manifest schemas for
+compatibility, so stack upgrades alone need no graph-only repin PR. Dirty source,
+unsupported schemas, scope, dependency and approval checks still refuse as before.
+Regression fixtures verify unchanged admission across stack updates, preserved
+provenance and unrelated coverage warnings.
+
+`/wave` 0.5.2 preserves plan approval across the required contract merge and other
+main/graph-PR SHA movement when fresh audits confirm the same effective graph and
+approved issue closure. Historical reports are validated against their own pins;
+current pending graphs still require explicit flags and exact-head review. Covers
+contract plan/build round trips, later-day resumes, graph publication and malformed
+historical evidence without relaxing scope, contract or changed-evidence checks.
+
 `/wave` 0.6.2: A1 is told the format of `TRACK.project`. The script matches it
 exactly against `graph_publication.projects[]`, but the A1 prompt never named
 the format, so an A1 that returned `"MVP 2.1 (<uuid>)"` instead of the bare UUID
@@ -28,8 +50,8 @@ installs. Updates are manually invoked, with no schedule or merge hook.
 `/wave` Run B no longer refuses because main moved after Run A. When A2 finds
 shared literals, B1 requires A3's contract PR on the default branch, so merging
 it always moved main and no wave with a contract could build. Run B now decides
-on the graph and closure digests it already compared; a changed digest, a moved
-accepted graph PR/head or a different project still refuses, and B1 verifies
+on the graph and closure digests it already compared; a changed digest or a
+different project still refuses, and B1 verifies
 Run A's main is an ancestor of the fetched default branch.
 
 `graph-admission` compares a closure issue's live `prerequisites` once per issue:

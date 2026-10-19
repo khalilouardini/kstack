@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.6.2
+version: 0.7.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -158,6 +158,15 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    Both runs match candidates only in validated build-transition reports. Run B
    validates stored reports using Run A's publication SHA/date, then compares
    each candidate's graph and factual closure digests before implementation.
+   When a local repair becomes published, compare its saved
+   `published_closure_graph_digest` and `published_closure_evidence_digest` with
+   the fresh published candidate digests. These describe the repair's own
+   closure, excluding its temporary origin audit. Both saved digests must be
+   valid and equal; a missing digest requires a new plan audit for that track.
+   Same-mode local audits still compare full origin closures; reverse mode
+   transitions require a new plan. An accepted graph reaching main is permitted
+   with fresh evidence. Pending graphs still require this invocation's explicit
+   flags and exact-head review. Unrelated graph changes never veto siblings.
    B1 and B3 receive each track's explicit Run A baseline, main/graph pins and
    both candidate digests. B1 verifies Run A's main is an ancestor of fetched
    main; unchanged candidate conditions permit a merged contract or unrelated

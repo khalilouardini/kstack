@@ -1488,7 +1488,11 @@ ${args.stage==='plan' ? `No Run A approval exists yet. Require live main SHA to 
 fresh audit's main_sha before writes. Changed or unavailable conditions stop this
 planning invocation before contract publication; repeat the plan audit.` :
 `Compare this track's closure_graph_digest and closure_evidence_digest with the
-explicit Run A approved observations supplied below. Unrelated changes preserve
+explicit Run A approved observations supplied below. For LOCAL_RECONCILIATION to
+PUBLISHED only, compare Run A's published_closure_graph_digest and
+published_closure_evidence_digest with the current full candidate digests instead.
+Require valid saved publication digests; never invent missing evidence. Other mode
+changes require a new plan. Unrelated changes preserve
 approval; changed scope, prerequisites, acceptance, human gates, policy, mode or
 missing fresh evidence returns STOPPED for this track before any write, then
 repeat condition analysis and plan approval. Never silently accept a changed condition.`}
@@ -1663,12 +1667,19 @@ for (const t of approved.filter(t=>t.project!==null)) {
   if (!current || !prior)
     preflightStops.set(t.issue_id,`graph publication/admission: ${t.issue_id} has no unambiguous eligible candidate audit for both runs; repeat condition analysis and plan approval`);
   else {
-    const changed=['issue_id','project_id','node_id','closure_graph_digest','closure_evidence_digest','mode']
-      .filter(key=>prior.candidate[key]!==current.candidate[key]);
+    const publishedRepair=prior.candidate.mode==='LOCAL_RECONCILIATION' && current.candidate.mode==='PUBLISHED';
+    const comparisons=['issue_id','project_id','node_id'].map(field=>({field,prior:prior.candidate[field],current:current.candidate[field]}));
+    for (const field of ['closure_graph_digest','closure_evidence_digest']) {
+      const priorField=publishedRepair ? 'published_'+field : field;
+      comparisons.push({field,prior_field:priorField,prior:prior.candidate[priorField],current:current.candidate[field]});
+    }
+    if (!publishedRepair) comparisons.push({field:'mode',prior:prior.candidate.mode,current:current.candidate.mode});
+    const changed=comparisons.filter(c=>c.prior!==c.current ||
+      (c.prior_field?.startsWith('published_') && !shaDigest(c.prior)));
     if (changed.length) preflightStops.set(t.issue_id,`graph admission: ${t.issue_id} changed since Run A; ${JSON.stringify({
       prior:{main_sha:prior.report.main_sha,graph_sha:prior.report.graph_sha},
       current:{main_sha:current.report.main_sha,graph_sha:current.report.graph_sha},
-      comparisons:changed.map(field=>({field,prior:prior.candidate[field],current:current.candidate[field]}))})}; repeat reconciliation and plan approval`);
+      comparisons:changed})}; repeat reconciliation and plan approval`);
   }
 }
 if (approved.every(t=>preflightStops.has(t.issue_id))) return refuse([...preflightStops.values()].join('; '),auditTrail);

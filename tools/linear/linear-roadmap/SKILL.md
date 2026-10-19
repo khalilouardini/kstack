@@ -1,6 +1,6 @@
 ---
 name: linear-roadmap
-version: 0.6.1
+version: 0.6.2
 description: Map existing Linear work or a proposed plan into local orchestration JSON, Markdown and a scope contract. Local updates are the default; --publish explicitly opens or updates the graph PR. Reports coverage separately from execution eligibility. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap PROJECT [--publish]". Tracker reads only; does not launch sessions or create tickets. (kstack)
 ---
 
@@ -141,7 +141,8 @@ contract's existence, completeness or approval.
    On first adoption, write `orchestration/<slug>.json` and the index using the
    template `project-template/orchestration-index.json`. Record the explicitly
    adopted reviewed stack HEAD as `source_revision`; never auto-repin an existing
-   index. Refuse a source mismatch until the owner reconciles it. Root
+   index. A different installed HEAD alone needs no repin; validate supported
+   schemas and retain the dirty-source guard. Root
    `ORCHESTRATION.md` links this machine-readable index and its one manifest.
 3. Encode prerequisites with source and target events. `start_after` targets a
    unit's plan/build event; `merge_after` targets merge; `release_after` targets
@@ -150,7 +151,7 @@ contract's existence, completeness or approval.
    `review_after` orders a human review. Every condition cites its source. Do not convert a merge-only condition into a native start blocker.
 4. Run `python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <absolute-consuming-root>/orchestration/index.json`, then the
    same full command with `render-index`. Read exit codes and the manifest digest.
-   Pin/structure failure stops the handoff; fix from evidence, never remove the
+   Schema/source/structure failure stops the handoff; fix from evidence, never remove the
    failing prerequisite. Plain `validate`/`render` accept a manifest for draft
    checks only and cannot substitute for indexed validation before `/next`.
 5. Put the rendered project graph, a condition/source table, unknowns and links
@@ -183,3 +184,7 @@ its existing human plan checkpoint until that controller path is implemented.
 When `--publish` is requested but a guard or `/land` gate refuses, report
 `STOPPED` with the exact stop reason and evidence, preserved local artifacts,
 and any existing PR URL/head. `LOCAL_ONLY` means publication was not requested.
+
+An existing index keeps its adopted `source_revision` across stack updates. The
+source SHA is provenance; validation uses supported schemas and still rejects
+dirty lifecycle/roadmap source. A different installed HEAD alone needs no repin.

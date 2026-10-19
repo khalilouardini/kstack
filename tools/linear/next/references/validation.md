@@ -142,8 +142,8 @@ membership. Run `python3 bin/check-stack` for repository structural validation.
     otherwise eligible P1 work, citing its head/main SHAs. Acceptance of --accept-overlap
     905 alone does not satisfy publication. New code dependencies remain blocked.
 24. Bare/malformed graph flags, a closed/merged/nonexistent/unrelated PR, an invalid
-    graph, a source-pin mismatch or a PR omitting selected A/its closure: refusal
-    before selection. Unrelated missing D remains a warning.
+    graph, a dirty/unsupported source or a PR omitting selected A/its closure: refusal
+    before selection. A provenance-only source-pin mismatch remains compatible. Unrelated missing D remains a warning.
     A moving head requires a fresh graph/coverage check. Repeated valid flags are
     validated/deduplicated but preserved through composed invocations.
 25. Planning used accepted #905, then wave build carries only --approve all while

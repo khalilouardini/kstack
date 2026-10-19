@@ -370,7 +370,7 @@ class RoadmapTests(unittest.TestCase):
                 self.assertIn('INVALID',result.stderr)
                 self.assertNotIn('Traceback',result.stderr)
 
-    def test_index_pin_and_manifest_revision_are_checked(self):
+    def test_index_provenance_survives_stack_updates_without_repin(self):
         with tempfile.TemporaryDirectory() as temp:
             directory=Path(temp)/'orchestration'
             directory.mkdir()
@@ -384,9 +384,23 @@ class RoadmapTests(unittest.TestCase):
                 self.assertEqual(record,fixture())
                 self.assertRegex(revision,r'^sha256:[0-9a-f]{64}$')
                 manifest.write_text(json.dumps(fixture(),indent=2),encoding='utf-8')
-                self.assertNotEqual(API['load_index'](index)[1],revision)
+                changed_revision = API['load_index'](index)[1]
+                self.assertNotEqual(changed_revision,revision)
             with mock.patch.dict(API['load_index'].__globals__,{'installed_revision':lambda:'b'*40}):
-                with self.assertRaisesRegex(ValueError,'source revision mismatch'):
+                before = index.read_bytes()
+                record, updated_revision = API['load_index'](index)
+                self.assertEqual(record, fixture())
+                self.assertEqual(index.read_bytes(), before)
+                self.assertEqual(updated_revision, changed_revision)
+            with mock.patch.dict(API['load_index'].__globals__,
+                                 {'installed_revision': mock.Mock(side_effect=ValueError('dirty installed source'))}):
+                with self.assertRaisesRegex(ValueError, 'dirty installed source'):
+                    API['load_index'](index)
+            with mock.patch.dict(API['load_index'].__globals__,{'installed_revision':lambda:'b'*40}):
+                value = json.loads(before)
+                value['schema_version'] = 2
+                index.write_text(json.dumps(value), encoding='utf-8')
+                with self.assertRaisesRegex(ValueError, 'expected 1'):
                     API['load_index'](index)
 
     def test_index_rejects_overlay_arrays_and_escape_paths(self):
