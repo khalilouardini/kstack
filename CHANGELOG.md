@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+`/wave` 0.5.2: A1 is told the format of `TRACK.project`. The script matches it
+exactly against `graph_publication.projects[]`, but the A1 prompt never named
+the format, so an A1 that returned `"MVP 2.1 (<uuid>)"` instead of the bare UUID
+stopped Run A with "no unambiguous eligible candidate audit". The A1 prompt and
+records.md now require the publication's `project_id` verbatim (or null), and a
+stopped Run A records, per failing track, the `project` value and how many
+publication projects it matched.
+
 Add `/update-stack` to refresh the recorded canonical checkout from the remote
 default branch, reinstall both host adapters through `bin/install`, and report
 source/host/project evidence. Dirty or divergent source checkouts stop updates.

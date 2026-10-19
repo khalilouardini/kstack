@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.5.1
+version: 0.5.2
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 

@@ -211,6 +211,25 @@ const tests=[
    assert.match(r.result.stop_reason,/no unambiguous eligible candidate audit/);
  },
  async()=>{
+   // Wave r3: A1 returned "MVP 2.1 (<uuid>)" where the script matches project_id exactly.
+   const uuid='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',decorated='Project ('+uuid+')';
+   const r=await run('plan',f=>{f.responses['A1 select'].tracks[0].project=decorated;});
+   const a1=r.calls.find(c=>c.label==='A1 select');
+   assert.ok(a1.prompt.includes('Set each TRACK.project to the issue\'s Linear project_id copied verbatim from\n'+JSON.stringify([uuid])),
+     'A1 prompt must name the publication project_id values TRACK.project takes');
+   assert.match(a1.prompt,/Never a project name, never a name with the UUID appended/);
+   assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,1);
+   assert.match(r.result.stop_reason,/no unambiguous eligible candidate audit/);
+   assert.deepEqual(r.result.evidence.slice(3),['T-1: TRACK.project '+JSON.stringify(decorated)+' matches 0 of 1 graph publication projects']);
+   const planned=await run('plan',f=>{f.responses['A1 select'].tracks.forEach(t=>t.project=uuid);});
+   assert.equal(planned.result.state,'AWAITING_APPROVAL');
+   assert.ok(planned.result.tracks.every(t=>t.project===uuid));
+   const built=await run('build',(_f,a)=>{a.plan_record=planned.result;});
+   assert.equal(built.result.state,'COMPLETE');
+   const edited=await run('build',(_f,a)=>{a.plan_record=clone(planned.result);a.plan_record.tracks[0].project=decorated;});
+   assert.equal(edited.result.state,'STOPPED');assert.equal(edited.calls.length,0);
+ },
+ async()=>{
    for(const stage of ['plan','build']){
      const r=await run(stage,(f,a)=>{
        a.graph_publication={projects:[]};a.graph_admission=[];
