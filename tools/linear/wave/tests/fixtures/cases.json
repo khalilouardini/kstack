@@ -130,5 +130,13 @@
   {
     "number": 32,
     "name": "contract merged between plan and build"
+  },
+  {
+    "number": 34,
+    "name": "main moved between B1 and B3 with unchanged closure readmits the review"
+  },
+  {
+    "number": 35,
+    "name": "moved main with a changed closure digest blocks review"
   }
 ]

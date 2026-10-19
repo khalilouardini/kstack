@@ -305,6 +305,21 @@
       ],
       "open_questions": []
     },
+    "B3 admission T-1": {
+      "issue_id": "T-1",
+      "pr": "https://example.test/pr/1",
+      "state": "OBSERVED",
+      "main_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "checked_at": "2026-10-05T12:30:00Z",
+      "ancestor_exit": null,
+      "merge_tree_exit": null,
+      "head_sha": null,
+      "admission_report": null,
+      "stop_reason": null,
+      "evidence": [
+        "git rev-parse origin/main"
+      ]
+    },
     "A4 plan T-2": {
       "issue_id": "T-2",
       "worktree": "/tmp/track-2",
@@ -364,6 +379,21 @@
       ],
       "open_questions": []
     },
+    "B3 admission T-2": {
+      "issue_id": "T-2",
+      "pr": "https://example.test/pr/2",
+      "state": "OBSERVED",
+      "main_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "checked_at": "2026-10-05T12:30:00Z",
+      "ancestor_exit": null,
+      "merge_tree_exit": null,
+      "head_sha": null,
+      "admission_report": null,
+      "stop_reason": null,
+      "evidence": [
+        "git rev-parse origin/main"
+      ]
+    },
     "A4 plan T-3": {
       "issue_id": "T-3",
       "worktree": "/tmp/track-3",
@@ -422,6 +452,21 @@
         "configured reviewer"
       ],
       "open_questions": []
+    },
+    "B3 admission T-3": {
+      "issue_id": "T-3",
+      "pr": "https://example.test/pr/3",
+      "state": "OBSERVED",
+      "main_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "checked_at": "2026-10-05T12:30:00Z",
+      "ancestor_exit": null,
+      "merge_tree_exit": null,
+      "head_sha": null,
+      "admission_report": null,
+      "stop_reason": null,
+      "evidence": [
+        "git rev-parse origin/main"
+      ]
     }
   }
 }

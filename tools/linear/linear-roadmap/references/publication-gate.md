@@ -260,4 +260,15 @@ Issue URLs are verified locators, retained in raw evidence but excluded from
 identity digests regardless of provider slug format. Scope applicability is a
 semantic check over the full relevant sections, including exclusions; a quote
 digest alone cannot establish it. Nodes compare saved/fresh scope sources.
+Immediately before each project-linked B3 review, a read-only READMISSION node
+observes live main. When it moved, require descendant ancestry, a clean merge of
+the observed PR head, and a fresh ELIGIBLE build report at that main. Reuse the
+same canonical identity and per-candidate graph/evidence comparisons as B1,
+including the one-way local repair publication rule. Whole-manifest changes
+outside that candidate do not block siblings. Preserve accepted graph head pins
+and current-invocation flags. Refresh citation locations and event facts rather
+than copying the old request. Evidence must not postdate the observation or be
+more than one hour old. A refusal yields BLOCKED/rounds 0 without a review call;
+retain the full observation and failure reason in WAVE_REPORT evidence. Successful
+reviews pin live main and the merge-tested PR head; another move stops writes.
 These caller observations are evidence, not durable human approval records.
