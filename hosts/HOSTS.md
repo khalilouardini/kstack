@@ -36,6 +36,26 @@ Symlink-vs-pointer is the only structural difference in install. It exists
 because Codex resolves skills from its own directory and does not follow the
 same layout, not because the two hosts need different content.
 
+## Refresh after a merge
+
+Invoke `/update-stack` to update the recorded root in
+`${KSTACK_STATE:-$HOME/.kstack}/stack-root` from the remote default branch and
+run that checkout's installer for both hosts. The canonical checkout must be
+clean and able to fast-forward; local edits are preserved by stopping, never
+stashed/reset automatically. `/update-stack --check` is read-only and labels
+its remote-tracking evidence as potentially stale.
+
+The read-only `core/update-stack/bin/installation-status` helper verifies every
+expected Claude symlink and Codex pointer's target/name/version/description,
+root record and source SHA. It can scan explicit projects and immediate sibling
+repos plus their registered worktrees for local skill copies. Global installation
+status and project-local copies are separate results, with the scan boundary
+reported. Neither it nor check-stack proves what an already-running agent has
+loaded; ask that session to re-read a changed skill or restart if needed.
+
+A global reinstall does not rewrite project configuration, remove local skills,
+or activate an update schedule. Use the normal installer for all adapter writes.
+
 ## Hooks — the one difference that changes a guarantee
 
 Claude Code reads a `hooks:` block in skill frontmatter and runs the named
