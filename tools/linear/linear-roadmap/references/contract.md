@@ -4,7 +4,8 @@
 `bin/graph-record` implements its bundled closed subset and additional graph
 semantics. It reads UTF-8 manifests and emits validation or Mermaid; it does not
 run acceptance commands, access the network, write tracker/runtime state or
-dispatch sessions. Index validation also runs read-only Git commands for the pin.
+dispatch sessions. Index validation also runs read-only Git commands to reject
+uncommitted lifecycle/roadmap source.
 
 ## One authoritative index
 
@@ -27,16 +28,28 @@ nodes in this same manifest. Additional draft files are inactive, never merged
 implicitly. A Linear project's owner maintains one authoritative graph; other
 repos link that graph rather than copying executable units into another graph.
 
-`validate-index` and `render-index` compare `source_revision` to the physical
-stack's `git rev-parse HEAD` and reject a mismatch or uncommitted lifecycle/roadmap
-source. They do not checkout, fetch or silently use another version. The skills
-stop on a mismatch and require an explicit reconciliation of source, graph and
-human decisions. A matching pin proves source identity, not human PR approval.
+`source_revision` records the reviewed kstack commit adopted when the index was
+created. It is provenance, not an exact runtime version requirement. Preserve it
+on stack upgrades; a different installed HEAD does not require a graph-only repin
+PR. `validate-index`, `render-index` and `graph-admission` enforce the supported
+index and manifest `schema_version` plus graph semantics, and still reject
+uncommitted lifecycle/roadmap source. Incompatible format or event semantics must
+use a new schema version and an explicit graph migration, rather than an equality
+check against the entire kstack repository's HEAD. No command checks out, fetches
+or rewrites provenance. Provenance and schema compatibility do not grant PR or
+human approval.
 `validate-index` reports `manifest_revision: sha256:<digest>` of the exact manifest
 bytes, including uncommitted drafts. This digest is the revision `/next` cites.
-Plain `validate`/`render` are structural draft tools and do not check the index pin.
+Plain `validate`/`render` are structural draft tools and do not check the index or installed source.
 
 ## Publication before execution
+
+Roadmap refresh is local by default: `/linear-roadmap <project>` updates the
+indexed JSON, generated root Markdown and scope contract without Git publication.
+Add `--publish` to open or update the graph PR after validation and gates. The
+local map is useful for inspection/visualization; execution still uses the
+verified baseline and candidate audit below. A refresh cannot change the tickets
+or approved plans of an existing wave.
 
 The [publication gate](publication-gate.md) adds a fresh-main ticket coverage
 audit to roadmap and separates project coverage warnings from per-candidate
@@ -46,9 +59,12 @@ scope, prerequisites, ownership and acceptance. The contract permits an auditabl
 local delta of at most three missing maintenance units within approved scope;
 this is an explicit isolated admission artifact, never an implicit index overlay.
 Semantic scope/dependency/release/human-gate changes require reviewed publication
-or an explicitly accepted reviewed graph PR. Source pins and all condition and
+or an explicitly accepted reviewed graph PR. Schema compatibility and all condition and
 approval checks still apply. This Git PR step is separate from publishing a
 Linear document, which remains the human maintainer's manual action below.
+Wave approval is tied to each mapped unit's relevant conditions, including its
+future merge gates. Fresh unrelated graph/main changes do not invalidate it;
+changed relevant conditions stop only the affected track for reapproval.
 
 ## Manifest fields
 

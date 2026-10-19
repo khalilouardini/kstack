@@ -16,6 +16,12 @@ bin/install                  # claude: symlinks into ~/.claude/skills/<name>
 bin/install --host codex     # codex: generated pointer files into ~/.codex/skills/
 ```
 
+After changes merge into the shared stack, `/update-stack` refreshes that
+recorded installation once for both hosts. `/update-stack --check` reports its
+source SHA and adapter status. Project-local copies remain separate; the audit
+reports them without deleting them. Do not rerun adoption/configuration steps
+in every project just to refresh the shared skills.
+
 `<stack-root>` is wherever you cloned it; you will need its **absolute path** in
 step 3. Install is per machine, not per project — a second project needs only
 steps 2 onward.
@@ -233,7 +239,7 @@ Keep the shared lifecycle at the installed stack's root; copy/adapt
 [`ORCHESTRATION.md`](ORCHESTRATION.md) and [`orchestration.json`](orchestration.json)
 into the consuming root and the one active `orchestration/<slug>.json`. Adapt
 [`orchestration-index.json`](orchestration-index.json) into `orchestration/index.json`;
-its required source pin is checked against the physical installed stack HEAD. Groups describe subunits without new sessions; one
+its source pin records adoption provenance; supported schemas and a clean installed source determine compatibility. Groups describe subunits without new sessions; one
 executable issue maps to one persistent session. `/next` reads indexed conditions
 and checks live evidence. `/wave` retains its current human plan checkpoint.
 
@@ -247,6 +253,13 @@ changes require reviewed publication. An explicit --accept-graph-update uses a
 validated reviewed pending graph for one invocation; build requires the flag again.
 Legacy graphs still need cited closure audits and reviewed mapping repairs.
 See the canonical publication-gate contract in the physical KStack checkout.
+
+Use `/linear-roadmap <project>` for local JSON, orchestration Markdown and scope
+updates; add `--publish` explicitly to open or update the graph PR. Updating the
+map leaves existing wave membership and approved plans intact. Revalidation uses
+each mapped track's graph/evidence closure; unrelated ticket, graph or main
+changes do not interrupt it. Changed relevant conditions stop only affected tracks
+while independent audited siblings continue. Local drafts alone grant no admission.
 
 The human maintainer manually publishes/links the shared team-owned Linear contract
 under the workspace rules and verifies read-back; the roadmap skill never writes it. Keep

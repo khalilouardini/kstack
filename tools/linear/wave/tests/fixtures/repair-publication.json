@@ -1,0 +1,24 @@
+{
+  "local": {
+    "graph_digest": "sha256:7d9ed56929b8e69137c449d3f8ec02c0e9e28d92842bc1856d940f01fa5bdf99",
+    "base_digest": "sha256:4a38aff320f8dc1f2d55263c3a42667981559da1837f6b8ad92b85e82031e29e",
+    "candidate": {
+      "mode": "LOCAL_RECONCILIATION",
+      "closure_graph_digest": "sha256:034b48fb89c8d611be52a5c485a5ce62677ddf2e5d769c966799c668e6601616",
+      "closure_evidence_digest": "sha256:3ac13b502e2cf09ca4357a9e3c61f3c9f62d8e5e90eae584910754ab9f06ddf2",
+      "published_closure_graph_digest": "sha256:8c3801baf391093d9124e0399c8a40c1e7eca9d2c171f6aa3e3f634bf9544678",
+      "published_closure_evidence_digest": "sha256:88488df11978cec190599cd5b36ec8a4669eb43ab572965e3ab0d1770ebc6239"
+    }
+  },
+  "published": {
+    "graph_digest": "sha256:7d9ed56929b8e69137c449d3f8ec02c0e9e28d92842bc1856d940f01fa5bdf99",
+    "base_digest": "sha256:7d9ed56929b8e69137c449d3f8ec02c0e9e28d92842bc1856d940f01fa5bdf99",
+    "candidate": {
+      "mode": "PUBLISHED",
+      "closure_graph_digest": "sha256:8c3801baf391093d9124e0399c8a40c1e7eca9d2c171f6aa3e3f634bf9544678",
+      "closure_evidence_digest": "sha256:88488df11978cec190599cd5b36ec8a4669eb43ab572965e3ab0d1770ebc6239",
+      "published_closure_graph_digest": "sha256:8c3801baf391093d9124e0399c8a40c1e7eca9d2c171f6aa3e3f634bf9544678",
+      "published_closure_evidence_digest": "sha256:88488df11978cec190599cd5b36ec8a4669eb43ab572965e3ab0d1770ebc6239"
+    }
+  }
+}

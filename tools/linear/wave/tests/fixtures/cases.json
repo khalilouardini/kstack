@@ -1,5 +1,13 @@
 [
   {
+    "number": 30,
+    "name": "unrelated roadmap and main changes preserve approved wave"
+  },
+  {
+    "number": 31,
+    "name": "changed or unmapped track does not interrupt independent siblings"
+  },
+  {
     "number": 28,
     "name": "plan reports do not shadow build admission"
   },
@@ -34,6 +42,10 @@
   {
     "number": 21,
     "name": "uncovered tracks cannot enter execution"
+  },
+  {
+    "number": 33,
+    "name": "A1 project is the publication project_id; a decorated name refuses"
   },
   {
     "number": 22,
@@ -116,15 +128,15 @@
     "name": "all plans stopped returns STOPPED without build command"
   },
   {
-    "number": 30,
+    "number": 32,
     "name": "contract merged between plan and build"
   },
   {
-    "number": 31,
+    "number": 34,
     "name": "main moved between B1 and B3 with unchanged closure readmits the review"
   },
   {
-    "number": 32,
+    "number": 35,
     "name": "moved main with a changed closure digest blocks review"
   }
 ]

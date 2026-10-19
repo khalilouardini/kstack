@@ -9,11 +9,26 @@ worktree in selection are proposed names/absolute paths; only dispatch read-back
 proves their existence. A1 excludes PLAN_ONLY from TRACK/SELECT.tracks and lists
 it in sequenced with the unmet condition/source. It does not count toward N;
 the two-stage wave's approval path receives implementation-eligible work only. PLAN.worktree must match the recovered TRACK.worktree.
+TRACK.project (and each SELECT.tracks[].project) is the issue's Linear project
+UUID, copied verbatim from one `graph_publication.projects[].project_id`, or
+null when the issue has no Linear project. It is never a project name and never
+a name with the UUID appended, such as `"MVP 2.1 (1fea30c2-…)"`: the script
+compares the string exactly, so any other value matches no publication project
+and stops Run A before A2. An exact `project_name` still matches, so Run A
+records written before this rule still build.
 RUN_A is AWAITING_APPROVAL only when at least one PLAN is PLANNED; if every A4
 plan stopped, it is STOPPED with build_command null and `<issue_id>: <stop_reason>`
 evidence per plan.
 Run ids are caller-supplied Workflow invocation ids; the tool's actual run id is
 attached by the invoking skill after return if the tool allocates it itself.
+
+RUN_A.evidence retains full graph publication/admission observations. A build
+matches each approved unit's `closure_graph_digest` and `closure_evidence_digest`
+against fresh reports, rather than requiring unchanged main/full-graph revisions.
+Wave membership is fixed by RUN_A; unrelated additions never enroll new tracks.
+A changed or unauditable track produces a STOPPED TRACK_RESULT while independent
+siblings continue. If all approved tracks fail admission, return a STOPPED report.
+Older records without candidate graph digests require a new plan audit.
 
 Accepted-overlap flags use transient caller `args.accepted_prs` snapshots, not
 new record fields. A4 carries relevant overlaps and current PR states in the

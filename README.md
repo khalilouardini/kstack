@@ -2,7 +2,7 @@
 
 # kstack
 
-A personal agent harness that travels across projects. Twenty-seven installable skills and four
+A personal agent harness that travels across projects. Twenty-eight installable skills and four
 role contracts, each defined once, pointed at by every host and every repo that
 uses them.
 
@@ -15,6 +15,10 @@ Ultracode coordinator, per-ticket sessions and human checkpoints;
 [the project template](project-template/ORCHESTRATION.md) carries project-specific conditions.
 [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) prepares a typed record
 and generates its Mermaid view; `/next` reads its conditions before recommending work.
+`/linear-roadmap <project>` updates local JSON and Markdown; add `--publish` only
+when ready to open or update its graph PR. A refresh keeps an existing wave's
+membership fixed. Fresh unrelated graph or main changes do not invalidate
+approved plans; a changed prerequisite or condition stops only its affected track.
 Roadmap reports project-wide coverage warnings separately from candidate eligibility.
 Mapped work can proceed despite unrelated missing tickets; small repairs within
 approved scope can use an auditable local reconciliation. Scope, dependency,
@@ -27,6 +31,11 @@ git clone <this repo> ~/projects/kstack
 cd ~/projects/kstack && bin/install            # Claude Code
 bin/install --host codex                               # Codex CLI
 ```
+
+After shared changes merge, run `/update-stack` from any project to refresh the
+recorded canonical checkout and reinstall both hosts. `/update-stack --check`
+only audits the installation. It reports the installed SHA, host targets and
+project-local copies separately; dirty canonical checkouts stop the update.
 
 Then per project: copy [`project-template/stack.yml`](project-template/stack.yml)
 to `<repo>/.agents/stack.yml` and fill in what applies. See
@@ -81,7 +90,7 @@ when needed. The contract explains the project’s purpose, boundaries, release
 gates and impact on the whole product; its title and filename are flexible.
 The shared lifecycle lives once at the stack root, with a versioned schema and
 one indexed manifest containing each repo's projects/subunits. Indexed validation
-checks the source pin; `/next` gives plan-only work a planning kickoff and excludes
+checks supported schemas and source cleanliness; the pin records adoption provenance; `/next` gives plan-only work a planning kickoff and excludes
 it from wave batches. The human publishes Linear views manually under workspace
 rules. Preparing a roadmap grants no execution permission.
 
@@ -122,6 +131,7 @@ merges on its own.
 | Skill | Does |
 |---|---|
 | [`/land`](core/land/SKILL.md) | Branch → gates green → atomic commits → PR. Carries the concurrent-session guards. **Stops at the PR** |
+| [`/update-stack`](core/update-stack/SKILL.md) | Refreshes the recorded shared checkout from main, reinstalls both hosts, and audits installed targets and project copies |
 | [`/health`](core/health/SKILL.md) | Runs the project's own gates, scores them, reports the trend |
 | [`/delivery-retro`](tools/github/delivery-retro/SKILL.md) | Was this period fruitful vs the previous equal period — refuses activity metrics |
 | [`/session-titles`](tools/github/session-titles/SKILL.md) | Retitles open agent sessions with their issue key and PR |
