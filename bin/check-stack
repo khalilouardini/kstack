@@ -3,7 +3,7 @@
 
 Checks every skill (`*/SKILL.md` under router/, core/, roles/, tools/) and every
 role contract (`roles/*.md`) against CONVENTIONS.md, plus the shell scripts under
-any `bin/`, plus the wave, roadmap and triage offline checks. Exits non-zero if
+any `bin/`, plus the bundled offline checks. Exits non-zero if
 anything fails. `--list` prints the catalog instead.
 Stdlib only; paths resolve against this file's repo, so run it from anywhere.
 """
@@ -354,6 +354,17 @@ def main(argv: list[str]) -> int:
         print(out.stderr, end="")
         if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
             r.fail("tools/linear/issue-graph/tests", "harness", "viewer tests failed or none discovered")
+
+    update_tests = REPO / "core/update-stack/tests"
+    if update_tests.is_dir():
+        out = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(update_tests)],
+            capture_output=True, text=True,
+        )
+        print(out.stdout, end="")
+        print(out.stderr, end="")
+        if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+            r.fail("core/update-stack/tests", "harness", "installation audit tests failed or none discovered")
 
     for where, check, msg in r.warns:
         print(f"WARN  {where}  [{check}] {msg}")

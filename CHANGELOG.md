@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+Add `/update-stack` to refresh the recorded canonical checkout from the remote
+default branch, reinstall both host adapters through `bin/install`, and report
+source/host/project evidence. Dirty or divergent source checkouts stop updates.
+A read-only installation audit detects stale targets/frontmatter, missing or
+orphaned adapters, and bounded project-local copies; `--check` never fetches or
+installs. Updates are manually invoked, with no schedule or merge hook.
+
 `/wave` Run B no longer refuses because main moved after Run A. When A2 finds
 shared literals, B1 requires A3's contract PR on the default branch, so merging
 it always moved main and no wave with a contract could build. Run B now decides

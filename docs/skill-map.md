@@ -79,6 +79,7 @@ flowchart LR
 
     subgraph operate["5 · Operate — after delivery"]
       direction TB
+      updateStack["/update-stack"]
       health["/health"]
       retro["/delivery-retro"]
       titles["/session-titles"]
@@ -92,7 +93,7 @@ flowchart LR
     classDef phase fill:#ddeeec,stroke:#1d6a63,color:#16292b
     classDef stopStyle fill:#f6dee5,stroke:#a04360,color:#16292b
     class router route
-    class spec,next,triage,intake,roadmap,roles,dispatch,investigate,controls,explain,produce,respond,loop,landSkill,health,retro,titles,labels,steward,audit,issueGraph phase
+    class spec,next,triage,intake,roadmap,roles,dispatch,investigate,controls,explain,produce,respond,loop,landSkill,updateStack,health,retro,titles,labels,steward,audit,issueGraph phase
     class human stopStyle
 ```
 
@@ -134,7 +135,7 @@ flowchart TB
 | Tier | Core dependency | Skills |
 |---|---|---|
 | Router | Local files | [`/stack`](../router/stack/SKILL.md) |
-| Core | Git + local filesystem | [`/investigate`](../core/investigate/SKILL.md), [`/careful`](../core/careful/SKILL.md), [`/freeze`](../core/freeze/SKILL.md), [`/unfreeze`](../core/unfreeze/SKILL.md), [`/explain-diff-html`](../core/explain-diff-html/SKILL.md), [`/land`](../core/land/SKILL.md), [`/health`](../core/health/SKILL.md) |
+| Core | Git + local filesystem | [`/investigate`](../core/investigate/SKILL.md), [`/careful`](../core/careful/SKILL.md), [`/freeze`](../core/freeze/SKILL.md), [`/unfreeze`](../core/unfreeze/SKILL.md), [`/explain-diff-html`](../core/explain-diff-html/SKILL.md), [`/land`](../core/land/SKILL.md), [`/health`](../core/health/SKILL.md), [`/update-stack`](../core/update-stack/SKILL.md) |
 | Roles | `scope_doc` | [`/spec`](../roles/spec/SKILL.md), [`/triage`](../roles/triage/SKILL.md), [`product-manager`](../roles/product-manager.md), [`tech-lead`](../roles/tech-lead.md), [`designer`](../roles/designer.md), [`qa`](../roles/qa.md) |
 | GitHub | `gh` plus configured identities or issue prefix | [`/review-claude-pr`](../tools/github/review-claude-pr/SKILL.md), [`/review-comments`](../tools/github/review-comments/SKILL.md), [`/pr-loop`](../tools/github/pr-loop/SKILL.md), [`/delivery-retro`](../tools/github/delivery-retro/SKILL.md), [`/session-titles`](../tools/github/session-titles/SKILL.md), [`/pr-label-sweep`](../tools/github/pr-label-sweep/SKILL.md) |
 | Linear | Linear workspace + `workspace_contract` | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/wave`](../tools/linear/wave/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-roadmap`](../tools/linear/linear-roadmap/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md) |
