@@ -24,6 +24,14 @@ current pending graphs still require explicit flags and exact-head review. Cover
 contract plan/build round trips, later-day resumes, graph publication and malformed
 historical evidence without relaxing scope, contract or changed-evidence checks.
 
+`/wave` 0.6.2: A1 is told the format of `TRACK.project`. The script matches it
+exactly against `graph_publication.projects[]`, but the A1 prompt never named
+the format, so an A1 that returned `"MVP 2.1 (<uuid>)"` instead of the bare UUID
+stopped Run A with "no unambiguous eligible candidate audit". The A1 prompt and
+records.md now require the publication's `project_id` verbatim (or null), and a
+stopped Run A records, per failing track, the `project` value and how many
+publication projects it matched.
+
 `/linear-roadmap` 0.6.0 refreshes local JSON, orchestration Markdown and scope
 files by default; `--publish` explicitly opens or updates the graph PR. Local
 mapping does not grant execution admission or alter a running wave's membership.

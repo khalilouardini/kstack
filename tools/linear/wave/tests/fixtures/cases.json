@@ -44,6 +44,10 @@
     "name": "uncovered tracks cannot enter execution"
   },
   {
+    "number": 33,
+    "name": "A1 project is the publication project_id; a decorated name refuses"
+  },
+  {
     "number": 22,
     "name": "project-less tracks are exempt"
   },
