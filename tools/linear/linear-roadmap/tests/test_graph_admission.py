@@ -72,6 +72,48 @@ class AdmissionTests(unittest.TestCase):
     def audit(self, proposed=None):
         return API['audit'](self.repo, 'main', self.snapshot, self.request, proposed, now=NOW)
 
+    def test_outside_event_edges_and_display_renames_preserve_candidate_digests(self):
+        for change in ('edge', 'node_title', 'project_title', 'issue_url'):
+            with self.subTest(change=change):
+                self.setUp()
+                before = self.audit()['candidates'][0]
+                if change == 'edge':
+                    extra = {**self.base['nodes'][2], 'id': 'extra', 'issue_ref': REPAIR_ID}
+                    self.base['nodes'].append(extra)
+                    self.base['edges'].append({'from': 'extra', 'from_event': 'merge', 'to': 'ui',
+                                               'to_event': 'merge', 'type': 'merge_after', 'source': 'Unrelated dependency'})
+                    self.request['nodes'] = []
+                    self.request['events'] = []
+                    self.snapshot['projects'][0]['issues'] = []
+                    for node in self.base['nodes']:
+                        self.prove(node, self.base)
+                elif change == 'node_title':
+                    self.base['nodes'][2]['title'] = 'Renamed display title'
+                elif change == 'project_title':
+                    self.base['projects'][0]['title'] = 'Renamed project title'
+                else:
+                    self.snapshot['projects'][0]['issues'][0]['url'] += '/renamed-title'
+                (self.repo / 'orchestration/graph.json').write_text(json.dumps(self.base))
+                (self.repo / 'docs/project.md').write_text('```mermaid\n' + API['GRAPH']['render'](self.base) + '```\n')
+                self.git('add', '.')
+                self.git('commit', '--allow-empty', '-m', 'unrelated metadata refresh')
+                self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+                after = self.audit()['candidates'][0]
+                for field in ('closure_graph_digest', 'closure_evidence_digest'):
+                    self.assertEqual(before[field], after[field], field)
+
+    def test_scope_line_movement_preserves_digests_but_stale_line_refuses(self):
+        before = self.audit()['candidates'][0]
+        (self.repo / 'docs/scope.md').write_text('Unrelated introduction.\n' + QUOTE + '\n')
+        self.git('add', 'docs/scope.md')
+        self.git('commit', '-m', 'insert unrelated introduction')
+        self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+        with self.assertRaisesRegex(ValueError, 'scope citation'):
+            self.audit()
+        for proof in self.request['nodes']:
+            proof['scope']['line'] = 2
+        self.assertEqual(before, self.audit()['candidates'][0])
+
     def repair(self):
         graph = copy.deepcopy(self.base)
         node = copy.deepcopy(graph['nodes'][2])
@@ -83,6 +125,54 @@ class AdmissionTests(unittest.TestCase):
         self.request['repairs'] = [{'node_id': node['id'], 'origin': 'contract', 'kind': 'maintenance',
                                    'rationale': 'Existing fixture contradicts the accepted behavior; no product boundary changes'}]
         return graph
+
+    def publish(self, graph):
+        (self.repo / 'orchestration/graph.json').write_text(json.dumps(graph))
+        (self.repo / 'docs/project.md').write_text('```mermaid\n' + API['GRAPH']['render'](graph) + '```\n')
+        self.git('add', '.')
+        self.git('commit', '-m', 'refresh roadmap')
+        self.sha = self.git('rev-parse', 'main')
+        self.snapshot['main_sha'] = self.sha
+
+    def test_unrelated_graph_updates_preserve_candidate_constraints(self):
+        before = self.audit()
+        graph = copy.deepcopy(self.base)
+        unrelated = {**graph['nodes'][2], 'id': 'unrelated', 'issue_ref': REPAIR_ID,
+                     'title': 'Independent maintenance'}
+        graph['nodes'].append(unrelated)
+        graph['title'] = 'Roadmap with another ticket'
+        self.prove(unrelated, graph)
+        self.publish(graph)
+        after = self.audit()
+        self.assertNotEqual(before['main_sha'], after['main_sha'])
+        self.assertNotEqual(before['graph_digest'], after['graph_digest'])
+        self.assertEqual(before['candidates'][0]['closure_graph_digest'],
+                         after['candidates'][0]['closure_graph_digest'])
+        self.assertEqual(before['candidates'][0]['closure_evidence_digest'],
+                         after['candidates'][0]['closure_evidence_digest'])
+
+    def test_relevant_future_merge_gates_and_policy_change_candidate_constraints(self):
+        before = self.audit()['candidates'][0]['closure_graph_digest']
+        for change in ('human', 'dependency', 'policy', 'project'):
+            with self.subTest(change=change):
+                graph = copy.deepcopy(self.base)
+                if change == 'human':
+                    next(n for n in graph['nodes'] if n['id'] == 'merge')['acceptance'] += ['New required decision']
+                elif change == 'dependency':
+                    next(e for e in graph['edges'] if e['to'] == 'api')['source'] = 'Changed prerequisite authority'
+                elif change == 'policy':
+                    graph['policy']['max_plan_revisions'] += 1
+                else:
+                    graph['projects'][0]['scope_source'] = 'Changed product authority'
+                self.publish(graph)
+                for proof in self.request['nodes']:
+                    n = next(n for n in graph['nodes'] if n['id'] == proof['node_id'])
+                    proof['acceptance'] = copy.deepcopy(n['acceptance'])
+                    proof['prerequisites'] = [e for e in graph['edges'] if e['to'] == n['id']]
+                for issue in self.snapshot['projects'][0]['issues']:
+                    n = next(n for n in graph['nodes'] if n['issue_ref'] == issue['id'])
+                    issue['prerequisites'] = [e for e in graph['edges'] if e['to'] == n['id']]
+                self.assertNotEqual(before, self.audit()['candidates'][0]['closure_graph_digest'])
 
     def test_unrelated_addition_warns_without_blocking_mapped_work(self):
         self.snapshot['projects'][0]['issues'].append({'id': REPAIR_ID, 'identifier': 'T-474'})

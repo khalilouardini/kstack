@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+`/linear-roadmap` 0.6.0 refreshes local JSON, orchestration Markdown and scope
+files by default; `--publish` explicitly opens or updates the graph PR. Local
+mapping does not grant execution admission or alter a running wave's membership.
+`/wave` 0.6.0 compares per-candidate graph/evidence closure digests across plan
+and build instead of locking approval to the whole graph or main SHA. Unrelated
+graph/ticket/main changes preserve approval after a fresh audit; changed or
+missing relevant evidence stops only the affected track, not independent siblings.
+
 Add `/update-stack` to refresh the recorded canonical checkout from the remote
 default branch, reinstall both host adapters through `bin/install`, and report
 source/host/project evidence. Dirty or divergent source checkouts stop updates.
