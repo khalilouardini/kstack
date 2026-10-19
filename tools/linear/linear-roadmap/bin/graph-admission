@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import re
 import runpy
 import sys
 
@@ -79,15 +80,47 @@ def ancestors(graph, roots):
     return found
 
 
-def closure_graph(graph, events, closure):
+def approval_body(body):
+    """Exclude explicitly non-authoritative progress lines, never requirements."""
+    facts = []
+    fenced = None
+    requirements = re.compile(
+        r'\b(must|shall|required|acceptance|blocker|depends|scope|exclusion|release|'
+        r'approval|owner|gate|criteria|never|reject|allow|constraint|prerequisite|'
+        r'exclude|include|remove|add|change|enable|disable|forbid|permission)\b', re.I)
+    for line in body.splitlines():
+        marker = re.match(r'^\s*(`{3,}|~{3,})(.*)$', line)
+        if marker:
+            token, tail = marker.groups()
+            if fenced is None:
+                fenced = (token[0], len(token))
+            elif token[0] == fenced[0] and len(token) >= fenced[1] and not tail.strip():
+                fenced = None
+            facts.append(line)
+            continue
+        if fenced is None and re.match(r'^Progress note:\s', line, re.I) and not requirements.search(line):
+            continue
+        facts.append(line)
+    while facts and not facts[-1].strip() and fenced is None:
+        facts.pop()
+    return '\n'.join(facts)
+
+
+def semantic_edges(edges):
+    return sorted(({k: v for k, v in edge.items() if k != 'source'} for edge in edges),
+                  key=lambda edge: json.dumps(edge, sort_keys=True))
+
+
+def closure_graph(graph, events, closure, semantic=False):
     """Protect this unit's conditions, including future merge gates, not siblings."""
     projects = {n['project'] for n in graph['nodes'] if n['id'] in closure}
     return {'schema_version': graph['schema_version'], 'policy': graph['policy'],
             'projects': sorted(({k: v for k, v in p.items() if k != 'title'}
                                 for p in graph['projects'] if p['key'] in projects), key=lambda p: p['key']),
-            'nodes': sorted(({k: v for k, v in n.items() if k != 'title'}
+            'nodes': sorted(({k: v for k, v in n.items() if k not in (('title', 'source') if semantic else ('title',))}
                              for n in graph['nodes'] if n['id'] in closure), key=lambda n: n['id']),
-            'edges': sorted((e for e in graph['edges'] if (e['to'], e['to_event']) in events),
+            'edges': sorted((({k: v for k, v in e.items() if k != 'source'} if semantic else e)
+                             for e in graph['edges'] if (e['to'], e['to_event']) in events),
                             key=lambda e: json.dumps(e, sort_keys=True))}
 
 
@@ -208,17 +241,19 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
             required_text(observation.get('source'), 'event evidence source')
             if observation['state'] != 'SATISFIED':
                 unmet.append({'node_id': event[0], 'event': event[1], 'state': observation['state']})
-        def evidence_digest(keys, required_events, candidate_events):
+        def evidence_digest(keys, required_events, candidate_events, semantic=False):
+            def prerequisites(edges):
+                selected_edges = [e for e in edges if (e['to'], e['to_event']) in candidate_events]
+                return semantic_edges(selected_edges) if semantic else selected_edges
             return digest({
                 'nodes': [{'node_id': key,
                            'scope': {field: proofs[key]['scope'][field] for field in ('path', 'quote')},
                            'owner': proofs[key]['owner'], 'acceptance': proofs[key]['acceptance'],
-                           'prerequisites': [e for e in proofs[key]['prerequisites']
-                                             if (e['to'], e['to_event']) in candidate_events]} for key in sorted(keys)],
+                           'prerequisites': prerequisites(proofs[key]['prerequisites'])} for key in sorted(keys)],
                 'issues': [{**{field: issues[nodes[k]['issue_ref']][1][field]
                                for field in ('id', 'identifier', 'description')},
-                            'prerequisites': [e for e in issues[nodes[k]['issue_ref']][1]['prerequisites']
-                                              if (e['to'], e['to_event']) in candidate_events]}
+                            'description': approval_body(issues[nodes[k]['issue_ref']][1]['description']) if semantic else issues[nodes[k]['issue_ref']][1]['description'],
+                            'prerequisites': prerequisites(issues[nodes[k]['issue_ref']][1]['prerequisites'])}
                            for k in sorted(keys) if nodes[k]['issue_ref']],
                 'events': [{'node_id': key, 'event': event, 'state': observed[(key, event)]['state']}
                            for key, event in sorted(required_events)]})
@@ -234,6 +269,10 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
                            'closure_evidence_digest': evidence_digest(closure, required, closure_events),
                            'published_closure_graph_digest': digest(closure_graph(graph, published_events, published_closure)),
                            'published_closure_evidence_digest': evidence_digest(published_closure, published_required, published_events),
+                           'semantic_closure_graph_digest': digest(closure_graph(graph, closure_events, closure, True)),
+                           'semantic_closure_evidence_digest': evidence_digest(closure, required, closure_events, True),
+                           'semantic_published_closure_graph_digest': digest(closure_graph(graph, published_events, published_closure, True)),
+                           'semantic_published_closure_evidence_digest': evidence_digest(published_closure, published_required, published_events, True),
                            'unmet': unmet})
     return {'schema_version': 1, 'main_sha': main_sha, 'graph_sha': sha, 'checked_at': snapshot['checked_at'],
             'transition': transition, 'coverage': coverage,
