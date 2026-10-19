@@ -16,6 +16,12 @@ bin/install                  # claude: symlinks into ~/.claude/skills/<name>
 bin/install --host codex     # codex: generated pointer files into ~/.codex/skills/
 ```
 
+After changes merge into the shared stack, `/update-stack` refreshes that
+recorded installation once for both hosts. `/update-stack --check` reports its
+source SHA and adapter status. Project-local copies remain separate; the audit
+reports them without deleting them. Do not rerun adoption/configuration steps
+in every project just to refresh the shared skills.
+
 `<stack-root>` is wherever you cloned it; you will need its **absolute path** in
 step 3. Install is per machine, not per project — a second project needs only
 steps 2 onward.

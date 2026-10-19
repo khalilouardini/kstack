@@ -2,7 +2,7 @@
 
 # kstack
 
-A personal agent harness that travels across projects. Twenty-seven installable skills and four
+A personal agent harness that travels across projects. Twenty-eight installable skills and four
 role contracts, each defined once, pointed at by every host and every repo that
 uses them.
 
@@ -31,6 +31,11 @@ git clone <this repo> ~/projects/kstack
 cd ~/projects/kstack && bin/install            # Claude Code
 bin/install --host codex                               # Codex CLI
 ```
+
+After shared changes merge, run `/update-stack` from any project to refresh the
+recorded canonical checkout and reinstall both hosts. `/update-stack --check`
+only audits the installation. It reports the installed SHA, host targets and
+project-local copies separately; dirty canonical checkouts stop the update.
 
 Then per project: copy [`project-template/stack.yml`](project-template/stack.yml)
 to `<repo>/.agents/stack.yml` and fill in what applies. See
@@ -126,6 +131,7 @@ merges on its own.
 | Skill | Does |
 |---|---|
 | [`/land`](core/land/SKILL.md) | Branch → gates green → atomic commits → PR. Carries the concurrent-session guards. **Stops at the PR** |
+| [`/update-stack`](core/update-stack/SKILL.md) | Refreshes the recorded shared checkout from main, reinstalls both hosts, and audits installed targets and project copies |
 | [`/health`](core/health/SKILL.md) | Runs the project's own gates, scores them, reports the trend |
 | [`/delivery-retro`](tools/github/delivery-retro/SKILL.md) | Was this period fruitful vs the previous equal period — refuses activity metrics |
 | [`/session-titles`](tools/github/session-titles/SKILL.md) | Retitles open agent sessions with their issue key and PR |
