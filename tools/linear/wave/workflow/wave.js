@@ -1526,7 +1526,11 @@ Also preserve every --accept-graph-update occurrence and apply its publication g
 PLAN_ONLY candidates must go in sequenced with the unmet build condition and source,
 never tracks. They do not count toward N and must not reach --approve all.
 Return all implementation-eligible tracks, sequenced and already_active entries. TRACK branch/worktree are
-proposals only. Select no more than requested; explicitly report every excluded issue.`, schemas.SELECT, 'Select');
+proposals only. Select no more than requested; explicitly report every excluded issue.
+Set each TRACK.project to the issue's Linear project_id copied verbatim from
+${JSON.stringify(publication.projects.map(p=>p.project_id))}, or null when the issue has no
+Linear project. Never a project name, never a name with the UUID appended:
+the script compares the string exactly and stops the run on any other value.`, schemas.SELECT, 'Select');
   const record = {state:'STOPPED', run_id:args.run_id, wave_id:args.wave_id,
     tracks:selected?.tracks || [], plans:[], contract:null, literals:[],
     sequenced:selected?.sequenced || [], already_active:selected?.already_active || [],
@@ -1536,7 +1540,13 @@ proposals only. Select no more than requested; explicitly report every excluded 
   if (!selected.tracks.length) { record.state='EMPTY'; return record; }
   if (selected.tracks.some(t=>!candidateEligible(t))) {
     record.stop_reason='graph publication: a selected track has no unambiguous eligible candidate audit';
-    record.evidence.push(record.stop_reason); return record;
+    record.evidence.push(record.stop_reason);
+    for (const t of selected.tracks.filter(t=>!candidateEligible(t))) {
+      const n=publication.projects.filter(p=>p.project_id===t.project || p.project_name===t.project).length;
+      record.evidence.push(`${t.issue_id}: TRACK.project ${JSON.stringify(t.project)} matches ${n} of ${publication.projects.length} graph publication projects`+
+        (n===1 ? '; no single ELIGIBLE build candidate' : ''));
+    }
+    return record;
   }
   if (new Set(selected.tracks.map(t=>t.issue_id)).size !== selected.tracks.length) {
     record.stop_reason='A1 returned duplicate issue ids'; record.evidence.push(record.stop_reason); return record;
