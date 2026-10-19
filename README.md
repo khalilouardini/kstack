@@ -15,6 +15,10 @@ Ultracode coordinator, per-ticket sessions and human checkpoints;
 [the project template](project-template/ORCHESTRATION.md) carries project-specific conditions.
 [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) prepares a typed record
 and generates its Mermaid view; `/next` reads its conditions before recommending work.
+`/linear-roadmap <project>` updates local JSON and Markdown; add `--publish` only
+when ready to open or update its graph PR. A refresh keeps an existing wave's
+membership fixed. Fresh unrelated graph or main changes do not invalidate
+approved plans; a changed prerequisite or condition stops only its affected track.
 Roadmap reports project-wide coverage warnings separately from candidate eligibility.
 Mapped work can proceed despite unrelated missing tickets; small repairs within
 approved scope can use an auditable local reconciliation. Scope, dependency,

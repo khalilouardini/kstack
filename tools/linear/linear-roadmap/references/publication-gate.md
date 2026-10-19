@@ -10,6 +10,12 @@ of caller evidence; there is no global hook.
 
 ## Fresh baseline and project coverage
 
+`/linear-roadmap` refreshes local JSON/Markdown/scope artifacts by default. It
+does not commit, push or open/update a PR unless invoked with `--publish`.
+Local mapping and PR publication are separate from execution admission below.
+Keep a running wave's selected tickets, approved plans and saved evidence intact.
+New tickets wait for a later selection; local refreshes never enroll them in a wave.
+
 On each invocation, resolve the authoritative repository, project UUID and graph
 path without ambiguity. Fetch literal `main`, record its exact SHA and UTC check
 time, and inspect Git blobs at that SHA. Do not use an unmerged working graph or
@@ -70,10 +76,10 @@ session checks, independence, plan/review approval and release gates remain
 mandatory. Legacy graphs require the same cited closure audit by the skill;
 `graph-admission` cannot grant deterministic admission without a typed index.
 A legacy missing unit or dependency repair requires a reviewed graph update.
-The index's `source_revision` records adoption provenance. A different installed
-kstack HEAD alone is not an admission failure or a reason for a graph-only repin
-PR; supported index/manifest schemas determine compatibility. Unsupported schemas
-require migration. Preserve provenance and all scope/dependency/approval checks.
+
+`source_revision` records adoption provenance. Preserve it across stack upgrades;
+supported schemas and clean installed source determine compatibility. A different
+installed HEAD alone requires no graph-only repin PR.
 
 For indexed graphs, use `bin/graph-admission` beside `bin/graph-coverage`:
 
@@ -89,7 +95,9 @@ order, after checking both prose and native relations. The list is per issue:
 when several nodes share one `issue_ref` (a unit and its human review node), it
 holds every edge into any of those nodes, in manifest order. Do not use truncated list
 responses as full bodies. Evidence expires after one hour and must be refreshed
-before each transition. A changed SHA or relevant evidence requires reanalysis.
+before each transition. A changed SHA requires a fresh audit. Only changed
+relevant conditions/evidence invalidate a track's approval; unrelated graph
+changes or commits do not. Keep old and new SHA observations in the audit trail.
 
 The request contains `selected` issue UUIDs, `transition` (plan/build/merge),
 `nodes` and `events`. Each closure node proof has `node_id`, exact `owner` and
@@ -136,7 +144,7 @@ manifest in an isolated admission directory; never implicitly merge overlays
 into the active index or edit the shared authoritative graph. Reconstruct from
 pinned main plus the recorded delta, validate/render, and inspect the complete
 conditions. Any local manifest must match that exact recorded effective digest.
-A structural draft validation is not a substitute for the source-pin audit.
+A structural draft validation is not a substitute for indexed schema and clean-source validation.
 
 Re-fetch main and full closure issues before dispatch/status writes, build,
 commit/push and implementer review fixes. Re-run admission against current
@@ -162,7 +170,7 @@ A graph-only PR is exempt from its own execution gate so it can repair it; a
 mixed implementation PR may use only verified existing scope/local reconciliation.
 Never merge automatically or write Linear through this policy.
 
-Linear-roadmap reports coverage warnings and may publish routine bookkeeping;
+Linear-roadmap reports coverage warnings and publishes only with `--publish`;
 it does not label the whole project blocked merely because coverage is below
 100%. Reuse a matching graph PR rather than opening duplicates. Report exactly
 which candidates or conditions require reviewed publication, including main SHA,
@@ -173,7 +181,7 @@ scope or prerequisites to manufacture completeness.
 
 Retain this repeatable flag for a specific pending **reviewed** graph update.
 Validate positive decimal numbers, deduplicate, and verify OPEN, base main,
-stable exact head, affected projects, indexed schema validation/clean source and review
+stable exact head, affected projects, indexed schema/clean-source validation and review
 evidence at that head. Report coverage gaps separately and require verified
 selected units and closure on that head; unrelated omissions do not veto it. Review must come from the configured reviewer
 or authorized human; scope decisions require the authorized owner independently.
@@ -181,8 +189,8 @@ Fetch and validate the exact PR head; `--main-ref <fresh-main-ref>` with
 `graph-admission` records both SHAs (snapshot also supplies `graph_sha`). The flag
 waives publication on main only. It cannot waive review, scope, blockers or gates.
 Closed, merged, unrelated, invalid or unreviewed heads refuse. A head moving
-within an invocation stops the node before writes; a later invocation requires
-fresh exact-head review and admission, then compares approved meaning;
+during a node returns STOPPED before writes; later invocations require fresh
+exact-head review and admission, then compare approved candidate conditions;
 incomplete selected scope/closure evidence refuses too; after
 merge omit the flag and recheck main. Never base implementation on the graph PR.
 
@@ -212,36 +220,44 @@ project/issue identity, main/graph pins, closure evidence and the bounded delta.
 Persist both coverage and admission reports in existing record.evidence; do not
 add RUN_A/WAVE_REPORT schema fields. A1 rechecks before selection, A3/A4 before
 writes, B1 before implementation and B3 before implementer fixes. Run B obtains
-fresh reports and compares effective graph and relevant closure digests with Run
-A before building. Main SHA equality between the runs is not required: merging
-the wave contract PR moves main, and matching digests show Run A's analysis still
-holds. B1 verifies Run A's main is an ancestor of the fetched default branch.
-A changed project or graph/closure meaning still refuses; current pending graph
-heads require this invocation's explicit flag and exact-head review.
-Coverage counts and routine tracker timestamp/status changes alone do not
+fresh reports and compares each candidate's `closure_graph_digest` and relevant
+`closure_evidence_digest` with Run A before building. The graph digest covers the
+selected unit, its containers, prerequisite events/nodes (including future merge
+gates), their project scope/authorization and execution policy. Unrelated nodes,
+edges, projects and display titles (graph, project and node) are excluded. Full graph digests and
+SHAs remain audit observations, not whole-wave approval locks. Coverage counts
+and routine tracker timestamp/status changes alone do not
 invalidate approval; full fresh observations remain in the audit record. Relevant
-digests cover scope path/quote (line remains a verified locator), node identity, ownership, acceptance, incoming
-prerequisites, issue id/identifier/description/url/prerequisites, and current event
+digests cover scope path/quote (line is a freshly verified locator), node identity, ownership, acceptance, incoming
+prerequisites within the candidate event closure, issue id/identifier/description/prerequisites, and current event
 node_id/event/state. Event facts are sorted by node_id/event before hashing.
 Agent-written scope rationales and proof/event source explanations remain required
 and fully retained in evidence.request but are excluded from the factual digest;
 rewording them alone cannot invalidate approval. The calling skills still verify
-source truth on each transition. Future gate definitions stay protected by the
-graph digest. A changed coverage count alone does not invalidate approval;
-a changed graph or relevant closure requires reanalysis and plan approval.
-SHA movement alone requires a fresh audit at the new SHA, not new plan approval:
-the required wave contract merge and unrelated commits naturally advance main.
-Bind each historical candidate to its original publication main/graph SHA and
-date, then compare its issue/node identity, effective graph and factual closure
-digest with fresh ELIGIBLE evidence for the approved work. An accepted graph PR
-may reach main, or an identical local repair may be published, without changing
-plan meaning. For LOCAL_RECONCILIATION -> PUBLISHED, compare the saved
-`published_closure_evidence_digest` over the repair itself and its ancestors
-with the fresh published closure digest. Continue validating origin evidence
-and comparing full closures while both audits are local. Reverse transitions
-require a new plan. Scope line numbers are verified locators; digest scope
-identity is path plus exact quote. Current pending graph heads still require explicit flags and fresh
-exact-head review. Never carry an old audit onto a new SHA. Missing or ambiguous
-historical/current evidence refuses the entire wave build invocation before agents run. Record both snapshots; keep
-contract merge/content verification, rebase, scope and human approval checks.
+source truth on each transition. Future merge gate definitions stay protected
+by the candidate graph digest; release conditions are verified at release.
+Changed relevant constraints or evidence require reanalysis and plan approval
+for that track. During build a missing/blocked/changed candidate stops only that track;
+independently verified siblings continue. If no approved track is eligible,
+return STOPPED with all reasons. Do not replace stopped tracks with new tickets.
+Older Run A records lacking candidate graph digests need a new plan audit;
+never substitute the full graph digest or invent missing evidence.
+B1 and B3 receive the saved Run A main/graph pins and per-track digests, alongside
+fresh Run B reports. Preserve both snapshots and changed fields with old/new
+values on refusals. B1 verifies Run A main ancestry before writes. Planning has
+no prior approval: caller preflight rejects known ineligible selections before
+Workflow, and unexpected invalid A1 selections stop before A3 writes.
+
+A LOCAL_RECONCILIATION -> PUBLISHED transition preserves approval only when the
+saved `published_closure_graph_digest` and `published_closure_evidence_digest`
+match the fresh published candidate's full graph/evidence digests. The helper
+computes both saved digests over the repair itself, its containers and its own
+prerequisites. The origin remains fully audited and binding while both runs are
+local. Missing saved publication digests or a reverse mode transition require a
+new plan for that track; never substitute a whole-manifest digest or invent a
+missing baseline. Unrelated graph changes still preserve independent tracks.
+Issue URLs are verified locators, retained in raw evidence but excluded from
+identity digests regardless of provider slug format. Scope applicability is a
+semantic check over the full relevant sections, including exclusions; a quote
+digest alone cannot establish it. Nodes compare saved/fresh scope sources.
 These caller observations are evidence, not durable human approval records.

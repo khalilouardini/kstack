@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+`/wave` 0.7.0 reconciles per-track admission with compatible stack updates and
+repair publication. Saved own-closure graph and evidence digests permit a local
+repair to become published while retaining full origin checks during local
+execution. Missing or changed relevant evidence stops only the affected track;
+unrelated graph changes and independently verified siblings remain admissible.
+`/linear-roadmap` 0.6.2 preserves local refresh defaults and source provenance.
+
 Roadmap admission now treats `source_revision` as adoption provenance, rather than
 requiring equality with the installed kstack HEAD. `/linear-roadmap` 0.5.1,
 `/next` 0.8.2 and `/wave` 0.5.2 use supported index/manifest schemas for
@@ -16,6 +23,14 @@ approved issue closure. Historical reports are validated against their own pins;
 current pending graphs still require explicit flags and exact-head review. Covers
 contract plan/build round trips, later-day resumes, graph publication and malformed
 historical evidence without relaxing scope, contract or changed-evidence checks.
+
+`/linear-roadmap` 0.6.0 refreshes local JSON, orchestration Markdown and scope
+files by default; `--publish` explicitly opens or updates the graph PR. Local
+mapping does not grant execution admission or alter a running wave's membership.
+`/wave` 0.6.0 compares per-candidate graph/evidence closure digests across plan
+and build instead of locking approval to the whole graph or main SHA. Unrelated
+graph/ticket/main changes preserve approval after a fresh audit; changed or
+missing relevant evidence stops only the affected track, not independent siblings.
 
 Add `/update-stack` to refresh the recorded canonical checkout from the remote
 default branch, reinstall both host adapters through `bin/install`, and report

@@ -1,7 +1,7 @@
 ---
 name: linear-roadmap
-version: 0.5.1
-description: Build a typed orchestration roadmap and Mermaid graph from existing Linear work or draft a proposed graph from a prompt. Reports main coverage warnings; small in-scope repairs use bounded local evidence, semantic changes require reviewed graph PRs. Creates or updates the local scope contract; tracker reads only. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap <project|spec|prompt>". Does not launch sessions or create tickets. (kstack)
+version: 0.6.2
+description: Map existing Linear work or a proposed plan into local orchestration JSON, Markdown and a scope contract. Local updates are the default; --publish explicitly opens or updates the graph PR. Reports coverage separately from execution eligibility. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap PROJECT [--publish]". Tracker reads only; does not launch sessions or create tickets. (kstack)
 ---
 
 # linear-roadmap — prepare the graph before execution
@@ -9,13 +9,38 @@ description: Build a typed orchestration roadmap and Mermaid graph from existing
 ## When to invoke
 
 A project or subunit needs a reusable execution map before `/next` or `/wave`.
-Invoke `/linear-roadmap <project|spec|prompt>`. This skill creates local roadmap
+Invoke `/linear-roadmap <project|spec|prompt> [--publish]`. This skill creates local roadmap
 artifacts, creates or updates the local product scope contract, reads Linear,
 and reports main coverage warnings separately from candidate eligibility;
-semantic changes require a reviewed graph update PR under the shared contract;
+publication is an explicit action, separate from refreshing the local map;
 it does not create issues, grant scope approval, publish to Linear, invoke
 Workflow, or start a ticket session. Those limits are prompt-level.
 The validator checks structure and phase dependencies; it proves no live readiness.
+
+## Local update and optional publication
+
+- `/linear-roadmap <project>` refreshes the indexed JSON, generated orchestration
+  Markdown and scope contract locally. Do not commit, push, open/update a PR or
+  invoke `/land` in this mode, even if main coverage is incomplete or the delta
+  needs review. Report the local paths and the review needed for affected work.
+- `/linear-roadmap <project> --publish` performs the same reconciliation and
+  explicitly authorizes publishing those graph/scope files through `/land`.
+  Reuse a matching open graph PR; otherwise open one. Validate the exact current
+  delta and run the consuming repository's gates before publication. Never merge.
+
+Parse `--publish` separately from the project/spec/prompt; reject unknown options.
+Preserve unrelated content and local edits. If an existing local graph conflicts
+with live evidence, resolve from cited sources and surface unresolved decisions.
+Keep approved scope intact when adding proposed scope. Publishing must transfer
+only the reviewed local roadmap delta to an isolated branch from fresh main;
+do not sweep unrelated work into its PR. Re-read live evidence before publishing
+a previously prepared local update. An unchanged map needs no new PR or commit.
+
+Local updates do not rewrite an active wave's selected tickets, approved plans,
+saved admission artifacts or worktrees. New tickets enter a later selection.
+The execution baseline remains freshly audited main, an explicitly accepted
+reviewed graph PR, or the shared contract's bounded local reconciliation. A local
+map or its visualization alone cannot admit new scope or changed prerequisites.
 
 ## Inputs and composition
 
@@ -56,7 +81,7 @@ call this roadmap builder. The roadmap consumes their outputs. Explicit recorded
 owner exceptions must be cited, never disguised as a product-manager verdict or
 an active-milestone status change. These rules are prompt-level.
 
-## Audit and publish main coverage
+## Audit main coverage
 
 On every existing-project or mapped-spec invocation, follow
 [references/publication-gate.md](references/publication-gate.md). Inspect the
@@ -65,8 +90,8 @@ with the complete live Linear ticket list. Report missing membership as coverage
 warnings separately from selected candidate eligibility. Small missing maintenance
 units can use bounded local reconciliation without a preliminary PR. Scope,
 dependency, release/acceptance or human-gate changes require reviewed publication
-before affected execution. Reuse an existing matching graph PR when publication
-is required or requested. Prompt-only DRAFT
+before affected execution. Report that requirement without opening a PR unless
+`--publish` was supplied. Prompt-only DRAFT
 proposals remain local until tickets exist. Read-only Linear access is unchanged.
 The same contract defines the explicit execution bypass --accept-graph-update;
 opening the repair PR does not apply that bypass implicitly.
@@ -115,10 +140,9 @@ contract's existence, completeness or approval.
    that record in place and preserve stable IDs; do not create per-subunit overlays.
    On first adoption, write `orchestration/<slug>.json` and the index using the
    template `project-template/orchestration-index.json`. Record the explicitly
-   adopted reviewed stack HEAD as `source_revision`, which records adoption
-   provenance. Preserve it on stack upgrades; compatibility is determined by the
-   supported index/manifest schema versions, not equality with installed HEAD.
-   Do not request a repin PR solely because kstack changed. Root
+   adopted reviewed stack HEAD as `source_revision`; never auto-repin an existing
+   index. A different installed HEAD alone needs no repin; validate supported
+   schemas and retain the dirty-source guard. Root
    `ORCHESTRATION.md` links this machine-readable index and its one manifest.
 3. Encode prerequisites with source and target events. `start_after` targets a
    unit's plan/build event; `merge_after` targets merge; `release_after` targets
@@ -127,19 +151,20 @@ contract's existence, completeness or approval.
    `review_after` orders a human review. Every condition cites its source. Do not convert a merge-only condition into a native start blocker.
 4. Run `python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <absolute-consuming-root>/orchestration/index.json`, then the
    same full command with `render-index`. Read exit codes and the manifest digest.
-   Schema/structure or dirty-source failure stops the handoff; fix from evidence, never remove the
+   Schema/source/structure failure stops the handoff; fix from evidence, never remove the
    failing prerequisite. Plain `validate`/`render` accept a manifest for draft
    checks only and cannot substitute for indexed validation before `/next`.
 5. Put the rendered project graph, a condition/source table, unknowns and links
    to the shared lifecycle in root `ORCHESTRATION.md`. Before replacing an
    existing diagram, inspect its conditions and preserve unrelated content.
-6. For semantic changes, complete the required reviewed graph update PR using
-   the graph-only repair exception to land. For small in-scope maintenance, the
+6. Save the validated local artifacts. Publish only with explicit `--publish`,
+   using the graph-only repair exception to land. For semantic changes, report
+   reviewed publication as a requirement before affected execution. For small in-scope maintenance, the
    shared contract's bounded local reconciliation can establish candidate admission;
    retain the main SHA, full live evidence and exact delta. Coverage bookkeeping
    can accompany the implementation PR or a later requested roadmap refresh.
    A local draft without that audit is never execution admission.
-   Report artifact paths, source provenance, manifest digest, resolved project IDs,
+   Report artifact paths, source pin, manifest digest, resolved project IDs,
    missing tickets/scope, conflicting conditions and remaining human decisions.
    Never publish or link Linear documents from this skill. Return artifacts for
    the human maintainer's separate manual publish/read-back step. Graph updates
@@ -149,8 +174,17 @@ contract's existence, completeness or approval.
 
 Return DRAFT or MAPPED, the scope contract path and change status, local JSON
 and root graph paths, validator exit code, main coverage SHA/missing ticket keys,
-update PR URL/head and publication gate status,
+publication result (`LOCAL_ONLY`, `UNCHANGED`, `PR_OPEN` or `STOPPED`), PR URL/head when present,
+and affected execution eligibility,
 source observations and up to three next actions. MAPPED means existing records
 were mapped, not that their work is ready. Actual readiness needs live evidence,
 source freshness and the explicit controller's admission checks. `/wave` keeps
 its existing human plan checkpoint until that controller path is implemented.
+
+When `--publish` is requested but a guard or `/land` gate refuses, report
+`STOPPED` with the exact stop reason and evidence, preserved local artifacts,
+and any existing PR URL/head. `LOCAL_ONLY` means publication was not requested.
+
+An existing index keeps its adopted `source_revision` across stack updates. The
+source SHA is provenance; validation uses supported schemas and still rejects
+dirty lifecycle/roadmap source. A different installed HEAD alone needs no repin.

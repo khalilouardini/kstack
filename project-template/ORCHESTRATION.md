@@ -31,6 +31,12 @@ approved spec needs intake-created executable tickets before mapping. Prompt-onl
 input can produce DRAFT. Refuse writes if consuming root equals stack root.
 This example has no tracker IDs or execution permission.
 
+Refresh locally with `/linear-roadmap <project>`; add `--publish` when ready to
+open or update its graph PR. Local graph/Markdown changes do not grant execution
+admission. An existing wave keeps its selected mapped tickets and approved plans.
+Fresh unrelated ticket, graph or main changes do not invalidate those plans;
+changed relevant prerequisites/conditions stop only affected tracks for reapproval.
+
 ## Project graph
 
 Replace these labels and conditions with actual issue IDs and gate evidence.

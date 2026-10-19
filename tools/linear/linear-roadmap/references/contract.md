@@ -44,6 +44,13 @@ Plain `validate`/`render` are structural draft tools and do not check the index 
 
 ## Publication before execution
 
+Roadmap refresh is local by default: `/linear-roadmap <project>` updates the
+indexed JSON, generated root Markdown and scope contract without Git publication.
+Add `--publish` to open or update the graph PR after validation and gates. The
+local map is useful for inspection/visualization; execution still uses the
+verified baseline and candidate audit below. A refresh cannot change the tickets
+or approved plans of an existing wave.
+
 The [publication gate](publication-gate.md) adds a fresh-main ticket coverage
 audit to roadmap and separates project coverage warnings from per-candidate
 execution eligibility. Missing unrelated tickets do not freeze mapped work.
@@ -55,6 +62,9 @@ Semantic scope/dependency/release/human-gate changes require reviewed publicatio
 or an explicitly accepted reviewed graph PR. Schema compatibility and all condition and
 approval checks still apply. This Git PR step is separate from publishing a
 Linear document, which remains the human maintainer's manual action below.
+Wave approval is tied to each mapped unit's relevant conditions, including its
+future merge gates. Fresh unrelated graph/main changes do not invalidate it;
+changed relevant conditions stop only the affected track for reapproval.
 
 ## Manifest fields
 

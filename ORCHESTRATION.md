@@ -15,6 +15,12 @@ containing main SHA, full live evidence and exact delta. Scope, dependency,
 release-criteria and human-gate changes require reviewed graph publication.
 Schema compatibility, prerequisites, ownership, acceptance and plan/review gates still apply.
 
+`/linear-roadmap <project>` updates local graph/scope files only. Add `--publish`
+to open or update a graph PR. Existing waves retain their selected mapped units
+and approved plans. On fresh audits, compare each unit's graph/evidence closure;
+unrelated ticket, graph or main changes do not interrupt it. Changed relevant
+conditions stop the affected track while verified independent siblings continue.
+
 ## Central source and reusable preparation
 
 The canonical lifecycle is this root file. The structural contract is
