@@ -174,6 +174,67 @@ def validate_evidence(evidence):
     return by_id
 
 
+def checkpoint_observations(nodes, edges, provenance, evidence):
+    """Validate explicit display observations, never infer approval from Done."""
+    by_node = {n["id"]: n for n in nodes}
+    observations = {}
+    for observation in evidence.get("checkpoints", []):
+        required = {"node_id", "manifest_digest", "status", "summary", "observed_at", "evidence"}
+        if not required <= observation.keys():
+            raise ValueError("incomplete checkpoint observation")
+        key = observation["node_id"]
+        node = by_node.get(key)
+        if key in observations or node is None or node["kind"] not in {"human", "evidence", "release"}:
+            raise ValueError("unknown, duplicate or non-checkpoint observation")
+        if observation["manifest_digest"] != provenance["manifest_digest"]:
+            raise ValueError("checkpoint observation belongs to a different manifest")
+        status = observation["status"]
+        if status not in {"verified", "historical", "pending", "failed", "unknown"}:
+            raise ValueError("invalid checkpoint observation status")
+        if not isinstance(observation["summary"], str) or not observation["summary"].strip():
+            raise ValueError("checkpoint observation needs an explanation")
+        observed = timestamp(observation["observed_at"])
+        if observed > timestamp(evidence["observed_at"]):
+            raise ValueError("checkpoint observation is newer than the snapshot")
+        proofs = observation["evidence"]
+        if not isinstance(proofs, list) or not proofs:
+            raise ValueError("checkpoint observation needs source evidence")
+        for proof in proofs:
+            if not isinstance(proof, dict) or not all(
+                    isinstance(proof.get(k), str) and proof[k].strip()
+                    for k in ("kind", "url", "summary")):
+                raise ValueError("checkpoint evidence needs kind, source URL and explanation")
+            if urlsplit(proof["url"]).scheme != "https":
+                raise ValueError("checkpoint evidence needs an HTTPS source")
+        kinds = {p["kind"] for p in proofs}
+        # A historical merge closes the display of that past review event. It
+        # deliberately does not certify its review criteria or any release gate.
+        review_units = {e["to"] for e in edges if e["from"] == key
+                        and e["type"] == "human_decision" and e["to_event"] == "merge"
+                        and by_node[e["to"]]["kind"] == "unit"
+                        and by_node[e["to"]]["issue_ref"] == node["issue_ref"]}
+        is_review = node["kind"] == "human" and bool(review_units)
+        if status == "historical" and (not is_review or "merge" not in kinds):
+            raise ValueError("only a review checkpoint can have a historical merge")
+        if status == "verified":
+            needed = {"human": {"human_decision"}, "evidence": {"evaluation"},
+                      "release": {"release"}}[node["kind"]]
+            if is_review:
+                needed |= {"merge", "review"}
+            if not needed <= kinds:
+                raise ValueError("checkpoint verification lacks the required evidence kinds")
+            if is_review:
+                heads = {p.get("head_sha") for p in proofs if p["kind"] == "merge"}
+                reviews = {p.get("sha") for p in proofs if p["kind"] == "review"}
+                if not heads or None in heads or not heads <= reviews:
+                    raise ValueError("review evidence must match the merged PR head")
+        if status in {"verified", "historical"}:
+            if not observation.get("event_at") or timestamp(observation["event_at"]) > observed:
+                raise ValueError("completed checkpoint needs its original event time")
+        observations[key] = copy.deepcopy(observation)
+    return observations
+
+
 def project_snapshot(record, provenance, key, evidence):
     nodes, edges = select_nodes(record, key)
     by_id = validate_evidence(evidence)
@@ -181,6 +242,7 @@ def project_snapshot(record, provenance, key, evidence):
                       if n["issue_ref"] and n["issue_ref"] not in by_id})
     if missing:
         raise ValueError("Linear evidence missing referenced UUIDs: " + ", ".join(missing))
+    observations = checkpoint_observations(nodes, edges, provenance, evidence)
     projects = {p["key"]: p for p in record["projects"]}
     counts = {}
     for n in nodes:
@@ -230,6 +292,24 @@ def project_snapshot(record, provenance, key, evidence):
             "linearObservedAt": evidence["observed_at"],
             "snapshotComments": copy.deepcopy(linked.get("comments", [])) if linked else [],
         }
+        observation = observations.get(node["id"])
+        if node["kind"] in {"human", "evidence", "release"}:
+            status = observation["status"] if observation else "unknown"
+            label = {"verified": "Verified", "historical": "Merge recorded",
+                     "pending": "Awaiting evidence", "failed": "Evidence failed",
+                     "unknown": "Evidence not checked"}[status]
+            item["state"] = {"name": label, "type": "completed" if status in {
+                "verified", "historical"} else "triage"}
+            item["completedAt"] = observation["event_at"] if status in {
+                "verified", "historical"} else None
+            raw["checkpoint"] = {
+                "kind": node["kind"], "status": status, "label": label,
+                "summary": observation["summary"] if observation else
+                    "Evidence has not been reconciled; this is not an additional Linear ticket.",
+                "linked_identifier": linked["identifier"] if linked else None,
+                "evidence": observation["evidence"] if observation else [],
+                "observed_at": observation["observed_at"] if observation else evidence["observed_at"],
+            }
         detail = [
             "# " + node["title"], "Manifest node: " + node["id"],
             "Kind: " + node["kind"], "Project: " + projects[node["project"]]["title"],
@@ -239,6 +319,12 @@ def project_snapshot(record, provenance, key, evidence):
             "Display snapshot; execution and release readiness unverified.",
             "## Acceptance", *node["acceptance"],
         ]
+        if "checkpoint" in raw:
+            detail += ["## Roadmap checkpoint (not a Linear ticket)",
+                       "Observation: " + raw["checkpoint"]["label"],
+                       raw["checkpoint"]["summary"]]
+            detail += ["- " + p["summary"] + " — " + p["url"]
+                       for p in raw["checkpoint"]["evidence"]]
         if linked:
             detail += ["## Linked Linear ticket: " + linked["identifier"],
                        "Linear state: " + linked["state"]["name"], linked["description"]]
