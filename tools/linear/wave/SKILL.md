@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.8.0
+version: 0.9.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -136,7 +136,19 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    coverage, absolute verified worktrees and STOPPED evidence. Record the user's
    exact approval and wave id. Do not infer approval from a prior plan invocation
    or use `resumeFromRunId` to transport data across Claude sessions. If the
-   record is unavailable, ask for that record before building anything.
+   record is unavailable, recover its durable checkpoint before asking or planning again.
+   Before Workflow, query each approved branch/worktree and its open/merged PRs.
+   Supply transient `args.recovery` entries for the approved tracks with
+   `issue_id`, exact `branch`/`worktree`, current UTC `checked_at`, `evidence`,
+   `state: ABSENT|PR_OPEN`, and `result` (null for ABSENT, verified TRACK_RESULT
+   for PR_OPEN). ABSENT requires a successful complete lookup, never an API error.
+   For an existing open PR, verify its current head, acceptance evidence and gates
+   at that head. Reuse prior same-head gate evidence; if unavailable, run lint and
+   changed-file tests only, without implementing, committing, pushing or duplicating
+   the PR. Merged/closed PRs, conflicts, dirty/foreign worktrees or unknown evidence
+   stop that track with the exact reason; do not label them ABSENT. The script
+   reuses a verified PR_OPEN result and skips B1. This works on an ordinary build
+   retry without a special resume flag. Do not infer new implementation approval.
 5. For both stages, obtain fresh `graph_publication` evidence and any
    `accepted_graph_updates` snapshots under the shared publication contract.
    For plan preserve graph flag/value tokens in `selection`; for build populate
@@ -158,6 +170,11 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    Both runs match candidates only in validated build-transition reports. Run B
    validates stored reports using Run A's publication SHA/date, then compares
    each candidate's graph and factual closure digests before implementation.
+   Prefer `semantic_closure_graph_digest` and `semantic_closure_evidence_digest`
+   when the saved candidate contains them; current semantic evidence is then
+   mandatory. Older checkpoints retain their original digest comparison and do
+   not become invalid solely because kstack upgraded. For repair publication,
+   use the corresponding saved `semantic_published_closure_*` pair when present.
    When a local repair becomes published, compare its saved
    `published_closure_graph_digest` and `published_closure_evidence_digest` with
    the fresh published candidate digests. These describe the repair's own
@@ -187,16 +204,21 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    Claude verifies path support on the first live run.
 7. Render the returned record. Attach the tool's actual run id if it allocates
    one; preserve the caller invocation ids for Run B. Keep the complete Run A
-   JSON available in the checkpoint handoff. Never truncate stopped, skipped,
+   JSON available in the checkpoint handoff. Atomically persist both RUN_A and
+   WAVE_REPORT JSON beneath `<git-common-dir>/kstack/waves/<wave-id>/<run-id>.json`,
+   using filesystem-safe encoded IDs and exclusive per-run paths, and report the
+   paths. These local checkpoints grant no new approval. Remote PRs and verified
+   worktree bindings are the recovery source if an interrupted build returned no
+   WAVE_REPORT. Never truncate stopped, skipped,
    sequenced or already-active issues. Agent nulls/exceptions become explicit
    stopped records or a wave refusal, with logs and evidence.
 
-**Internal node rule:** A2, A3, B2 and B3 admission read this skill only for their
+**Internal node rule:** A2, A3, B2, B4 and B3 admission read this skill only for their
 assigned scan, contract, seam or admission operation below. The numbered caller
 procedure, including the Workflow invocation, is caller-only: a node never
 recursively invokes it. A2 reads issues/scopes and returns literals; A3 prepares
 only the contract and its test via land; B2 runs seam-check and verifies questions;
-B3 admission only observes. All are prompt-level.
+B3 admission and B4 only observe. All are prompt-level.
 
 Run A selects (A1), scans shared literals in issue descriptions and scopes (A2),
 then, only if necessary, prepares a contract PR (A3) before dispatch plans (A4).
@@ -207,7 +229,9 @@ literals without Markdown escaping and a stdlib-readable input to seam-check.
 A4 reads `tools/linear/dispatch-implementation/SKILL.md` top to bottom using its
 `--plan-only` node rule. No separate executor is launched.
 
-Run B pipelines approved tracks through B1 in the dispatch worktrees. Each node
+Run B first consumes the caller's read-only recovery evidence. Existing verified
+PRs skip implementation and proceed to seams/review. Only tracks proven to have
+no PR enter B1 in the dispatch worktrees. Each B1 node
 reads the dispatch lifecycle and land procedure by reference, verifies any
 contract PR actually reached the fetched default branch, rebases, then builds
 only the approved plan. After all B1s, B2 runs the deterministic
@@ -217,21 +241,34 @@ blocks affected tracks. No contract → B2 does not run and the report says so.
 B3 reads `tools/github/pr-loop/SKILL.md` top to bottom with the round cap and
 parses its existing verdict report; it has no new adaptation. Review concurrency
 limits only B3, so a later track's review can start long after B1 validated main.
-Before each project-linked track's pr-loop, a read-only B3 admission node returns
-READMISSION: the live main SHA and, when it differs from Run B's validated main,
-the exit codes of `git merge-base --is-ancestor <validated> <live>` and
-`git merge-tree --write-tree <live> <PR head>` plus a fresh build-transition
-graph-admission report at live main. The script proceeds only when the validated
-main is an ancestor, the merge is clean, and the fresh report admits the track
-with the same canonical identity and candidate graph/evidence digests. A local
-repair becoming published uses its saved own-closure digests, as in Run B preflight;
-unrelated whole-manifest changes do not veto admission. Require the report to be
-no later than the observation and at most one hour old. The review node then
-uses live main and the merge-tested PR head as pins, retaining the full readmission
-observation in WAVE_REPORT evidence. Any other result, including a missing record, makes the
-track BLOCKED with rounds 0 and no review write. A move during the loop still stops
-the loop. Project-less tracks have no admission node. Do not give Workflow agents `isolation: 'worktree'`: that would
-lose the dispatch workspace and its evidence.
+Before every project-linked track's pr-loop, a read-only B3 admission node returns
+READMISSION with fresh full Linear and scope evidence, even if main did not move.
+Always verify main ancestry, merge-tree against the actual PR head, and a fresh
+build-transition graph-admission report. Reports must be no later than the
+observation, no older than one hour and no earlier than Run B's audit. Preserve
+canonical identity and the selected candidate's digests. An accepted graph PR
+that reached main is audited on main; remove its obsolete flag from composed
+commands. A still-pending graph needs this invocation's explicit flag and the
+same reviewed exact head. Unavailable evidence blocks only that track before a
+paid review, with rounds 0; refresh it without demanding approval for no change.
+
+B3 passes the Run A baseline and fresh source/flags to canonical pr-loop. Refresh
+admission at every round and before fixes. Unrelated main movement permits
+continuing after fresh ancestry, merge and condition checks. The loop's own
+verified fix commits advance its expected head after guarded pushes; foreign
+head changes still stop. These per-round observations are prompt-level, while
+the B3 entry comparison is checked by the script. Project-less tracks remain
+exempt from graph admission. Do not use Workflow worktree isolation: it would
+lose dispatch context.
+
+After every review loop completes, B4 reads actual remote heads, same-head
+configured reviewer markers and final CI evidence. CLEAN requires a matching
+reviewed head. Update each result's head observation and run deterministic seams
+again against the immutable final head SHAs. FINAL_CHECK contains heads and the
+raw SHA-keyed seam table; the script maps rows back to tracks. Missing/duplicate
+heads, changed unreviewed heads, absent rows or mismatches block the affected
+track. A pre-review seam success cannot certify code changed by review fixes.
+B4 is read-only, including for terminal review verdicts.
 
 All node policy guarantees — no merge, human approval, tracker boundaries,
 canonical composition, truthful worktree use and refusal on ambiguity — are
@@ -275,7 +312,8 @@ overlaps in `PLAN.risks`. SELECT/RUN_A do not retain `/next`'s unused-PR or
 excluded-candidate overlap reports, including EMPTY runs; say so explicitly.
 Direct `/next` and Codex's A1-only output retain those reports.
 With N=3, Run A normally uses 6 agents (3+N with contract), or 5 without A3;
-Run B uses 10 (3N+1 with B2), or 9 without B2: one B1, one B3 admission and one B3
+Run B uses 11 (3N+2 with B2 and B4), or 10 without B2: one B1, one B3 admission and one B3
 review per project-linked track. Project-less tracks have no admission node.
+One final B4 node is included. Recovered PRs omit their B1 nodes.
 Counts are before stopped-track reductions.
 There is no implicit retry past terminal review verdicts.

@@ -138,5 +138,33 @@
   {
     "number": 35,
     "name": "moved main with a changed closure digest blocks review"
+  },
+  {
+    "number": 36,
+    "name": "graph publication while review is queued"
+  },
+  {
+    "number": 37,
+    "name": "recover existing PR without rebuilding"
+  },
+  {
+    "number": 38,
+    "name": "refresh during review and allow owned fix commits"
+  },
+  {
+    "number": 39,
+    "name": "readmit Linear changes even on unchanged main"
+  },
+  {
+    "number": 40,
+    "name": "repeat seams after review fixes"
+  },
+  {
+    "number": 41,
+    "name": "semantic approval ignores metadata while retaining legacy and condition guards"
+  },
+  {
+    "number": 42,
+    "name": "final heads accept reviewed fix commits and block unreviewed drift"
   }
 ]

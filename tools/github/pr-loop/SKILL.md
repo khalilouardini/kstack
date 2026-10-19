@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.7.0
+version: 0.7.1
 description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED; each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, repeat-finding ledger, head-SHA marker, and pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
 ---
 
@@ -28,6 +28,24 @@ SHA, full live evidence and exact delta into each implementation round and PR.
 Scope/dependency/release/human-gate changes require reviewed publication; unknown
 selected evidence blocks fixes. Read-only review remains allowed. Existing review
 and merge requirements hold; a graph-only repair uses the shared exception.
+
+When invoked inside a wave, retain its explicit Run A candidate baseline.
+Refresh admission at the start of every review round and before implementer
+writes, including when main has not changed: Linear and human evidence can move
+independently. Compare the saved semantic digest pair when present, otherwise
+the original pair; a repair published on main uses its saved own-closure pair.
+Unrelated main movement permits continuing after ancestry, clean merge and
+unchanged-condition checks. Publication of the accepted graph on main removes
+that track's obsolete pending flag from composed commands. A new unreviewed
+pending head, real conflict or changed conditions stops the affected PR.
+
+Head observations are per round. The loop's own verified fix commits advance
+its expected head only after gates and a successful pre-push guard; they are
+not foreign drift. Unexpected external commits still require reconciliation.
+Never rerun implementation merely to retry a review/CI result; recover the
+existing PR and apply the normal same-head review marker/CI skip-check. Report
+the final PR head and gate evidence so the wave can verify final seams. These
+context checks are prompt-level and do not remove any local/remote head guard.
 
 ## Configuration — read `.agents/stack.yml` first
 
