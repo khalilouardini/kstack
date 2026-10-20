@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Check published graph ticket coverage at a Git ref; no network or writes."""
+"""Check graph ticket coverage at a Git ref or local index; no network or writes."""
 import argparse
+import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -55,22 +56,12 @@ def diagram_nodes(markdown):
     return nodes
 
 
-def check(repo, ref, snapshot):
+def coverage(snapshot, read_text, manifest):
     if not isinstance(snapshot, dict) or snapshot.get('complete') is not True:
         raise ValueError('complete paginated Linear evidence is required')
     projects = snapshot.get('projects')
     if not isinstance(projects, list) or not projects:
         raise ValueError('projects must contain the exact audited Linear projects')
-    sha = git(repo, 'rev-parse', '--verify', f'{ref}^{{commit}}').strip()
-    index_text = read_blob(repo, sha, 'orchestration/index.json')
-    manifest = None
-    if index_text is not None:
-        index = json.loads(index_text)
-        API['check_schema'](index, json.loads(API['INDEX_SCHEMA'].read_text()))
-        manifest_text = read_blob(repo, sha, index['manifest'])
-        if manifest_text is None:
-            raise ValueError('published index points to a missing manifest')
-        manifest = API['validate'](json.loads(manifest_text))
     seen_projects, seen_issues, seen_identifiers, results = set(), set(), set(), []
     for project in projects:
         pid, name = project.get('project_id'), project.get('project_name')
@@ -91,7 +82,7 @@ def check(repo, ref, snapshot):
                 raise ValueError('issue identifier must be valid and unique')
             seen_issues.add(iid)
             seen_identifiers.add(identifier)
-        text = read_blob(repo, sha, path)
+        text = read_text(path)
         view_nodes = diagram_nodes(text or '')
         # Legacy views declare their own ticket key at the beginning of a label.
         view_keys = {m[1] for _, label in view_nodes
@@ -117,18 +108,64 @@ def check(repo, ref, snapshot):
                         'project_in_manifest': project_in_manifest,
                         'total_count': len(issues), 'covered_count': len(issues) - len(set(missing_view + missing_manifest)),
                         'missing_view': missing_view, 'missing_manifest': missing_manifest})
-    return {'ref': ref, 'sha': sha, 'state': 'CURRENT' if all(
+    return {'state': 'CURRENT' if all(
         p['state'] == 'CURRENT' for p in results) else 'UPDATE_REQUIRED', 'projects': results}
+
+
+def check(repo, ref, snapshot):
+    sha = git(repo, 'rev-parse', '--verify', f'{ref}^{{commit}}').strip()
+    index_text = read_blob(repo, sha, 'orchestration/index.json')
+    manifest = None
+    if index_text is not None:
+        index = json.loads(index_text)
+        API['check_schema'](index, json.loads(API['INDEX_SCHEMA'].read_text()))
+        manifest_text = read_blob(repo, sha, index['manifest'])
+        if manifest_text is None:
+            raise ValueError('published index points to a missing manifest')
+        manifest = API['validate'](json.loads(manifest_text))
+    return {'ref': ref, 'sha': sha, **coverage(
+        snapshot, lambda path: read_blob(repo, sha, path), manifest)}
+
+
+def local_file(repo, path):
+    target = (Path(repo).resolve() / safe_path(path)).resolve()
+    if not target.is_relative_to(Path(repo).resolve()):
+        raise ValueError(f'{path}: local file escapes the owning repository')
+    return target.read_text(encoding='utf-8') if target.exists() else None
+
+
+def check_local(repo, index_path, snapshot):
+    repo = Path(repo).resolve()
+    index_path = Path(index_path)
+    if not index_path.is_absolute():
+        index_path = repo / index_path
+    if index_path.resolve() != repo / 'orchestration/index.json':
+        raise ValueError('local index must be the owning repository orchestration/index.json')
+    before = index_path.read_bytes()
+    manifest, revision = API['load_index'](index_path)
+    index = json.loads(before)
+    result = coverage(snapshot, lambda path: local_file(repo, path), manifest)
+    if index_path.read_bytes() != before or 'sha256:' + hashlib.sha256(
+            (repo / index['manifest']).read_bytes()).hexdigest() != revision:
+        raise ValueError('local graph changed during validation; check it again')
+    return {**result, 'source_mode': 'local', 'index_path': str(index_path.resolve()),
+            'manifest_path': index['manifest'], 'source_revision': index['source_revision'],
+            'index_digest': 'sha256:' + hashlib.sha256(before).hexdigest(),
+            'manifest_digest': revision}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, required=True)
-    parser.add_argument('--ref', required=True, help='fresh origin/main or verified graph PR head')
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument('--ref', help='fresh origin/main or verified graph PR head')
+    source.add_argument('--local-index', type=Path, help='owning repository orchestration/index.json')
     parser.add_argument('--issues', type=Path, required=True, help='complete live Linear evidence JSON')
     args = parser.parse_args()
     try:
-        result = check(args.repo, args.ref, json.loads(args.issues.read_text()))
+        snapshot = json.loads(args.issues.read_text())
+        result = (check_local(args.repo, args.local_index, snapshot) if args.local_index
+                  else check(args.repo, args.ref, snapshot))
     except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
         print(json.dumps({'state': 'UNKNOWN', 'error': str(error)}))
         return 1

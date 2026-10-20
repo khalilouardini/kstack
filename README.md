@@ -24,6 +24,16 @@ Mapped work can proceed despite unrelated missing tickets; small repairs within
 approved scope can use an auditable local reconciliation. Scope, dependency,
 release-criteria and human-gate changes require reviewed graph publication.
 See the [shared gate contract](tools/linear/linear-roadmap/references/publication-gate.md).
+
+For a local roadmap, explicitly pass `--local-graph`
+to wave plan and repeat it on wave build alongside --approve. The path defaults
+to orchestration/index.json; refresh it first with /linear-roadmap "<project>"
+when needed, without --publish. This uses fresh local
+indexed/candidate admission without graph publication to GitHub or Linear. Scope,
+native blockers, dependencies, evidence and human plan/merge decisions still apply.
+Changed local index/manifest/provenance pins require a new plan; source_revision
+remains the original adoption provenance across compatible stack upgrades.
+
 The [interactive map](docs/skill-map.html) adds filtering when opened locally.
 
 ```bash

@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.7.0
+version: 0.8.0
 description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED; each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, repeat-finding ledger, head-SHA marker, and pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
 ---
 
@@ -11,7 +11,7 @@ description: Drive an unattended reviewer↔implementer loop on one open PR to C
 One open PR needs review rounds driven to a stop condition without a human in
 the seat: review → fix → reply → re-review, until the PR is clean, a
 disagreement blocks it, or the round budget runs out. Invoke as
-`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--accept-graph-update <PR#>]...`. Not for reviewing a
+`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--accept-graph-update <PR#>]... [--local-graph]`. Not for reviewing a
 human-authored PR, not for deciding contested design questions, and not for
 approving — see "What this skill is NOT for".
 
@@ -28,6 +28,16 @@ SHA, full live evidence and exact delta into each implementation round and PR.
 Scope/dependency/release/human-gate changes require reviewed publication; unknown
 selected evidence blocks fixes. Read-only review remains allowed. Existing review
 and merge requirements hold; a graph-only repair uses the shared exception.
+
+
+Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
+procedure. It replaces graph publication with fresh local indexed validation and
+candidate/closure admission; scope, native blockers, evidence, human decisions
+and plan/merge approvals remain mandatory. Forward this invocation's explicit
+flag and canonical owner/index/manifest pins through composed execution skills.
+Recheck the owner files before writes; never substitute an older dispatch-worktree
+copy. Changed pins require a new plan. Reject repeated local flags and mixed
+local/PR graph sources. No graph publication or extra tracker writes are granted.
 
 ## Configuration — read `.agents/stack.yml` first
 

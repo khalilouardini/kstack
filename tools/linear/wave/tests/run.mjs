@@ -89,6 +89,28 @@ const changeStored=(a,kind,change)=>{
   const value=JSON.parse(a.plan_record.evidence[i].slice(prefix.length));
   change(value);a.plan_record.evidence[i]=prefix+JSON.stringify(value);
 };
+const localFlags=['--local-graph'];
+const localArgs=(f,a)=>{
+  if(a.stage==='plan') a.selection.push(...localFlags);
+  else a.graph_update_flags=clone(localFlags);
+  a.approved_local_graph={index_path:'/tmp/repo/orchestration/index.json',
+    manifest_path:'orchestration/project.json',index_digest:'sha256:'+'b'.repeat(64),
+    manifest_digest:'sha256:'+'c'.repeat(64),source_revision:'d'.repeat(40),
+    checked_at:a.graph_publication.checked_at,validation_exit:0,coverage_exit:0,coverage_state:'CURRENT',
+    project_ids:[a.graph_publication.projects[0].project_id]};
+  a.graph_publication.projects[0].state='APPROVED_LOCAL';
+  const pins=Object.fromEntries(['index_path','manifest_path','index_digest','manifest_digest','source_revision']
+    .map(k=>[k,a.approved_local_graph[k]]));
+  for(const report of a.graph_admission){
+    report.graph_sha=null;report.local_graph=clone(pins);
+    report.evidence.local_scope_sources={'docs/scope.md':{text:'Approved scope',digest:'sha256:'+'a'.repeat(64)}};
+    report.candidates.forEach(c=>c.mode='APPROVED_LOCAL');
+  }
+  for(const t of f.tracks){
+    const response=f.responses['B3 admission '+t.issue_id];
+    response.admission_report=JSON.stringify(a.graph_admission[0]);
+  }
+};
 const tests=[
  async()=>{
    const planned=await run('plan');
@@ -659,6 +681,72 @@ const movedAdmission=(f,a,id,live,change={})=>{
   obs.admission_report=JSON.stringify(report);
   change.obs?.(obs);
 };
+tests.push(
+ async()=>{
+   const plan=await run('plan',localArgs);
+   assert.equal(plan.result.state,'AWAITING_APPROVAL');
+   assert.equal(plan.result.build_command,'/wave build --approve all --local-graph');
+   const build=await run('build',(f,a)=>{localArgs(f,a);a.plan_record=plan.result;});
+   assert.equal(build.result.state,'COMPLETE');
+   assert.ok(build.result.tracks.every(t=>t.state==='CLEAN'));
+   for(const call of build.calls.filter(c=>/^B[13]/.test(c.label)))
+     assert.ok(call.prompt.includes(JSON.stringify(localFlags)),call.label);
+   const warnings=await run('plan',(f,a)=>{localArgs(f,a);a.approved_local_graph.coverage_exit=1;
+     a.approved_local_graph.coverage_state='UPDATE_REQUIRED';});
+   assert.equal(warnings.result.state,'AWAITING_APPROVAL','unrelated missing tickets remain warnings');
+ },
+ async()=>{
+   for(const mutate of [a=>a.selection.push(...localFlags),
+     a=>{a.approved_local_graph.index_path='/tmp/other/orchestration/index.json';},
+     a=>{delete a.approved_local_graph;},a=>{a.approved_local_graph.index_digest='invalid';},
+     a=>{a.approved_local_graph.validation_exit=1;},a=>{a.approved_local_graph.coverage_state='UNKNOWN';},
+     a=>{a.approved_local_graph.project_ids=[];},a=>{a.approved_local_graph.checked_at='2026-10-04T12:00:00Z';},
+     a=>{a.selection.push('--accept-graph-update','900');}]){
+     const r=await run('plan',(f,a)=>{localArgs(f,a);mutate(a);});
+     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+   }
+   const plan=await run('plan',localArgs);
+   for(const field of ['index_digest','manifest_digest','source_revision']){
+     const r=await run('build',(f,a)=>{localArgs(f,a);a.plan_record=plan.result;
+       a.approved_local_graph[field]=(field==='source_revision'?'':'sha256:')+'e'.repeat(field==='source_revision'?40:64);});
+     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+   }
+   const inherited=await run('build',(f,a)=>{localArgs(f,a);a.plan_record=plan.result;delete a.graph_update_flags;});
+   assert.equal(inherited.result.state,'STOPPED');assert.equal(inherited.calls.length,0);
+ },
+ async()=>{
+   const plan=await run('plan',localArgs);
+   for(const field of ['closure_graph_digest','closure_evidence_digest','state']){
+     const r=await run('build',(f,a)=>{localArgs(f,a);a.plan_record=plan.result;
+       a.graph_admission[0].candidates[0][field]=field==='state'?'BLOCKED':'sha256:'+'9'.repeat(64);});
+     assert.equal(r.result.tracks[0].state,'STOPPED');
+     assert.equal(r.result.tracks[1].state,'CLEAN');
+     assert.ok(!r.calls.some(c=>c.label==='B1 build T-1'));
+   }
+   for(const approve of [undefined,[],['unknown']]){
+     const r=await run('build',(f,a)=>{localArgs(f,a);a.plan_record=plan.result;a.approve=approve;});
+     assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+   }
+   const subset=await run('build',(f,a)=>{localArgs(f,a);a.plan_record=plan.result;a.approve=['T-2'];});
+   assert.deepEqual(subset.calls.filter(c=>c.label.startsWith('B1')).map(c=>c.label),['B1 build T-2']);
+ },
+ async()=>{
+   const plan=await run('plan',localArgs);
+   for(const change of ['missing','pins','closure']){
+     const r=await run('build',(f,a)=>{localArgs(f,a);a.plan_record=plan.result;
+       const response=f.responses['B3 admission T-1'];
+       if(change==='missing') response.admission_report=null;
+       else {const fresh=JSON.parse(response.admission_report);
+         if(change==='pins') fresh.local_graph.manifest_digest='sha256:'+'9'.repeat(64);
+         else fresh.candidates[0].closure_evidence_digest='sha256:'+'9'.repeat(64);
+         response.admission_report=JSON.stringify(fresh);}
+     });
+     assert.equal(r.result.tracks[0].state,'BLOCKED',change);
+     assert.equal(r.result.tracks[1].state,'CLEAN',change);
+     assert.ok(!r.calls.some(c=>c.label==='B3 review T-1'));
+   }
+ }
+);
 function seamIntegration(){
  const temp=mkdtempSync(join(tmpdir(),'wave-seam-'));
  try{

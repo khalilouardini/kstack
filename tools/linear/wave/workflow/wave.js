@@ -1465,10 +1465,22 @@ const parsePrFlags=(tokens, flag, only=false) => {
 // Caller observations are required before selection/build; nodes compare live
 // scoped conditions with these observations before writes. Build never inherits flags.
 const graphFlag='--accept-graph-update';
+const localFlag='--local-graph';
 const graphTokens=args.stage==='plan' ? (args.selection || []) : (args.graph_update_flags || []);
-const parsedGraph=parsePrFlags(graphTokens,graphFlag,args.stage==='build');
+if (!Array.isArray(graphTokens)) return refuse('graph flags must be argument tokens');
+const prTokens=[];
+const indexPath=args.repo_root.replace(/\/+$/,'')+'/orchestration/index.json';
+let localIndex=null;
+for (let i=0;i<graphTokens.length;i++) {
+  if (graphTokens[i]!==localFlag) { prTokens.push(graphTokens[i]); continue; }
+  if (localIndex) return refuse(`${localFlag}: supply this flag only once`);
+  localIndex=indexPath;
+}
+const parsedGraph=parsePrFlags(prTokens,graphFlag,args.stage==='build');
 if (parsedGraph.error) return refuse(parsedGraph.error);
+if (localIndex && parsedGraph.numbers.size) return refuse('choose either an approved local graph or pending graph PRs');
 const graphFlags=parsedGraph.flags;
+if (localIndex) graphFlags.push(localFlag);
 const graphUpdates=new Map();
 for (const number of parsedGraph.numbers) {
   const pr=Array.isArray(args.accepted_graph_updates) ? args.accepted_graph_updates.find(p=>p.number===number) : null;
@@ -1481,7 +1493,8 @@ for (const number of parsedGraph.numbers) {
     return refuse(`${graphFlag} ${JSON.stringify(String(number))}: missing verified reviewed OPEN graph-update coverage`);
   graphUpdates.set(number,pr);
 }
-const publication=args.graph_publication;
+const publication={...args.graph_publication};
+delete publication.local_graph;
 const validUTC=value => typeof value==='string' &&
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value) &&
   Number.isFinite(Date.parse(value)) && new Date(value).toISOString().replace('.000Z','Z')===value.replace('.000Z','Z');
@@ -1492,15 +1505,36 @@ if (publication.projects.length && (!/^[0-9a-f]{40}$/.test(publication.main_sha 
     publication.checked_at.slice(0,10)!==args.date))
   return refuse('graph publication: fresh main and project coverage audit required for the invocation date');
 const projectUUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+const local=args.approved_local_graph;
+const localFields=['index_path','manifest_path','index_digest','manifest_digest','source_revision'];
+const sameLocalPins=(a,b)=>!!a && !!b && localFields.every(k=>a[k]===b[k]);
+if (localIndex && (!local || local.index_path!==localIndex ||
+    !/^orchestration\/[a-z][a-z0-9_-]*\.json$/.test(local.manifest_path || '') ||
+    !/^sha256:[0-9a-f]{64}$/.test(local.index_digest || '') ||
+    !/^sha256:[0-9a-f]{64}$/.test(local.manifest_digest || '') ||
+    !/^[0-9a-f]{40}$/.test(local.source_revision || '') || local.validation_exit!==0 ||
+    ![0,1].includes(local.coverage_exit) || local.coverage_state!==(local.coverage_exit===0?'CURRENT':'UPDATE_REQUIRED') ||
+    local.checked_at!==publication.checked_at || !publication.projects.length ||
+    !Array.isArray(local.project_ids) || !local.project_ids.length ||
+    new Set(local.project_ids).size!==local.project_ids.length || local.project_ids.some(id=>!projectUUID.test(id))))
+  return refuse('local graph: fresh indexed validation, provenance, digests and complete live coverage audit required');
+const localPins=localIndex ? Object.fromEntries(localFields.map(k=>[k,local[k]])) : null;
+if (localPins) publication.local_graph=localPins;
 const auditedProjects=new Set();
 const coverageWarnings=[];
 for (const p of publication.projects) {
   if (!p || typeof p.project_id!=='string' || !projectUUID.test(p.project_id) || auditedProjects.has(p.project_id) ||
       typeof p.project_name!=='string' || !p.project_name ||
       typeof p.view_path!=='string' || !p.view_path || p.view_path.startsWith('/') || p.view_path.split('/').includes('..') ||
-      !['CURRENT','ACCEPTED_UPDATE','UPDATE_REQUIRED','UNKNOWN'].includes(p.state))
+      !['CURRENT','ACCEPTED_UPDATE','UPDATE_REQUIRED','UNKNOWN','APPROVED_LOCAL'].includes(p.state))
     return refuse('graph publication: invalid or duplicate project evidence');
   auditedProjects.add(p.project_id);
+  if (p.state==='APPROVED_LOCAL') {
+    if (!localIndex || !local.project_ids.includes(p.project_id))
+      return refuse('local graph: explicit approval and matching project audit required');
+    if (local.coverage_state==='UPDATE_REQUIRED') coverageWarnings.push(p);
+    continue;
+  }
   if (p.state==='CURRENT') continue;
   const pr=graphUpdates.get(p.pr_number);
   if (p.state==='ACCEPTED_UPDATE' && pr) {
@@ -1508,6 +1542,9 @@ for (const p of publication.projects) {
       return refuse(`graph publication: ${p.project_name} does not match the verified graph-update head/project`);
   } else coverageWarnings.push(p);
 }
+if (localIndex && (publication.projects.some(p=>p.state!=='APPROVED_LOCAL') ||
+    local.project_ids.some(id=>!auditedProjects.has(id))))
+  return refuse('local graph: all affected project audits must use the approved index');
 // Coverage warnings do not determine execution eligibility. Consume the separate
 // audited candidate reports; nodes still acquire live evidence before writes.
 const admissions=args.graph_admission || [];
@@ -1533,7 +1570,7 @@ const candidateAdmission=(track,reports=validAdmissions,pins=publication,current
     p && (p.project_id===track.project || p.project_name===track.project)) : [];
   if (projects.length!==1 || projects[0].state==='UNKNOWN' ||
       !projectUUID.test(projects[0].project_id || '') ||
-      !['CURRENT','UPDATE_REQUIRED','ACCEPTED_UPDATE'].includes(projects[0].state) ||
+      !['CURRENT','UPDATE_REQUIRED','ACCEPTED_UPDATE','APPROVED_LOCAL'].includes(projects[0].state) ||
       (projects[0].state==='ACCEPTED_UPDATE' &&
        (!Number.isSafeInteger(projects[0].pr_number) || projects[0].pr_number<1 ||
         !/^[0-9a-f]{40}$/.test(projects[0].head_sha || ''))) ||
@@ -1542,10 +1579,15 @@ const candidateAdmission=(track,reports=validAdmissions,pins=publication,current
     .filter(({candidate:c})=>c && c.project_id===projects[0].project_id && c.identifier===track.issue_id);
   if (matches.length!==1) return null;
   const {report,candidate:c}=matches[0];
-  if (report.graph_sha!==(projects[0].state==='ACCEPTED_UPDATE' ? projects[0].head_sha : pins.main_sha) ||
+  const localProject=projects[0].state==='APPROVED_LOCAL';
+  if (localProject && (!sameLocalPins(report.local_graph,pins.local_graph) ||
+      (current && !sameLocalPins(report.local_graph,localPins)) ||
+      !report.evidence?.local_scope_sources || report.delta.added_nodes.length)) return null;
+  if (report.graph_sha!==(localProject ? null : projects[0].state==='ACCEPTED_UPDATE' ? projects[0].head_sha : pins.main_sha) ||
       report.transition!=='build' || c.state!=='ELIGIBLE' ||
       typeof c.issue_id!=='string' || !c.issue_id || typeof c.node_id!=='string' || !c.node_id ||
-      !['PUBLISHED','LOCAL_RECONCILIATION'].includes(c.mode) ||
+      !['PUBLISHED','LOCAL_RECONCILIATION','APPROVED_LOCAL'].includes(c.mode) ||
+      (c.mode==='APPROVED_LOCAL')!==localProject ||
       !Array.isArray(c.closure) || !c.closure.includes(c.node_id) ||
       !shaDigest(c.closure_graph_digest) || !shaDigest(c.closure_evidence_digest) || !Array.isArray(c.unmet) || c.unmet.length ||
       (c.mode==='LOCAL_RECONCILIATION' && !report.delta.added_nodes.some(n=>n.id===c.node_id && n.issue_ref===c.issue_id))) return null;
@@ -1566,8 +1608,17 @@ const candidateChanges=(before,after) => {
 };
 const admissionEvidence='Graph admission evidence: '+JSON.stringify(admissions);
 const graphEvidence='Graph publication evidence: '+JSON.stringify(publication);
-const graphPrompt=`For work linked to a Linear project, before selection or execution recheck the canonical graph publication gate
-against fresh main and live evidence for the candidate and its relevant dependency closure.
+const graphPrompt=`${localIndex ? `Explicit local graph approval from THIS invocation: ${JSON.stringify(graphFlags)}.
+Use only this owning local index/manifest: ${JSON.stringify(localPins)}. Re-run indexed
+validation, local coverage and graph-admission --local-index ${localIndex} --main-ref <fresh main>
+before every transition. Use the saved local scope snapshots for Run A comparison;
+re-read full current scope sections, exclusions and original human decisions.
+Changed index/manifest/provenance pins require a new plan and human approval.
+No graph PR, graph on main or Linear document publication is required or authorized.
+The flag approves graph use only, never scope, a human_decision event, a plan or a merge.
+Keep native blockers, typed event dependencies, independent tracks and human checkpoints.
+` : ''}For work linked to a Linear project, before selection or execution recheck the canonical graph publication gate
+against fresh implementation main, the chosen graph source and live evidence for the candidate and its relevant dependency closure.
 Project coverage gaps are warnings; never exclude all mapped candidates because an unrelated ticket is missing.
 Validated graph publication evidence: ${JSON.stringify(publication)}.
 Validated candidate admission reports: ${JSON.stringify(validAdmissions)}.
@@ -1618,7 +1669,7 @@ ${read(args.paths.next, 'selection is read-only; no adaptation')}
 Run /next with argument tokens ${JSON.stringify(args.selection)} in parallel mode.
 Pass every token unchanged, including repeated --accept-overlap flags and values;
 /next owns their validation and deduplication.
-Also preserve every --accept-graph-update occurrence and apply its publication gate.
+Also preserve every graph source flag occurrence and apply its admission procedure.
 PLAN_ONLY candidates must go in sequenced with the unmet build condition and source,
 never tracks. They do not count toward N and must not reach --approve all.
 Return all implementation-eligible tracks, sequenced and already_active entries. TRACK branch/worktree are
@@ -1719,7 +1770,7 @@ risks, status read-back and verified absolute worktree. No implementation permis
     log(`Wave STOPPED: ${record.stop_reason}`); return record;
   }
   record.state='AWAITING_APPROVAL';
-  record.build_command='/wave build --approve all';
+  record.build_command='/wave build --approve all'+(localIndex ? ' --local-graph' : '');
   return record;
 }
 if (args.stage !== 'build') throw new Error('args.stage must be plan or build');
@@ -1735,6 +1786,8 @@ const priorEvidence=a.evidence?.find(e=>e.startsWith('Graph publication evidence
 let priorPublication;
 try { priorPublication=priorEvidence && JSON.parse(priorEvidence.slice('Graph publication evidence: '.length)); }
 catch { return refuse('graph publication: invalid Run A SHA evidence'); }
+if ((localIndex || priorPublication?.local_graph) && (!localIndex || !sameLocalPins(priorPublication?.local_graph,localPins)))
+  return refuse('local graph: build requires renewed explicit approval of unchanged Run A index/manifest/provenance pins; repeat the plan');
 let priorAdmissions;
 try { priorAdmissions=JSON.parse(a.evidence?.find(e=>e.startsWith('Graph admission evidence: '))?.slice('Graph admission evidence: '.length)); }
 catch { return refuse('graph admission: missing Run A candidate evidence'); }
@@ -1748,7 +1801,7 @@ const approvedGraphPrompt=t => t.project===null ? '' : `Run A approved observati
 Run A pinned main ${priorPublication.main_sha}; Run B validated main ${publication.main_sha}.
 Verify ${priorPublication.main_sha} is an ancestor of the fetched ${args.default_branch};
 if not, return STOPPED before any write. Diff the cited scope sources at the saved
-and fresh graph SHAs and recheck their full relevant sections, including exclusions.
+and fresh graph SHAs (or saved/fresh local scope snapshots) and recheck their full relevant sections, including exclusions.
 Exact quote equality alone does not prove scope applicability.\n`;
 const preflightStops=new Map();
 const buildAdmissions=new Map();
@@ -1849,11 +1902,13 @@ const readmit=async (t,r) => {
   if (t.project===null) return {prompt:''};
   const current=buildAdmissions.get(t.issue_id);
   const project=publication.projects.find(p=>p.project_id===current.candidate.project_id);
-  const ref=project.state==='ACCEPTED_UPDATE' ? `--ref ${project.head_sha} --main-ref <live main>` : '--ref <live main>';
+  const ref=localIndex ? `--local-index ${localIndex} --main-ref <live main>` :
+    project.state==='ACCEPTED_UPDATE' ? `--ref ${project.head_sha} --main-ref <live main>` : '--ref <live main>';
   const obs=await call(`B3 admission ${t.issue_id}`, `${graphPrompt}${approvedGraphPrompt(t)}${read(args.paths.wave, 'B3 admission only: read-only observation; never review, fix, push, comment or write the tracker')}
 B3 admission for ${t.issue_id}, PR ${r.pr}, worktree ${t.worktree}. Fetch literal main and record
 its exact SHA and UTC checked_at. Run B validated main ${publication.main_sha}. If live main equals
-it, return OBSERVED with null ancestor_exit, merge_tree_exit, head_sha and admission_report.
+it, return OBSERVED with null ancestor_exit, merge_tree_exit and head_sha;
+admission_report is null except local mode, which always requires a fresh full local audit.
 Otherwise record exact exit codes without interpreting them:
 git -C ${t.worktree} merge-base --is-ancestor ${publication.main_sha} <live main> as ancestor_exit, and
 git -C ${t.worktree} merge-tree --write-tree <live main> <PR head> as merge_tree_exit, with that PR head as head_sha.
@@ -1877,9 +1932,10 @@ digests from Run B's report. Return STOPPED with evidence when a command or evid
   if (obs.state==='STOPPED') return stop(`stopped: ${obs.stop_reason}`);
   if (!/^[0-9a-f]{40}$/.test(obs.main_sha || '') || !validUTC(obs.checked_at) ||
       Date.parse(obs.checked_at)<Date.parse(publication.checked_at)) return stop('returned invalid live main evidence');
-  if (obs.main_sha===publication.main_sha) return {prompt:'',auditEvidence};
-  if (obs.ancestor_exit!==0) return stop('validated main is not an ancestor of live main');
-  if (obs.merge_tree_exit!==0 || !/^[0-9a-f]{40}$/.test(obs.head_sha || '')) return stop('PR head does not merge cleanly with live main');
+  const moved=obs.main_sha!==publication.main_sha;
+  if (!moved && !localIndex) return {prompt:'',auditEvidence};
+  if (moved && obs.ancestor_exit!==0) return stop('validated main is not an ancestor of live main');
+  if (moved && (obs.merge_tree_exit!==0 || !/^[0-9a-f]{40}$/.test(obs.head_sha || ''))) return stop('PR head does not merge cleanly with live main');
   let fresh=null;
   try { fresh=JSON.parse(obs.admission_report); } catch { fresh=null; }
   const livePins={...publication,main_sha:obs.main_sha,checked_at:obs.checked_at};
@@ -1891,11 +1947,12 @@ digests from Run B's report. Return STOPPED with evidence when a command or evid
     return stop('has no eligible build admission at live main');
   const changed=candidateChanges(current.candidate,now.candidate);
   if (changed.length) return stop('closure changed: '+JSON.stringify(changed));
-  const evidence=`B3 admission ${t.issue_id}: main moved ${publication.main_sha} -> ${obs.main_sha}; ancestor, clean merge of ${obs.head_sha}, graph and closure digests unchanged`;
+  const evidence=moved ? `B3 admission ${t.issue_id}: main moved ${publication.main_sha} -> ${obs.main_sha}; ancestor, clean merge of ${obs.head_sha}, graph and closure digests unchanged` :
+    `B3 admission ${t.issue_id}: fresh local graph pins and candidate conditions unchanged at ${obs.main_sha}`;
   log(evidence);
   return {evidence,auditEvidence,prompt:`${evidence}. For this review node live main ${obs.main_sha} replaces the
 validated main_sha in the rule above, and this fresh admission report replaces Run B's for ${t.issue_id}:
-${JSON.stringify(now.report)}. Verify the PR head still equals ${obs.head_sha} before writes.
+${JSON.stringify(now.report)}. Verify the PR head still equals ${obs.head_sha || r.head_sha} before writes.
 If main or the PR head moves again, return BLOCKED before any write.\n`};
 };
 // Batch only the review stage: build remains a per-track pipeline; B2 is the seam barrier.

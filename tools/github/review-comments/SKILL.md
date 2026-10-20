@@ -1,6 +1,6 @@
 ---
 name: review-comments
-version: 0.4.0
+version: 0.5.0
 description: Find unanswered PR feedback, make the warranted code fixes, and reply under the configured implementer identity using a per-command token that never switches global gh state. Use when asked to "answer the review comments", "reply to the review", "address the PR feedback", or "/review-comments [PR#]". (kstack)
 ---
 
@@ -10,7 +10,7 @@ description: Find unanswered PR feedback, make the warranted code fixes, and rep
 
 An open PR carries review feedback — inline threads, review summaries, or
 conversation comments — that needs answering, and the fix-plus-reply should land
-under the project's implementer identity. Invoke as `/review-comments [PR#] [--accept-graph-update <PR#>]...` (defaults
+under the project's implementer identity. Invoke as `/review-comments [PR#] [--accept-graph-update <PR#>]... [--local-graph]` (defaults
 to the current branch's PR). Not for initiating reviews, resolving threads, or
 changing PR state — see "What this skill is NOT for".
 
@@ -25,6 +25,16 @@ live evidence and exact delta retained in the PR; scope/dependency/release/human
 changes require reviewed publication or an explicitly accepted reviewed graph PR.
 Read-only feedback lookup remains allowed. Carry the audit and explicit flags
 into land; every transition refreshes evidence, with no inherited bypass.
+
+
+Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
+procedure. It replaces graph publication with fresh local indexed validation and
+candidate/closure admission; scope, native blockers, evidence, human decisions
+and plan/merge approvals remain mandatory. Forward this invocation's explicit
+flag and canonical owner/index/manifest pins through composed execution skills.
+Recheck the owner files before writes; never substitute an older dispatch-worktree
+copy. Changed pins require a new plan. Reject repeated local flags and mixed
+local/PR graph sources. No graph publication or extra tracker writes are granted.
 
 ## Configuration — read `.agents/stack.yml` first
 

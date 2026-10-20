@@ -21,6 +21,14 @@ and approved plans. On fresh audits, compare each unit's graph/evidence closure;
 unrelated ticket, graph or main changes do not interrupt it. Changed relevant
 conditions stop the affected track while verified independent siblings continue.
 
+
+For a local roadmap, explicitly pass `--local-graph`
+to wave plan and repeat it on wave build alongside --approve. This uses fresh local
+indexed/candidate admission without graph publication to GitHub or Linear. Scope,
+native blockers, dependencies, evidence and human plan/merge decisions still apply.
+Changed local index/manifest/provenance pins require a new plan; source_revision
+remains the original adoption provenance across compatible stack upgrades.
+
 ## Central source and reusable preparation
 
 The canonical lifecycle is this root file. The structural contract is

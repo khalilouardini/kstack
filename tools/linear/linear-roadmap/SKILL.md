@@ -1,6 +1,6 @@
 ---
 name: linear-roadmap
-version: 0.6.2
+version: 0.7.0
 description: Map existing Linear work or a proposed plan into local orchestration JSON, Markdown and a scope contract. Local updates are the default; --publish explicitly opens or updates the graph PR. Reports coverage separately from execution eligibility. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap PROJECT [--publish]". Tracker reads only; does not launch sessions or create tickets. (kstack)
 ---
 
@@ -169,6 +169,10 @@ contract's existence, completeness or approval.
    Never publish or link Linear documents from this skill. Return artifacts for
    the human maintainer's separate manual publish/read-back step. Graph updates
    never grant launch permission.
+
+Execution may separately use --local-graph
+under the shared gate; producing a local graph does not grant that approval.
+Do not publish it unless --publish was explicitly supplied.
 
 ## Output
 
