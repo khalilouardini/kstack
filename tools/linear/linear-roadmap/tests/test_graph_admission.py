@@ -72,6 +72,57 @@ class AdmissionTests(unittest.TestCase):
     def audit(self, proposed=None):
         return API['audit'](self.repo, 'main', self.snapshot, self.request, proposed, now=NOW)
 
+    def local_audit(self, **kwargs):
+        with patch.dict(API['GRAPH']['load_index'].__globals__, installed_revision=lambda: 'a' * 40):
+            return API['audit'](self.repo, None, self.snapshot, self.request, now=NOW,
+                                main_ref='main', local_index='orchestration/index.json', **kwargs)
+
+    def test_local_admission_uses_unpublished_graph_and_retains_scope_snapshots(self):
+        index = (self.repo / 'orchestration/index.json').read_text()
+        manifest = (self.repo / 'orchestration/graph.json').read_text()
+        view = (self.repo / 'docs/project.md').read_text()
+        self.git('rm', 'orchestration/index.json', 'orchestration/graph.json', 'docs/project.md')
+        self.git('commit', '-m', 'base without published roadmap')
+        self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+        (self.repo / 'orchestration').mkdir(exist_ok=True)
+        (self.repo / 'orchestration/index.json').write_text(index)
+        (self.repo / 'orchestration/graph.json').write_text(manifest)
+        (self.repo / 'docs/project.md').write_text(view)
+        before = self.git('status', '--porcelain')
+        report = self.local_audit()
+        self.assertEqual(report['state'], 'ELIGIBLE')
+        self.assertIsNone(report['graph_sha'])
+        self.assertEqual(report['candidates'][0]['mode'], 'APPROVED_LOCAL')
+        self.assertEqual(report['local_graph']['source_revision'], 'a' * 40)
+        self.assertEqual(report['evidence']['local_scope_sources']['docs/scope.md']['text'], QUOTE + '\n')
+        self.assertEqual(self.git('status', '--porcelain'), before)
+        with self.assertRaisesRegex(ValueError, 'typed index required'):
+            self.audit()
+
+    def test_local_admission_keeps_scope_dependencies_and_human_events(self):
+        self.request['events'][0]['state'] = 'UNSATISFIED'
+        self.assertEqual(self.local_audit()['state'], 'BLOCKED')
+        self.request['events'][0]['state'] = 'SATISFIED'
+        (self.repo / 'docs/scope.md').write_text('Unapproved replacement scope.\n')
+        with self.assertRaisesRegex(ValueError, 'scope citation'):
+            self.local_audit()
+        (self.repo / 'docs/scope.md').write_text(QUOTE + '\n')
+        self.snapshot['projects'][0]['issues'][0]['relations_complete'] = False
+        with self.assertRaisesRegex(ValueError, 'complete live relations'):
+            self.local_audit()
+
+    def test_local_admission_rejects_overlays_stale_evidence_and_draft_scope(self):
+        with self.assertRaisesRegex(ValueError, 'excludes --ref/--reconcile'):
+            self.local_audit(proposed=self.base)
+        self.snapshot['checked_at'] = (NOW - timedelta(hours=2)).isoformat().replace('+00:00', 'Z')
+        with self.assertRaisesRegex(ValueError, 'stale'):
+            self.local_audit()
+        self.snapshot['checked_at'] = NOW.isoformat().replace('+00:00', 'Z')
+        self.base['projects'][0]['authorization'] = 'draft'
+        (self.repo / 'orchestration/graph.json').write_text(json.dumps(self.base))
+        with self.assertRaisesRegex(ValueError, 'scope authorization is draft'):
+            self.local_audit()
+
     def test_outside_event_edges_and_display_renames_preserve_candidate_digests(self):
         for change in ('edge', 'node_title', 'project_title', 'issue_url'):
             with self.subTest(change=change):

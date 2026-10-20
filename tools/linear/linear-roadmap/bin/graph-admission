@@ -101,24 +101,31 @@ def closure_nodes(nodes, events):
     return found
 
 
-def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
-    coverage = COVERAGE['check'](repo, ref, snapshot)
-    sha = coverage['sha']
+def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, local_index=None):
+    if local_index and (ref or not main_ref or proposed is not None):
+        raise ValueError('local admission requires --main-ref and excludes --ref/--reconcile')
+    coverage = (COVERAGE['check_local'](repo, local_index, snapshot) if local_index
+                else COVERAGE['check'](repo, ref, snapshot))
+    sha = None if local_index else coverage['sha']
     main_sha = COVERAGE['git'](repo, 'rev-parse', '--verify', f'{main_ref or ref}^{{commit}}').strip()
-    if snapshot.get('main_sha') != main_sha or (sha != main_sha and snapshot.get('graph_sha') != sha):
+    if snapshot.get('main_sha') != main_sha or (not local_index and sha != main_sha and snapshot.get('graph_sha') != sha):
         raise ValueError('live evidence must pin the exact freshly fetched main SHA')
     checked = utc(snapshot.get('checked_at'))
     now = now or datetime.now(timezone.utc)
     if not 0 <= (now - checked).total_seconds() <= 3600:
         raise ValueError('live evidence is stale or future-dated; refresh before this transition')
-    index_text = COVERAGE['read_blob'](repo, sha, 'orchestration/index.json')
+    read_source = (lambda path: COVERAGE['local_file'](repo, path)) if local_index else (
+        lambda path: COVERAGE['read_blob'](repo, sha, path))
+    index_text = read_source('orchestration/index.json')
     if index_text is None:
         raise ValueError('typed index required for deterministic admission; use the documented legacy audit')
     index = json.loads(index_text)
     # Schemas define compatibility; the adoption SHA remains provenance. Keep
     # the same dirty-source guard as validate-index without requiring a repin.
     GRAPH['installed_revision']()
-    base = GRAPH['validate'](json.loads(COVERAGE['read_blob'](repo, sha, index['manifest'])))
+    base = GRAPH['validate'](json.loads(read_source(index['manifest'])))
+    if local_index and 'sha256:' + hashlib.sha256(read_source(index['manifest']).encode()).hexdigest() != coverage['manifest_digest']:
+        raise ValueError('local graph changed during admission')
     graph = copy.deepcopy(base) if proposed is None else GRAPH['validate'](proposed)
     selected = request.get('selected')
     if not isinstance(selected, list) or not selected or len(set(selected)) != len(selected):
@@ -148,6 +155,7 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
     if len(observed) != len(events):
         raise ValueError('duplicate event evidence')
     candidates = []
+    local_scopes = {}
     for iid in selected:
         matches = [n for n in nodes.values() if n['kind'] == 'unit' and n['issue_ref'] == iid]
         if len(matches) != 1:
@@ -169,12 +177,14 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
             proof = proofs.get(key, {})
             scope = proof.get('scope', {})
             path = COVERAGE['safe_path'](scope.get('path'))
-            text = COVERAGE['read_blob'](repo, sha, path)
+            text = read_source(path)
+            if local_index and text is not None:
+                local_scopes[path] = {'text': text, 'digest': 'sha256:' + hashlib.sha256(text.encode()).hexdigest()}
             line = scope.get('line')
             quote = required_text(scope.get('quote'), 'approved scope quote')
             if type(line) is not int or line < 1 or text is None or '\n'.join(
                     text.splitlines()[line-1:line-1+len(quote.splitlines())]) != quote:
-                raise ValueError('scope citation must match exact lines on pinned main')
+                raise ValueError('scope citation must match exact lines on pinned graph source')
             required_text(scope.get('rationale'), 'scope applicability rationale')
             if proof.get('owner') != n['owner'] or proof.get('acceptance') != n['acceptance']:
                 raise ValueError('verified ownership and exact acceptance conditions required throughout closure')
@@ -228,17 +238,26 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
         candidates.append({'issue_id': iid, 'identifier': issues[iid][1]['identifier'],
                            'project_id': projects[node['project']]['linear_id'],
                            'state': 'BLOCKED' if unmet else 'ELIGIBLE',
-                           'mode': 'LOCAL_RECONCILIATION' if origin else 'PUBLISHED',
+                           'mode': 'APPROVED_LOCAL' if local_index else 'LOCAL_RECONCILIATION' if origin else 'PUBLISHED',
                            'node_id': node['id'], 'closure': sorted(closure),
                            'closure_graph_digest': digest(closure_graph(graph, closure_events, closure)),
                            'closure_evidence_digest': evidence_digest(closure, required, closure_events),
                            'published_closure_graph_digest': digest(closure_graph(graph, published_events, published_closure)),
                            'published_closure_evidence_digest': evidence_digest(published_closure, published_required, published_events),
                            'unmet': unmet})
-    return {'schema_version': 1, 'main_sha': main_sha, 'graph_sha': sha, 'checked_at': snapshot['checked_at'],
+    local_pins = {}
+    if local_index:
+        repeated = COVERAGE['check_local'](repo, local_index, snapshot)
+        fields = ('index_path', 'manifest_path', 'index_digest', 'manifest_digest', 'source_revision')
+        if any(repeated[k] != coverage[k] for k in fields) or any(
+                read_source(path) != source['text'] for path, source in local_scopes.items()):
+            raise ValueError('local graph/scope changed during admission; repeat the audit')
+        local_pins = {'local_graph': {k: coverage[k] for k in fields}}
+    return {'schema_version': 1, 'main_sha': main_sha, 'graph_sha': sha, **local_pins, 'checked_at': snapshot['checked_at'],
             'transition': transition, 'coverage': coverage,
             'base_digest': digest(base), 'graph_digest': digest(graph),
-            'issue_evidence_digest': digest(snapshot), 'evidence': {'issues': snapshot, 'request': request},
+            'issue_evidence_digest': digest(snapshot), 'evidence': {'issues': snapshot, 'request': request,
+                **({'local_scope_sources': local_scopes} if local_index else {})},
             'delta': {'added_nodes': added, 'changed_edges': [], 'repairs': request.get('repairs', [])},
             'candidates': candidates, 'state': 'ELIGIBLE' if all(c['state'] == 'ELIGIBLE' for c in candidates) else 'BLOCKED'}
 
@@ -246,7 +265,9 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, required=True)
-    parser.add_argument('--ref', required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument('--ref')
+    source.add_argument('--local-index', type=Path)
     parser.add_argument('--main-ref', help='fresh main ref when --ref is an explicitly accepted PR head')
     parser.add_argument('--issues', type=Path, required=True)
     parser.add_argument('--request', type=Path, required=True)
@@ -255,7 +276,8 @@ def main():
     try:
         report = audit(args.repo, args.ref, json.loads(args.issues.read_text()),
                        json.loads(args.request.read_text()),
-                       json.loads(args.reconcile.read_text()) if args.reconcile else None, main_ref=args.main_ref)
+                       json.loads(args.reconcile.read_text()) if args.reconcile else None,
+                       main_ref=args.main_ref, local_index=args.local_index)
     except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
         state = next((s for s in ('REVIEWED_PUBLICATION_REQUIRED', 'UNMAPPED') if str(error).startswith(s + ':')), 'UNKNOWN')
         print(json.dumps({'state': state, 'error': str(error)}))

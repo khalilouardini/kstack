@@ -261,6 +261,14 @@ each mapped track's graph/evidence closure; unrelated ticket, graph or main
 changes do not interrupt it. Changed relevant conditions stop only affected tracks
 while independent audited siblings continue. Local drafts alone grant no admission.
 
+
+For a local roadmap, explicitly pass `--local-graph`
+to wave plan and repeat it on wave build alongside --approve. This uses fresh local
+indexed/candidate admission without graph publication to GitHub or Linear. Scope,
+native blockers, dependencies, evidence and human plan/merge decisions still apply.
+Changed local index/manifest/provenance pins require a new plan; source_revision
+remains the original adoption provenance across compatible stack upgrades.
+
 The human maintainer manually publishes/links the shared team-owned Linear contract
 under the workspace rules and verifies read-back; the roadmap skill never writes it. Keep
 each pilot document with its project. Publishing a graph does not execute it;

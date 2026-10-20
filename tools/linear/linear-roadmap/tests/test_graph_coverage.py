@@ -5,6 +5,7 @@ import runpy
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 API = runpy.run_path(str(ROOT / 'bin/graph-coverage'))
@@ -217,6 +218,84 @@ class CoverageTests(unittest.TestCase):
             self.check()
         with self.assertRaises(ValueError):
             self.check('absent-ref')
+
+    def local_graph(self):
+        self.view()
+        record = json.loads((ROOT / 'tests/fixtures/reporting.json').read_text())
+        orchestration = self.repo / 'orchestration'
+        orchestration.mkdir()
+        (orchestration / 'reporting.json').write_text(json.dumps(record))
+        index = orchestration / 'index.json'
+        index.write_text(json.dumps({'schema_version': 1, 'source_revision': 'a' * 40,
+                                     'manifest': 'orchestration/reporting.json'}))
+        return index
+
+    def check_local(self, index):
+        # The fixture pins a synthetic stack revision; production uses the
+        # unchanged installed_revision check, including its dirty-source guard.
+        with mock.patch.dict(API['API']['load_index'].__globals__, installed_revision=lambda: 'a' * 40):
+            return API['check_local'](self.repo, index, self.snapshot)
+
+    def test_local_uncommitted_graph_covers_without_publishing(self):
+        index = self.local_graph()
+        before = self.git('status', '--porcelain')
+        report = self.check_local(index)
+        self.assertEqual(report['state'], 'CURRENT')
+        self.assertEqual(report['source_mode'], 'local')
+        self.assertEqual(report['index_path'], str(index.resolve()))
+        self.assertRegex(report['index_digest'], r'^sha256:[0-9a-f]{64}$')
+        self.assertRegex(report['manifest_digest'], r'^sha256:[0-9a-f]{64}$')
+        self.assertEqual(self.check()['state'], 'UPDATE_REQUIRED')
+        self.assertEqual(self.git('status', '--porcelain'), before)
+
+    def test_local_digest_changes_and_missing_tickets_remain_blocked(self):
+        index = self.local_graph()
+        original = self.check_local(index)
+        manifest = index.parent / 'reporting.json'
+        record = json.loads(manifest.read_text())
+        record['nodes'][3]['issue_ref'] = '11111111-1111-1111-1111-111111111111'
+        manifest.write_text(json.dumps(record))
+        changed = self.check_local(index)
+        self.assertNotEqual(changed['manifest_digest'], original['manifest_digest'])
+        self.assertEqual(changed['state'], 'UPDATE_REQUIRED')
+        self.assertEqual(changed['projects'][0]['missing_manifest'], ['T-2'])
+        self.snapshot['complete'] = False
+        with self.assertRaisesRegex(ValueError, 'complete paginated'):
+            self.check_local(index)
+
+    def test_local_index_keeps_source_and_dependency_validation(self):
+        index = self.local_graph()
+        data = json.loads(index.read_text())
+        data['source_revision'] = 'b' * 40
+        index.write_text(json.dumps(data))
+        self.assertEqual(self.check_local(index)['source_revision'], 'b' * 40)
+        data['source_revision'] = 'a' * 40
+        index.write_text(json.dumps(data))
+        manifest = index.parent / 'reporting.json'
+        record = json.loads(manifest.read_text())
+        record['edges'].append({'from': 'ui', 'from_event': 'merge', 'to': 'api',
+                                'to_event': 'plan', 'type': 'start_after', 'source': 'Fixture cycle'})
+        manifest.write_text(json.dumps(record))
+        with self.assertRaisesRegex(ValueError, 'event dependency cycle'):
+            self.check_local(index)
+
+    def test_local_index_and_views_cannot_escape_owner_repository(self):
+        index = self.local_graph()
+        with self.assertRaisesRegex(ValueError, 'owning repository'):
+            self.check_local(self.repo / 'other/index.json')
+        view = self.repo / 'docs/MVP.md'
+        view.unlink()
+        view.symlink_to(ROOT / 'SKILL.md')
+        with self.assertRaisesRegex(ValueError, 'escapes the owning repository'):
+            self.check_local(index)
+
+    def test_local_cli_requires_a_single_source(self):
+        result = subprocess.run(['python3', str(ROOT / 'bin/graph-coverage'),
+                                 '--repo', str(self.repo), '--ref', 'main',
+                                 '--local-index', 'orchestration/index.json',
+                                 '--issues', 'unused.json'], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('not allowed with argument', result.stderr)
 
 
 if __name__ == '__main__':

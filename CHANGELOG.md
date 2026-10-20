@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+Add --local-graph to wave and composed execution
+skills. Explicit local graph use retains fresh candidate/closure, scope, dependency,
+evidence and human approval checks without graph publication. Build requires renewed
+local approval and matching saved pins; B3 re-audits local files even when main is
+unchanged. Preserve source_revision as adoption provenance across stack upgrades.
+
 `/wave` 0.8.0: a B3 review no longer stops before round 1 because main moved
 after B1. With the default `review_concurrency` of 1, a later track's review
 starts after earlier tracks' rounds, and any merge in that window moved main and

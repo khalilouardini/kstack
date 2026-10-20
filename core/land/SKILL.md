@@ -1,6 +1,6 @@
 ---
 name: land
-version: 0.5.0
+version: 0.6.0
 description: Land an agent session's work safely — dedicated branch, concurrent-session guards re-run before every commit, the repo's own lint and test gates from .agents/stack.yml, atomic commits, then one PR. Stops at the PR; merging is a human decision. Use when asked to "land this", "commit and push", "open a PR", "ship it", or "/land". (kstack)
 ---
 
@@ -9,7 +9,7 @@ description: Land an agent session's work safely — dedicated branch, concurren
 ## When to invoke
 
 Work is done in the working tree and needs to become a reviewable PR. Invoke as
-`/land [<type>/<name>] [--accept-graph-update <PR#>]...`.
+`/land [<type>/<name>] [--accept-graph-update <PR#>]... [--local-graph]`.
 
 For Linear-linked implementation, before commits/pushes follow
 `tools/linear/linear-roadmap/references/publication-gate.md` from the physical
@@ -28,6 +28,16 @@ reason, and they re-run before every commit rather than once at the start.
 
 It stops at the PR. It does not merge, and it is not an auto-ship pipeline —
 see "What this skill is NOT for".
+
+
+Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
+procedure. It replaces graph publication with fresh local indexed validation and
+candidate/closure admission; scope, native blockers, evidence, human decisions
+and plan/merge approvals remain mandatory. Forward this invocation's explicit
+flag and canonical owner/index/manifest pins through composed execution skills.
+Recheck the owner files before writes; never substitute an older dispatch-worktree
+copy. Changed pins require a new plan. Reject repeated local flags and mixed
+local/PR graph sources. No graph publication or extra tracker writes are granted.
 
 ## Configuration — read `.agents/stack.yml` first
 

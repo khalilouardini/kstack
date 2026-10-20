@@ -138,5 +138,21 @@
   {
     "number": 35,
     "name": "moved main with a changed closure digest blocks review"
+  },
+  {
+    "number": 36,
+    "name": "approved local graph preserves full candidate admission through review"
+  },
+  {
+    "number": 37,
+    "name": "local graph requires valid fresh explicit source approval at both checkpoints"
+  },
+  {
+    "number": 38,
+    "name": "local graph retains closure and human plan approval checks"
+  },
+  {
+    "number": 39,
+    "name": "local review requires a fresh matching graph audit even when main is unchanged"
   }
 ]
