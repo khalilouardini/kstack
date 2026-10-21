@@ -160,14 +160,20 @@ class EvidenceTests(unittest.TestCase):
 
     def test_range_citation_and_priority_mention_in_assessment(self):
         body = ('### Findings\n1. **[P2] Fix this** — `file.py:8-12`\n'
-                '### Overall assessment\nThe [P2] issue is reproducible.')
+                '### Overall assessment\n[P3] context: the [P2] issue is reproducible.')
         value = self.check([review(body=body)])
         self.assertEqual(value['status'], 'FINDINGS')
         self.assertEqual(value['findings'], [dict(priority=2, title='Fix this', path='file.py')])
 
     def test_clean_assessment_allows_trailing_sentence(self):
-        value = self.check([review(body='### Overall assessment\nNo findings. Tests pass.')])
+        value = self.check([review(body='### Overall assessment\nNo findings. Tests pass.\n'
+                                       '[P3] is discussed here as context, not a finding.')])
         self.assertEqual(value['status'], 'REVIEW_CLEAR')
+
+    def test_formatted_malformed_finding_still_blocks(self):
+        body = '### Findings\n1. **[P9] Invalid** — `file.py:8`\n### Overall assessment\nNeeds work.'
+        with self.assertRaises(rt.Blocked):
+            self.check([review(body=body)])
 
     def test_prior_count_requires_matching_account_engine_and_commit(self):
         valid = review(engine='codex', reviewer='review-bot')

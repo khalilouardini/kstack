@@ -113,39 +113,57 @@ was passed on the invocation.
 
 Read [references/routing.md](references/routing.md) and follow it before the
 preflight below. If unreadable, stop. It owns provenance, role selection, host
-checks, canonical skill resolution and CLI invocation. Bootstrap the maintainer
-credential and scratch there, resolve the exact PR, and pin route.json. All role
+checks, canonical skill resolution and CLI invocation. Bootstrap the controller
+before running its resolver:
+
+```bash
+PR=<number>
+MAINTAINER="<identities.maintainer>"
+DEFAULT_REVIEWER="<identities.reviewer>"
+DEFAULT_IMPLEMENTER="<identities.implementer>"
+DEFAULT_REVIEWER_ENGINE="<review_engines.reviewer, or codex>"
+DEFAULT_IMPLEMENTER_ENGINE="<review_engines.implementer, or claude>"
+AUTHOR_ARGS=()  # append only this invocation's explicit authorship flags
+REPO_ROOT=$(git rev-parse --show-toplevel)
+STACK_ROOT=$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")
+test -r "$STACK_ROOT/tools/github/pr-loop/SKILL.md"
+REVIEW_SKILL="$STACK_ROOT/tools/github/review-claude-pr/SKILL.md"
+test -r "$REVIEW_SKILL"
+SCRATCH=$(mktemp -d)  # outside the repository; stop if creation fails
+test -d "$SCRATCH"
+trap 'test -n "$SCRATCH" && rm -rf -- "$SCRATCH"' EXIT
+MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
+test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
+BOOTSTRAP_TOKEN="$MAINTAINER_TOKEN"  # the controller's routing reads
+OWNER_REPO=$(GH_TOKEN="$MAINTAINER_TOKEN" gh repo view --json nameWithOwner --jq .nameWithOwner)
+```
+
+Resolve the exact PR with the shared contract and pin route.json. All role
 placeholders below mean resolved roles. Never infer the engine from a bot name.
 On a host mismatch stop; no whole-loop delegation or fallback self-review.
 
 ## Preflight — run once, stop on any failure
 
-Every variable the round uses is defined here. The round body below assumes all
-of them exist; do not run it against a partial preflight.
+Every variable the round uses is defined by the bootstrap, routing contract, or
+this preflight. Do not run the round against a partial preflight.
 
 ```bash
-PR=<number>
 MAX_ROUNDS=5; N=0                                        # --max-rounds overrides MAX_ROUNDS
                                                          # N counts rounds in THIS invocation only —
                                                          # see "Resuming after ROUNDS_EXHAUSTED"
-MAINTAINER="<identities.maintainer>"                    # from .agents/stack.yml
-REVIEWER="<resolved reviewer account>"
-IMPLEMENTER="<resolved implementer account>"
+# REVIEWER and IMPLEMENTER were read from pinned route.json above.
 CI_CHECKS="<ci.checks>"                                  # required | all | none
 CI_WAIT_MIN=30                                           # --ci-wait overrides: minutes step 3a
                                                          # waits for pending checks
 
-MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
 REVIEWER_TOKEN=$(gh auth token --hostname github.com --user "$REVIEWER")
 IMPLEMENTER_TOKEN=$(gh auth token --hostname github.com --user "$IMPLEMENTER")
 test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
 test "$(GH_TOKEN="$REVIEWER_TOKEN" gh api user --jq .login)" = "$REVIEWER"
 test "$(GH_TOKEN="$IMPLEMENTER_TOKEN" gh api user --jq .login)" = "$IMPLEMENTER"
 
-REPO_ROOT=$(git rev-parse --show-toplevel)
-OWNER_REPO=$(GH_TOKEN="$MAINTAINER_TOKEN" gh repo view --json nameWithOwner --jq .nameWithOwner)
 OWNER=${OWNER_REPO%/*}; REPO=${OWNER_REPO#*/}
-# Reuse the bootstrap SCRATCH and route.json; never overwrite them here.
+# Reuse the bootstrap SCRATCH and pinned route.json; never overwrite them here.
 
 # durable, per-PR answered-findings ledger — OUTSIDE $SCRATCH and outside $REPO_ROOT,
 # because the repeat-finding guard must survive this invocation. See step 5.
@@ -159,6 +177,8 @@ touch "$LEDGER"
 # Precedence per slot: invocation flag > first-review escalation > base config
 # > stack default. Explicit flags pin their slots for every round.
 FAST="<true iff --fast was passed; otherwise false>"
+REVIEW_ARGS=()
+if [ "$FAST" = true ]; then REVIEW_ARGS=(--fast); fi
 BASE_MODEL="<review_model.slug, or gpt-6.1-sol>"
 BASE_EFFORT="<review_model.effort, or high>"             # --effort overrides
 PINNED_MODEL="<--model value, if passed>"
@@ -304,9 +324,17 @@ overrides). The cap counts rounds in *this* invocation — `--max-rounds N` mean
 durable bound on repeated invocations is the ledger in step 5, not `N`.
 
 **1. Skip-check (and round bound).** Increment N and enforce MAX_ROUNDS before any paid
-review. Read the current remote head and recompute route.json from complete
+review. Assign `HEAD` from the current remote head and recompute route.json from complete
 commit evidence. A foreign head requires reconciliation; the loop's own guarded
 fix head becomes the next expected head. Preserve existing graph admission.
+
+```bash
+N=$((N+1)); test "$N" -le "$MAX_ROUNDS"  # false ⇒ ROUNDS_EXHAUSTED
+HEAD=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .headRefOid)
+```
+
+After recomputing route.json with the shared resolver, require
+`test "$HEAD" = "$(route_field head)"` before skipping or launching a review.
 
 Read all submitted reviews with --paginate --slurp. For Codex model escalation,
 PRIOR_REVIEW_COUNT counts only submitted reviews by the resolved reviewer with

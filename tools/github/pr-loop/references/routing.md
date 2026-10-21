@@ -31,6 +31,16 @@ python3 "$STACK_ROOT/tools/github/pr-loop/bin/resolve-route" \
   --implementer-engine "$DEFAULT_IMPLEMENTER_ENGINE" \
   --pr-json "$SCRATCH/pr.json" --commits-json "$SCRATCH/commits.json" \
   "${AUTHOR_ARGS[@]}" > "$SCRATCH/route.json"
+
+# Read resolved fields as data; never source or eval route.json.
+route_field() {
+  python3 -c 'import json,sys; value=json.load(open(sys.argv[1]))[sys.argv[2]]; assert isinstance(value,str); print(value)' \
+    "$SCRATCH/route.json" "$1"
+}
+REVIEWER=$(route_field reviewer)
+IMPLEMENTER=$(route_field implementer)
+REVIEWER_ENGINE=$(route_field reviewer_engine)
+IMPLEMENTER_ENGINE=$(route_field implementer_engine)
 ```
 
 `AUTHOR_ARGS` contains only this invocation's explicit

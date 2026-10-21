@@ -118,8 +118,12 @@ def review_evidence(reviews, comments, reviewer, engine, head):
             or f'**Review performed by {label}.**' not in body):
         raise Blocked('review has wrong commit, missing submission, or false engine attribution')
     findings = []
-    for line in body.splitlines():
-        # Priority mentions in the assessment are prose, not findings.
+    section = re.search(r'^### Findings\s*\n(.*?)(?=^### |\Z)', body, re.M | re.S)
+    # Formatted reviews parse only the Findings section. Headerless historical
+    # reviews retain their strict priority-line parsing.
+    finding_lines = (section[1].splitlines() if section else
+                     [] if re.search(r'^### ', body, re.M) else body.splitlines())
+    for line in finding_lines:
         if not re.match(r'^\s*(?:\d+\.\s+)?(?:\*\*)?\[P[^\]]*\]', line):
             continue
         match = re.fullmatch(r'\d+\. \*\*\[P([0-3])\] (.+?)\*\* — `(.+?):\d+(?:-\d+)?`', line)
