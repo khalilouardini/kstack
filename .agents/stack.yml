@@ -35,7 +35,7 @@ review_gate:
 # Sol/high is normal. Astra/high is a first-review exception for high-risk paths;
 # use --model gpt-6-luna for an economy pass.
 review_model:
-  slug: gpt-6-sol
+  slug: gpt-6.1-sol
   effort: high
   escalated_slug: gpt-6-astra
   escalate_above_lines: null
@@ -45,6 +45,11 @@ review_model:
     - "bin/**"
     - "tools/github/**"
   escalated_effort: high
+
+# kstack has no GitHub CI; bin/check-stack runs locally as gates.lint/test.
+# pr-loop's CLEAN therefore reflects review findings only, and says so.
+ci:
+  checks: none
 
 identities:
   maintainer: khalilouardini
@@ -56,3 +61,9 @@ protected_branches:
 
 role_appendix_dir: null
 spec_output_dir: null
+
+# Missing/null rounds and concurrency use announced defaults, not host settings.
+wave:
+  max_review_rounds: 3  # three bounds unattended review; later rounds address fix interactions
+  review_concurrency: 1  # reviewer processes share one account quota window
+  contract_dir: null  # project-specific; refuse if shared literals need a contract

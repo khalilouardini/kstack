@@ -1,7 +1,7 @@
 ---
 name: next
-version: 0.2.0
-description: Read Linear — open issues, cycles, projects, milestones, deadlines, blockers — and decide what to work on next, gated against the consuming repo's scope doc. Default mode makes exactly ONE recommendation with a ranked top 3; --parallel [N] instead returns up to N mutually-independent issues as a batch, each with its own paste-ready kickoff — and its own branch and worktree when the track is engineering work. Read-only; never creates, closes, or reassigns an issue, and never invents one. Use when asked to "what should I work on next", "what's next", "pick my next ticket", "what can I run in parallel", or "/next [<milestone-id>|any] [--parallel [N]]". (kstack)
+version: 0.9.0
+description: Read Linear and recommend one scoped issue, or up to five independent tracks with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. Explicit flags accept a reviewed pending PR or a local graph. --accept-overlap accepts named PR file overlap. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
 # next — what to pick up now
@@ -9,7 +9,8 @@ description: Read Linear — open issues, cycles, projects, milestones, deadline
 ## When to invoke
 
 Someone needs to decide what starts now, and the tracker holds more open work
-than fits in one head. Invoke as `/next [<milestone-id>|any] [--parallel [N]]`.
+than fits in one head. Invoke as
+`/next [<milestone-id>|any] [--project "<name-or-id>"]... [--parallel [N]] [--accept-overlap <PR#>]... [--accept-graph-update <PR#>]... [--local-graph]`.
 Forward-looking;
 the complement to `triage`, which audits unfinished GitHub work backwards. Not
 for deciding whether a *new* idea is in scope (that is the `spec` pipeline's
@@ -31,6 +32,116 @@ set of things that can start *at once* without colliding." Same configuration,
 same contract gate, same blocker analysis; the output is a batch of up to N issues
 proven independent of each other instead of a single decision. Default N = 3. See
 **Parallel mode** below.
+
+## Project filters — `--project "<name-or-id>"` (repeatable)
+
+Read `tools/linear/next/references/project-resolution.md` from the physical
+stack root and follow it top to bottom, using **open issues** as the state
+restriction. If unreadable, stop. It owns argument validation, access/team
+resolution, canonical project-ID union, membership verification and pagination.
+
+With filters and no positional milestone (or `any`), consider each issue under
+**its own authorized milestone**; do not narrow the pool to the active milestone
+or let a winner seed one milestone. With an explicit positional milestone, apply
+it as an additional restriction across the selected projects. Project names are
+selection boundaries, **not scope authorization**: neither a release-looking
+name nor membership makes an issue IN. Map `projectMilestone.id` plus project ID
+to the scope doc's milestone and ratified IN line. If tracker milestones use a
+different vocabulary, use an explicit mapping in the scope/workspace contract;
+never equate a project with a milestone or guess from similar names. An issue
+with null or unresolved milestone is ineligible unless the contract explicitly
+assigns its scope to a milestone. Report unmapped issues and TBD/non-binding IN
+lists as unauthorized; fail closed if the mapping data could not be fetched.
+
+Without `--parallel` (including `--parallel 1`), project filters still yield one
+recommendation and at most two runners-up. With `--parallel`, select **one
+combined batch**, using the cross-project checks below. Without project filters,
+the existing single-milestone resolution remains unchanged.
+
+Examples:
+
+```text
+/next --project "Road to MVP-2" --project "MVP-2 stretch" --project "MVP 2.3" --parallel 5
+/next <milestone-id> --project "Road to MVP-2" --project "MVP-2 stretch" --parallel 3
+/next --project "<project-id>"                  # one recommendation
+/next any --parallel 3                        # legacy single-milestone batch
+/next <milestone-id>                          # legacy single recommendation
+```
+
+For focused offline validation, use [references/validation.md](references/validation.md).
+
+## Accepted file overlaps — `--accept-overlap <PR#>` (repeatable)
+
+The human may explicitly accept file overlap with named active PRs, expecting
+the implementer to resolve it by rebasing. This flag composes with default mode,
+`--parallel` (including 1), the milestone argument and repeated `--project` filters.
+
+**Validate every occurrence before any selection**, as with `--parallel N`.
+Each value must match `^[1-9][0-9]*$`, a positive decimal integer naming a PR
+in the consuming repository
+whose state is **OPEN at run time**. Missing, non-integer, zero, negative,
+nonexistent, closed or merged values → **refuse**, quoting the supplied value
+(or `<missing>`). Use `--accept-overlap 479`, without a leading `#`.
+Deduplicate PR numbers after validation. Read
+`tools/linear/next/references/pr-file-snapshot.md` from the physical stack root
+and follow it top to bottom with allowed state OPEN and refusal on unavailable,
+incomplete or unstable evidence. If unreadable, stop. Never infer acceptance
+from the file snapshot itself.
+Never infer acceptance from a prior run,
+tracker comment, PR title or graph decision.
+
+Its only effect is the active-work file comparison under **Selecting the
+tracks**: retain each candidate's exact overlapping files, but allow those
+overlaps with the named PR. It never waives blocking relations or dependency
+paths (criteria 1–2), an unmerged foundation (criterion 3), files shared by two
+candidates in the same batch (criterion 4), the scope gate or graph conditions.
+A candidate needing code from an accepted PR is still sequenced. A candidate
+whose own issue already has a live branch or PR is still `already active`.
+
+Default mode (including `--parallel 1`) keeps its existing ranking and blocker
+checks: the flag computes and reports intersections without adding an active-work
+file-collision test for #1. The existing concurrency checks still govern any
+parallel kickoff. An unrelated accepted PR cannot make #1 less eligible.
+
+For overlap reporting, **candidates means the scope-gated pool**, including
+sequenced and already-active issues, not OUT issues. Establish their file scopes
+for reporting; an unknown scope is `unverified`, not proof of no intersection,
+and does not add a new default-mode blocking check. Record each known overlap
+even when another check excludes that candidate. Report a named PR as **unused**
+only when every gated candidate has a concrete scope and none intersects its
+complete diff; otherwise report its unused status as **unverified**, naming the
+unknown scopes. Keep this report even when the selection is empty. Give each PR
+a line for its overlaps with sequenced/already-active candidates, including PRs
+also overlapping selected tracks. The full evidence list may exceed one screen;
+never truncate it to meet the output's usual size target.
+
+Direct `/next` and Codex's A1-only `/wave plan` render this report. The Workflow
+path preserves per-track overlaps in `PLAN.risks`; its unchanged SELECT/RUN_A
+schemas do not retain unused-PR or excluded-candidate overlap reports, including
+EMPTY runs. State that limitation in the checkpoint handoff. These rules are
+prompt-level selection rules, not tool restrictions.
+
+### Rebase policy for accepted overlaps
+
+Engineering implementation starts from the default branch. Never base on an
+accepted PR's branch or rebase onto its head. Before `land` Step 7 (gates before
+push), fetch: if the accepted PR has merged, rebase onto the fetched default
+branch and resolve the listed files. If it is still OPEN, keep the PR based on
+the default branch and list its number and overlapping files under **Pending
+overlap** in the PR body. Whichever PR merges second rebases onto the default
+branch and re-runs the gates before its merge. If it closes unmerged, the active overlap is gone.
+PLAN_ONLY records overlap as a plan risk and stops without a rebase; human
+actions touch no files and receive no rebase instruction.
+
+
+Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
+procedure. It replaces graph publication with fresh local indexed validation and
+candidate/closure admission; scope, native blockers, evidence, human decisions
+and plan/merge approvals remain mandatory. Forward this invocation's explicit
+flag and canonical owner/index/manifest pins through composed execution skills.
+Recheck the owner files before writes; never substitute an older dispatch-worktree
+copy. Changed pins require a new plan. Reject repeated local flags and mixed
+local/PR graph sources. No graph publication or extra tracker writes are granted.
 
 ## Configuration — read `.agents/stack.yml` first
 
@@ -70,7 +181,7 @@ case you are in if the user asks.
 
 | | `triage` | `next` |
 |---|---|---|
-| Source | GitHub — PRs, branches, worktrees | Linear — issues, cycles, projects |
+| Source | GitHub — PRs (default), branches/worktrees on request; optional Linear project selection | Linear — issues, cycles, projects |
 | Direction | Backward. What did we leave unfinished? | Forward. What should start now? |
 | Output | A scored roster of everything | One recommendation plus two runners-up — or, under `--parallel`, an N-track batch |
 
@@ -79,15 +190,10 @@ If the answer is "finish something already in flight," say so and hand off to
 
 ## Reaching Linear
 
-Two paths. Use whichever the harness offers; the reasoning below is identical.
-
-**Path A — MCP tools** (a host with the Linear connector). Use the `list_issues`,
-`list_cycles`, `list_projects`, `list_milestones`, `get_issue` tools. Prefer these
-when available.
-
-**Path B — GraphQL** (any harness without the connector). Needs `LINEAR_API_KEY`
-in the environment. Prefer the access contract in the file named by
-`workspace_contract` when it is present.
+For access and canonical team resolution, follow
+`tools/linear/next/references/project-resolution.md` (Access and team), including
+when no project filter was supplied. The connector may additionally need cycle
+and milestone reads for the ranking below.
 
 **The query must collect every field the ranking below consumes.** An earlier
 version fetched only active-cycle issues with priority and state, while steps 3–5
@@ -97,21 +203,27 @@ blocked by another ticket, lost to an apparently-unblocked cycle item and nothin
 in the output revealed the omission.
 
 Read **open issues across the team**, not just the active cycle, and paginate.
+With project filters, restrict the candidate queries to the resolved project IDs
+as well. Verify IDs and membership using the project-filter procedure; a connector
+name filter is not proof. Fetch blocking neighbors outside those projects (and
+outside the team when linked) to establish their state and transitive dependencies.
+The project union limits recommendations, not the dependency evidence.
 
-**Resolve the team first, and filter on it.** A state-only filter returns every
-team's open issues in a multi-team workspace, so an unrelated team's P1 can win
-the ranking and be handed back as your next ticket — the output looks identical
-either way. Take the team from the workspace contract (`workspace_contract` in
-`.agents/stack.yml`), or from `issue_prefix` resolved against `teams`. If the
-consuming team cannot be identified from either, **refuse this fallback** rather
-than ranking a workspace-wide result; say which key would have resolved it.
+Apply the resolved canonical team constraint to every candidate query. For
+the example below, resolve `TEAM_KEY` from that verified team; never use a
+workspace-wide state-only query.
 
 ```bash
-# TEAM_KEY resolved above — never run this query unscoped
+# Base query without project filters; TEAM_KEY resolved above — never unscoped
 curl -s https://api.linear.app/graphql \
   -H "Authorization: $LINEAR_API_KEY" -H "Content-Type: application/json" \
-  -d '{"query":"query($after:String,$team:String!){ issues(first:100, after:$after, filter:{team:{key:{eq:$team}}, state:{type:{nin:[\"completed\",\"canceled\"]}}}) { pageInfo { hasNextPage endCursor } nodes { identifier title priority estimate dueDate state { name type } assignee { name } cycle { name endsAt isActive } project { id name } projectMilestone { name targetDate } labels { nodes { name } } relations { nodes { type relatedIssue { identifier state { type } } } } inverseRelations { nodes { type issue { identifier state { type } } } } } } }","variables":{"after":null,"team":"'"$TEAM_KEY"'"}}'
+  -d '{"query":"query($after:String,$team:String!){ issues(first:100, after:$after, filter:{team:{key:{eq:$team}}, state:{type:{nin:[\"completed\",\"canceled\"]}}}) { pageInfo { hasNextPage endCursor } nodes { id identifier team { id key } title priority estimate dueDate state { name type } assignee { name } cycle { name endsAt isActive } project { id name } projectMilestone { id name targetDate } labels { nodes { name } } relations { nodes { type relatedIssue { identifier state { type } } } } inverseRelations { nodes { type issue { identifier state { type } } } } } } }","variables":{"after":null,"team":"'"$TEAM_KEY"'"}}'
 ```
+
+For project-filtered GraphQL reads, extend the base query with a project-ID
+variable/filter using the available schema, or run one ID-filtered query per
+resolved project and union the verified results. Do not run this team-only
+example unchanged and present it as a project-filtered query.
 
 Follow `pageInfo.hasNextPage` / `endCursor` until exhausted. `relations` gives
 what this issue blocks; `inverseRelations` gives what blocks it — you need both,
@@ -140,6 +252,98 @@ than useless.
    A milestone reading 100% means its issues are closed, which is not the same
    claim. Never quote milestone progress as evidence that something works.
 
+## Published graph coverage — required for Linear projects
+
+Before ranking or emitting any kickoff, resolve the physical stack root and read
+`tools/linear/linear-roadmap/references/publication-gate.md` there. Follow its
+fresh main coverage audit and separate candidate/closure eligibility checks,
+including legacy projects with no index. Report coverage counts and missing keys
+as project warnings. Rank otherwise eligible mapped candidates despite unrelated
+missing tickets. Selected unmapped maintenance work may prepare the bounded local
+reconciliation artifact; cite main SHA, full live evidence and exact delta in its
+kickoff. Scope/dependency/release/human changes need reviewed publication. Unknown
+selected main/live/closure evidence fails closed; exclude that candidate, not all
+independently verified work in its project.
+
+Accept repeatable --accept-graph-update <PR#> with the contract's positive-number,
+OPEN/main-base, reviewed exact-head, indexed validation and selected-closure checks
+before selection; unrelated coverage omissions remain warnings. It is
+independent of --accept-overlap and waives only main publication. Read the
+validated pending PR graph for condition analysis when accepted; do not relax
+indexed validation or the gates below. Report the main SHA, coverage and accepted
+PR/head/digest and candidate audit path/digests; carry the local delta and forward
+current invocation flags into every kickoff, including dispatch --plan-only and
+wave. Prior flags or local audit records are not consent or fresh evidence.
+
+## Project orchestration records — read-only
+
+Use a detached, read-only graph checkout at the exact main SHA validated above,
+or the exact accepted graph PR head for that project. Call it `<graph-checkout>`;
+verify its HEAD equals the coverage SHA. Read the index, manifest, root roadmap
+and human-decision table from that checkout. Never use the consuming working
+tree's unmerged graph for condition analysis. The sole exception is the bounded
+local maintenance manifest reconstructed from pinned main plus the recorded exact
+delta; validate its effective digest and origin closure under the shared contract.
+If the validated head or relevant evidence moves, repeat admission and condition
+analysis before a kickoff.
+
+When `<graph-checkout>/orchestration/index.json` exists, it is the sole active manifest index.
+Resolve this skill's physical canonical directory: follow the installed Claude
+symlink with `cd <installed-next-directory> && pwd -P`, or read Codex's generated
+pointer and use its canonical target. Obtain `<stack-root>` with
+`git -C <physical-next-directory> rev-parse --show-toplevel`. Read
+`<stack-root>/ORCHESTRATION.md` and the roadmap `references/contract.md` beneath
+that root, then run `python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <graph-checkout>/orchestration/index.json`. Unreadable,
+invalid or unsupported schemas and dirty lifecycle/roadmap source stop the
+covered-project recommendation. `source_revision` is adoption provenance;
+an installed HEAD mismatch alone never blocks selection or requires repinning.
+Absent index keeps the legacy procedure only where the root graph does not claim
+adoption. If the root claims adoption but lacks its index, stop recommendations
+for the affected projects until the index is repaired; never fall back around
+their graph conditions.
+
+Read the exact manifest named by the index. Cite the `sha256:<digest>` reported
+by indexed validation as its revision. Never combine additional files or infer
+readiness from Mermaid. A covered project's open issue without a kind `unit`
+matching its canonical UUID is UNMAPPED: require bounded verified local maintenance
+reconciliation or reviewed graph publication before a kickoff. A publication flag
+cannot waive executable mapping or closure evidence. Other node kinds can share
+issue references for context only.
+
+This analysis owns the read-only graph rehearsal. Use the state predicates in the
+contract: ACTIVE, HUMAN_REQUIRED, UNKNOWN, BLOCKED, PLAN_ONLY, READY_TO_BUILD and
+MERGE_BLOCKED. Scope authorization and the independence bar below still apply.
+A start prerequisite is **any edge targeting plan or build**, regardless of type.
+Native Linear blockers always target plan; step 4's native-blocker rule wins over
+a graph's build-only edge. An open native blocker excludes even a plan-only
+kickoff. Report conflicting representations as a named human decision.
+
+Check each event against fresh PR/default-branch, acceptance and human-decision
+evidence. Before a controller exists, read the root Human decisions table and its
+original scope decision-log entry or Linear comment, including authorized actor,
+UTC date, exact boundary and manifest digest. A changed graph/scope invalidates a
+decision unless its owner explicitly reaffirms it. Do not write approval records.
+Done, a draft/recorded field or structural validity is not completion evidence.
+
+Verified plan/native conditions with a false or unknown later build condition
+permit PLAN_ONLY in default mode. Its kickoff calls
+`/dispatch-implementation <id> --plan-only` only after the dispatcher's unchanged
+scope/lifecycle guards pass; it ends at a plan, with no code edits or PR. Name the
+unmet build event and source, and re-check it before any later implementation.
+READY_TO_BUILD gets the existing implementation kickoff, as does engineering
+work without an adopted graph. Later merge/release
+conditions never waive the scope or parallel-independence bar. The sole file
+exception is overlap with active work that the human named on the command line
+with `--accept-overlap`; the scope gate, graph conditions and independence
+between selected candidates still hold.
+
+PLAN_ONLY does not count toward N in `--parallel`. List it under Planning only,
+outside the selected implementation batch. For `/wave` selection, put these
+candidates in `sequenced` with the unmet condition/source, never SELECT.tracks;
+`--approve all` can therefore approve only the implementation-eligible batch.
+Use unresolved downstream conditions within the existing release/scope ranking;
+do not invent durations or a computed critical path. These rules are prompt-level.
+
 ## Procedure
 
 1. **Read the file named by `scope_doc`, in full, every run.** Do not answer from
@@ -159,7 +363,7 @@ than useless.
    If the document's structure disagrees with this table, **the document wins**
    and you say so.
 
-   **Resolve the target milestone** from the argument — a milestone id the scope
+   **Without project filters, resolve the target milestone** from the argument — a milestone id the scope
    doc defines, or `any` (whichever milestone the winning candidate serves). With
    no argument, the target is the **active** milestone: the earliest gate the
    decision log does not record as released. **A passed date does not advance it**
@@ -167,29 +371,35 @@ than useless.
    days to *that* gate; if it is negative, write `overdue by N days`, never "soon"
    or "coming up".
 
+   With project filters, resolve each candidate as described under **Project
+   filters**; only an explicit positional milestone restricts that union.
+
    A gate whose entry carries no date, or whose IN list the document marks as
    under redefinition or TBD, is reported as such rather than given an invented
    one.
 
 2. **Pull tracker state — all of it.** Every open issue on the team (not only the
-   active cycle), paginated to exhaustion, each carrying priority, estimate,
+   active cycle), restricted to the verified project union when filters are set, paginated to exhaustion, each carrying priority, estimate,
    state, assignee, due date, cycle, **project, project milestone and its target
    date, and both directions of its blocking relations**. Verify the filter
    actually applied (trap 1). If any of those inputs is missing, fail closed per
    "Reaching Linear" rather than ranking on what arrived.
 
-   **Under `--parallel`, this field set is not sufficient** — criterion 4 of the
-   concurrency bar needs `description`, `parent`, `children`, and branch/PR
+   **Under `--parallel`, this field set is not sufficient**
+   — criterion 4 of the concurrency bar needs `description`, `parent`, `children`, and branch/PR
    evidence per candidate, which the base query above does not request. Fetch them
-   before computing a batch, and fail closed if they are unavailable. Default mode
-   does not need them, which is why they are not in the base query.
+   before selection, and fail closed if they are unavailable. Default mode does
+   not add this selection requirement. With `--accept-overlap`, fetch concrete
+   scopes for overlap reporting; mark missing scopes unverified as defined above.
 3. **Gate each candidate against the contract.** An issue that does not trace to a
-   line in the target milestone's IN list is not that milestone's next step
+   line in its resolved milestone's IN list is not that milestone's next step
    regardless of its tracker priority. **When tracker priority and contract scope
    disagree, say so loudly** — that disagreement is usually the most useful thing
    on the screen, because it means the board has drifted from what was ratified.
 4. **Check blockers before recommending.** If the strongest candidate is blocked,
-   recommend *the unblocking work* instead and name what it releases. Two kinds:
+   recommend *the unblocking work* instead and name what it releases, only if
+   that work passes the same project/team and scope gate. Otherwise report the
+   external prerequisite without making it a selected track. Two kinds:
 
    - **Linear blocking relations**, from `inverseRelations` — authoritative, since
      the board maintains them.
@@ -216,7 +426,11 @@ than useless.
    If a row cannot be verified, say so and rank without it rather than assuming it
    still holds. Report any row found stale — that is a finding about the contract,
    and it is worth more than the recommendation it changed.
-5. **Prefer work that unblocks other work**, then work on the critical path, then
+5. **With project filters, prefer authorized active release work** over later or
+   stretch work: derive active/unreleased gates from the scope doc and decision
+   log, not project names or passed dates. Within that release tier, prefer work
+   that unblocks other work, then the critical path, then the rest. Without
+   filters, **prefer work that unblocks other work**, then work on the critical path, then
    everything else. A two-hour task that releases four tickets beats a one-day
    task that releases none.
 6. **Non-engineering items count.** If the binding constraint is "nobody has asked
@@ -238,7 +452,7 @@ batch. Above **5**, clamp to 5 and say the clamp applied: more concurrent
 worktrees than that cannot be supervised by one person, and the batch stops
 fitting the one-screen ceiling the output section is built around.
 
-### Resolving `any` for a batch
+### Resolving `any` for a batch without project filters
 
 `any` is defined in step 1 as "whichever milestone the winning candidate serves,"
 and parallel mode has no winning candidate — so that definition does not survive
@@ -246,7 +460,7 @@ the composition `/next any --parallel 3` unaided. Left undefined it is circular:
 the target milestone must be known to gate candidates, but it would depend on a
 candidate chosen after gating.
 
-**A parallel batch is always single-milestone.** Under `any`, resolve the
+**Without project filters, a parallel batch is always single-milestone.** Under `any`, resolve the
 milestone *before* selecting tracks: gate every candidate against each milestone's
 IN list, rank the gated candidates by step 5's preference, and take the milestone
 the top-ranked one serves. The batch is then drawn from that milestone alone, and
@@ -256,23 +470,51 @@ choice was made on their behalf.
 
 This is the one place the top-ranked candidate does seed something, and it is not
 the batch — it fixes the *scope*, after which cardinality is maximized within that
-scope exactly as below. A batch spanning two milestones is never emitted: the
+scope exactly as below. Without project filters, a batch spanning two milestones is never emitted: the
 output cannot describe it in one gate line, and "these five things are next" across
 two different gates is not a decision anyone can act on.
 
 **Configuration and steps 1–4 of the Procedure are unchanged.** Read
 `.agents/stack.yml`, read the file named by `scope_doc` in full, pull tracker state
-to exhaustion, gate every candidate against the target milestone's IN list, verify
+to exhaustion, gate every candidate against its resolved milestone's IN list (one target
+without project filters, per issue with them), verify
 both kinds of blocker. Parallel mode changes what happens *after* the gating, never
 the gating itself, and the hard read-only rule above covers it unchanged.
 
 ### Selecting the tracks
 
-From the gated, unblocked candidates, select the **largest mutually-independent
+Before selection, read active work across the repository, including open PRs and
+linked branches, local worktrees, and available session/ownership evidence, even
+when their issues lie outside the requested projects. Remove already active issues
+from the fresh-track pool; report resume/review instructions separately. Treat
+active work as a fixed concurrency constraint: a new track must also have no
+blocking dependency, unaccepted shared file, or unmerged foundation with it.
+Fetch real diffs
+and establish concrete scopes; if relevant active scope or ownership cannot be
+verified, sequence the affected candidate instead of declaring it independent.
+Do not use assignee or In Progress alone as proof of a live session.
+
+For each candidate and each accepted PR, intersect the candidate's concrete
+file scope with that PR's live diff and record the exact overlapping paths.
+Exclude only that candidate/accepted-PR intersection from the active-work file
+collision test. Do not remove accepted paths from candidate scopes or globally
+subtract them from active work: the same file in an unaccepted PR or other
+active work still sequences the candidate. Linked branch/worktree scope is
+covered only where verified as belonging to the accepted PR's live diff;
+additional or unverified active scope keeps the existing fail-closed rule.
+Default mode uses these intersections for reporting and for its existing
+parallel-kickoff checks; it adds no active-work file bar for #1. Criteria 1–3
+remain unchanged against accepted PRs, and criterion 4
+still forbids all file overlap between candidates selected in the same batch.
+
+From the gated, unblocked, inactive candidates, select the **largest mutually-independent
 set of size ≤ N** — maximum cardinality, not merely a set nothing can be added
 to. Step 5's preference (work that unblocks other work first, then the critical
 path, then the rest) breaks ties **among the batches that are already largest**;
-it does not choose the first track and let the rest fall out around it.
+it does not choose the first track and let the rest fall out around it. With
+project filters, compare equal-size batches first by the number of authorized
+active-release tracks, then by step 5's remaining preferences. Later work fills
+spare capacity only when independent; do not reserve one slot per project.
 
 The distinction is not pedantic, and greedy-by-priority gets it wrong. If the
 highest-priority candidate A collides with both B and C while B and C are
@@ -285,7 +527,8 @@ that trade is the reader's to see.
 
 Independence must hold **pairwise across every pair in the batch**, not merely
 between each candidate and the top-ranked one. Three tracks is three pairs; four is
-six. Checking each track only against track 1 is the failure this mode is most
+six; five is ten. These checks cross project and milestone boundaries as well.
+Checking each track only against track 1 is the failure this mode is most
 likely to ship, because the output reads identically either way and the collision
 does not surface until merge.
 
@@ -300,12 +543,15 @@ A pair is independent only when all four hold:
    underfill — which silently defeats the cardinality rule above. Related and
    duplicate edges are **context**: read them, mention them if they matter, never
    let them block.
-2. **No dependency edge between them**, in either direction — again blocking type
-   only, by the same reasoning.
+2. **No dependency path between them**, direct or transitive in either direction — again blocking type
+   only, by the same reasoning. Follow blocking neighbors outside the selected
+   projects too; missing relation pages or neighbor state cannot prove independence.
 3. **No shared not-yet-merged foundation.** Two issues stacked on the same open PR
    are not independent: a stacked PR's `MERGED` state proves nothing about the
    default branch, because the base can merge out from under it and strand the
-   code off it.
+   code off it. Verify required foundation code is reachable from the current
+   default branch; an open/unmerged foundation blocks starting even one dependent
+   track. Do not substitute a stacked PR's merged label for reachability.
 4. **Scopes isolatable in separate worktrees**, with no overlap in the files each
    will touch — and **this one has to be proven from evidence you actually
    fetched**, which the base query does not provide. An unstarted issue has no
@@ -340,10 +586,16 @@ If none passes, say so and name what they are all waiting on.
 Every rule in **Agent handoff** applies per track, and one paragraph per issue
 still means one paragraph per issue. Additionally:
 
-- **Each *engineering* track names its own branch and its own worktree.** Several
+- **Each *engineering* track names its own branch and its own distinct worktree
+  path in the kickoff.** Several
   agent sessions in one working directory is the concurrency hazard this mode
   exists to manage, not to create. A fresh worktree may need the repo's install
   step re-run before its checks pass.
+- **With the flag, each engineering track carries its actual accepted overlaps
+  in its kickoff:** PR number, title, author and exact overlapping files. For
+  READY_TO_BUILD or graphless implementation, include the **Rebase policy for
+  accepted overlaps** above. PLAN_ONLY lists risks without a rebase step;
+  human actions omit this clause. No overlap means no extra kickoff instruction.
 - **A non-engineering track keeps its human execution kickoff and gets no git
   artifacts.** Step 6 of the Procedure holds here unchanged: if the binding
   constraint is "nobody has asked the customer who gets logins," that is real work
@@ -372,7 +624,8 @@ still means one paragraph per issue. Additionally:
   `Sequenced instead` for lacking a file scope to compare.
 
   **Gating and rendering.** It is gated like everything else: it enters the batch
-  only if it traces to a line in the target milestone's IN list. That it has no
+  only if it traces to a line in its resolved milestone's IN list. With project filters, record its
+  project and milestone from the contract; do not assign it to a project by guess. That it has no
   tracker issue is not a defect to paper over — it is the finding the Rules section
   already requires ("a contract IN line with no tracker issue is a finding"), so
   surface it. It has no identifier and no estimate, and **inventing either would
@@ -381,21 +634,28 @@ still means one paragraph per issue. Additionally:
   no branch, no worktree. Propose the title; never create the ticket.
 - **An issue already owned by a live branch or PR is not a new track.** Mark it
   `already active` and hand off a resume instruction instead.
-- Each **engineering** kickoff still ends with: open a PR, do not merge, do not
-  mark the issue complete.
+- Each **READY_TO_BUILD or graphless engineering** kickoff ends with: open a PR, do not merge,
+  do not mark the issue complete. PLAN_ONLY uses the plan-only variant below and
+  is listed outside the N selected implementation tracks.
 
 ## Agent handoff
 
 After ranking, write a paste-ready kickoff for the recommended work — one
 paragraph a person can paste straight into a fresh coding-agent session (Claude
-Code, Codex, whichever host they drive). This is an execution handoff, not a
-second recommendation.
+Code, Codex, whichever host they drive). This handoff follows the readiness state; it is not a second recommendation.
 
 - Write **one short paragraph for the #1 issue**. Use its tracker outcome and
   acceptance criteria, the contract boundary, known prerequisites, the relevant
-  validation, and the instruction to open a PR without merging or marking the
-  issue complete. Do not invent implementation scope that the tracker does not
-  contain.
+  validation, and, for READY_TO_BUILD or graphless engineering, the instruction to open a PR without
+  merging or marking the issue complete. For PLAN_ONLY, use: "Run
+  `/dispatch-implementation <id> --plan-only`, honoring its scope/workspace rules.
+  Produce the acceptance-cited plan and stop. No implementation or PR; build waits
+  for <event, unmet condition, source>." Do not invent scope.
+- With the flag and actual file overlap, carry this engineering issue's PR
+  number, title, author and exact overlapping files in the paragraph. Include
+  the **Rebase policy for accepted overlaps** for READY_TO_BUILD or graphless
+  implementation. PLAN_ONLY carries plan risks without a rebase step; human
+  actions omit this clause. Apply the same rule to every parallel kickoff.
 - If #1 is already genuinely active, tell the agent to resume the named branch or
   PR instead of creating a duplicate session. If #1 is non-engineering, write an
   execution kickoff for the human action; do not manufacture an agent task or a
@@ -417,9 +677,17 @@ under `--parallel` the batch *is* the answer and there is no #1.
 
 ## Output
 
-Short. The whole point is that it fits in one screen.
+Keep the recommendation short, normally one screen. The full accepted-overlap
+evidence list is the explicit exception; preserve every entry.
 
-Every milestone-dependent field below is **derived from the resolved milestone**,
+With the flag, the **Accepted overlaps** list names every selected engineering
+track (and each default-mode parallel kickoff), with each PR's number, title,
+author and exact overlapping files; write `none` when its scope is verified and
+does not overlap, or `unverified` for an unknown scope. Include unused/unverified
+accepted PRs and overlaps with sequenced/already-active candidates, even when no
+track is selected. Omit this list when the flag is absent and omit human actions.
+
+Every milestone-dependent field below is **derived from the issue's resolved milestone**,
 never written literally. Under an explicit milestone argument the gate line
 carries whatever the scope doc states for *that* milestone — including "scope and
 date TBD, under redefinition" while such a banner stands — and cites its IN-list
@@ -434,14 +702,21 @@ the right issue.
 **Why this one:** <two sentences. The contract line it serves, and what it
 unblocks or de-risks.>
 
-**Gate:** <MILESTONE> (<gate date>, N days) · **Contract:** <section, as the doc numbers it>
+**Project:** <project name and ID> · **Gate:** <MILESTONE> (<gate date>, N days) · **Contract:** <section, as the doc numbers it>
+**Readiness:** <READY_TO_BUILD / PLAN_ONLY / ACTIVE; omit when no graph>
+**Graph:** <manifest path, sha256 revision, condition source; omit when no graph>
 **Size:** <tracker estimate, or "unestimated — treat as unknown">
 **Blocked by:** <nothing / what, and whether that is also worth doing first>
 
 **First action:** <one concrete thing doable in under 30 minutes>
 
-**Kickoff:** <one short, paste-ready paragraph for #1; use "Execution kickoff"
-instead when #1 is non-engineering>
+**Accepted overlaps** (omit when `--accept-overlap` is absent):
+- `<selected/kickoff issue id>` — PR #<number> — <title> — @<author>: <exact overlapping files; implementation rebase policy / PLAN_ONLY risk> (or `none` / `unverified`)
+- PR #<number> — <title> — @<author>: <sequenced/already-active candidate ids and exact overlapping files, even if also selected elsewhere>
+- PR #<number> — <title> — @<author>: unused — no gated-candidate overlap, all scopes verified (or unused status unverified — <unknown scope ids>)
+
+**Kickoff:** <implementation paragraph for READY_TO_BUILD or graphless engineering; plan-only paragraph
+with unmet build condition for PLAN_ONLY; human action when non-engineering>
 
 ---
 
@@ -471,7 +746,12 @@ three deserve mention, the board needs grooming and that is itself the finding.
 ### Parallel mode output
 
 Used only under `--parallel`, and only when at least two tracks passed the bar.
-Same one-screen ceiling; every milestone-derived field works identically.
+Same one-screen ceiling; every milestone-derived field works identically. With
+project filters, replace the shared Gate/Contract line with a Projects line listing
+the resolved name/ID pairs, and render **Project, Milestone, Gate, and Contract
+separately on every track**, including human actions. Never label a mixed batch
+with one shared gate or date. A single-track collapse uses that track's own fields;
+runner-up lines also name their project and milestone when filters are supplied.
 
 ```
 ## Parallel batch: <k> tracks (<N> requested, <k> passed the bar)
@@ -479,22 +759,38 @@ Same one-screen ceiling; every milestone-derived field works identically.
 **Gate:** <MILESTONE> (<gate date>, N days) · **Contract:** <section, as the doc numbers it>
 
 **Track 1 — `<id>` <title>**
-<size> · <contract section> · branch `<name>`, own worktree
+Project: <name, ID> · Milestone: <name, ID> · Gate: <date/TBD/overdue>
+Readiness: READY_TO_BUILD · Graph: <path, sha256 revision, condition source; omit without graph>
+<size> · <contract section> · branch `<name>`, worktree `<distinct path>`
 <one short paste-ready kickoff paragraph, this issue only>
 
 **Track 2 — `(no issue)` <one-line action>**          ← untracked human action
+Project: <contract assignment> · Milestone: <contract assignment> · Gate: <date/TBD/overdue>
 untracked human action · <contract section> · no branch, no worktree
 Proposed issue title: "<title>" — not created.
 Independent because: <the one sentence from criterion 2 above>
 <one short execution kickoff paragraph for the person>
 
 **Track 3 — `<id>` <title>**
-<size> · <contract section> · branch `<name>`, own worktree
+Project: <name, ID> · Milestone: <name, ID> · Gate: <date/TBD/overdue>
+Readiness: READY_TO_BUILD · Graph: <path, sha256 revision, condition source; omit without graph>
+<size> · <contract section> · branch `<name>`, worktree `<distinct path>`
 <one short paste-ready kickoff paragraph, this issue only>
 
 **Sequenced instead** (passed the contract gate, failed the concurrency bar):
 - `<id>` — <the concrete collision: the file it shares with track M, the
   dependency edge, or the unmerged base it stacks on>
+
+**Planning only** (outside N, no implementation or PR):
+- `<id>` — PLAN_ONLY — <manifest sha256, unmet build condition/source>
+  <plan-only kickoff using /dispatch-implementation --plan-only; stop at plan>
+
+**Already active:** <issue, project, milestone, branch/PR, resume or review action>
+
+**Accepted overlaps** (omit when `--accept-overlap` is absent):
+- `<selected engineering track id>` — PR #<number> — <title> — @<author>: <exact overlapping files; implementation rebase policy> (or `none` / `unverified`)
+- PR #<number> — <title> — @<author>: <sequenced/already-active candidate ids and exact overlapping files, even if also selected elsewhere>
+- PR #<number> — <title> — @<author>: unused — no gated-candidate overlap, all scopes verified (or unused status unverified — <unknown scope ids>)
 
 **Integration order:** <which track's PR should land first, and why; "independent,
 any order" is a valid answer>
@@ -549,7 +845,11 @@ integration-order preference.
 - **Do not duplicate active work.** A live branch or PR gets a resume/review
   instruction, not another agent session.
 - **Every milestone-dependent field is derived.** Gate name, gate date, days
-  remaining, and contract section all follow the resolved milestone.
+  remaining, and contract section all follow each issue's resolved milestone.
+- **Project filters form one union; authorization stays per issue.** Resolve IDs,
+  verify membership, and check every pair across all projects and active work.
+- **Indexed graph conditions supplement the contract.** Check event evidence,
+  preserve human gates and distinguish plan-only from implementation readiness.
 - **Fail closed on incomplete tracker state.** Name the missing input rather than
   ranking on a subset.
 - **Never invent a ticket.** If the right next step has no tracker issue, say

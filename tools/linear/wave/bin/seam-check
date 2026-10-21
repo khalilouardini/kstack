@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Assert literal agreement in changed files at each branch tip; emit a JSON table."""
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--contract', required=True)
+    p.add_argument('--repo', required=True)
+    p.add_argument('--base', required=True, help='Fetched default branch ref')
+    p.add_argument('--branches', nargs='*', default=[])
+    a = p.parse_args()
+    table = []
+
+    def error(branch, file, evidence, literal=''):
+        table.append(dict(literal=literal, branch=branch, file=file,
+                          state='ERROR', evidence=evidence))
+
+    def git(*argv):
+        return subprocess.run(['git', '-C', a.repo, *argv], capture_output=True)
+
+    try:
+        if not a.branches:
+            raise ValueError('empty branch list')
+        entries = json.loads(Path(a.contract).read_text())
+        if not isinstance(entries, list) or not entries:
+            raise ValueError('contract must be a non-empty JSON list')
+        for entry in entries:
+            if (not isinstance(entry, dict) or set(entry) != {'literal', 'files'}
+                    or not isinstance(entry['literal'], str) or not entry['literal']
+                    or '\n' in entry['literal'] or '\r' in entry['literal']
+                    or not isinstance(entry['files'], list) or not entry['files']
+                    or any(not isinstance(f, str) or not f or f.startswith('/')
+                           or '..' in Path(f).parts for f in entry['files'])):
+                raise ValueError('invalid contract entry (single-line literal and relative files required)')
+        base = git('rev-parse', '--verify', '--end-of-options', a.base + '^{commit}')
+        if base.returncode:
+            raise ValueError('missing default branch: ' + a.base)
+        base_sha = base.stdout.decode().strip()
+        for branch in a.branches:
+            tip = git('rev-parse', '--verify', '--end-of-options', branch + '^{commit}')
+            if tip.returncode:
+                error(branch, '', 'Missing branch: ' + branch)
+                continue
+            tip_sha = tip.stdout.decode().strip()
+            changed = git('diff', '--no-renames', '--name-only', '-z', base_sha + '...' + tip_sha, '--')
+            if changed.returncode:
+                error(branch, '', changed.stderr.decode(errors='replace'))
+                continue
+            files = set(changed.stdout.decode().split('\0'))
+            for entry in entries:
+                for file in entry['files']:
+                    if file not in files:
+                        table.append(dict(literal=entry['literal'], branch=branch, file=file,
+                                          state='UNCHANGED', evidence='Not changed relative to merge base'))
+                        continue
+                    found = git('grep', '-F', '-n', '-e', entry['literal'], tip_sha,
+                                '--', ':(literal)' + file)
+                    state = 'PASS' if found.returncode == 0 else 'MISMATCH' if found.returncode == 1 else 'ERROR'
+                    table.append(dict(literal=entry['literal'], branch=branch, file=file,
+                                      state=state, evidence=found.stdout.decode(errors='replace').strip()
+                                      or found.stderr.decode(errors='replace').strip()
+                                      or 'Literal absent at branch tip (including deleted file)'))
+    except (OSError, ValueError, TypeError) as exc:
+        error('', a.contract, str(exc))
+    print(json.dumps(table, indent=2))
+    return int(any(r['state'] in ('MISMATCH', 'ERROR') for r in table))
+
+
+if __name__ == '__main__':
+    sys.exit(main())

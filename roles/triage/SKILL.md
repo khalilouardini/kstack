@@ -1,7 +1,7 @@
 ---
 name: triage
-version: 0.2.0
-description: Score every open PR, unmerged branch, and worktree against the consuming repo's scope doc and propose MERGE / REBASE+MERGE / CLOSE / PARK for each, with every verdict citing a scope-doc line. Read-only — writes one dated proposal file and never closes, merges, deletes, or pushes. Use when asked to "triage the backlog", "clean up the open PRs", "which branches can we delete?", or "/triage [prs|branches|worktrees|all] [--label <name>]". (kstack)
+version: 0.3.1
+description: Score open work against scope and report PR intent, merge/CI, review-loop evidence and unresolved threads. Default PR-only; optional repeated project and label filters. Read-only proposal; never reviews, merges or closes. Use when asked to "triage the backlog", "clean up the open PRs", "which branches can we delete?", or "/triage [prs|branches|worktrees|all] [--project <name-or-ID>]... [--label <name>]...". (kstack)
 ---
 
 # triage — score the backlog against the scope contract
@@ -11,32 +11,34 @@ description: Score every open PR, unmerged branch, and worktree against the cons
 The repo has accumulated more open work than anyone can hold in their head —
 open PRs, unmerged branches, stale worktrees — and someone needs a defensible
 disposition for each one. Invoke as
-`/triage [prs|branches|worktrees|all] [--label <name>]` (default `prs`). This
-skill produces **a proposal**; it never executes it. Not for deciding whether a
-*new* idea is in scope (that is the `spec` pipeline), and not for picking what
-to work on next.
+`/triage [prs|branches|worktrees|all] [--project "<name-or-ID>"]... [--label <name>]...`
+(default `prs`). This skill produces **a proposal**; it never executes it. Not
+for deciding whether a *new* idea is in scope (that is the `spec` pipeline), and
+not for picking what to work on next.
 
-### `--label` — scoring a subset
+### Filters — PR selection only
 
-`--label <name>` narrows the PR pass to PRs carrying that label; repeat the flag
-to require several (`gh` ANDs them). Use it when the backlog is already
-partitioned by a milestone label and only one partition is being decided.
+`--label <name>` requires that GitHub PR label; repeated labels are an **AND**.
+`--project "<name-or-ID>"` selects PRs implementing or explicitly attached to
+verified Linear project issues; repeated projects are a **union**. Both together
+mean **(project A OR project B) AND label X AND label Y**. Reject empty/missing
+values before access. A project name is never substituted with a GitHub label.
 
-Two consequences, both of which the proposal must carry rather than absorb
-silently:
+When the invocation includes a PR pass and `--project`, read
+`references/project-filter.md` and follow it top to bottom; if unreadable, stop. Without `--project`, use GitHub only: no Linear access or
+credentials are required. For `branches` or `worktrees` alone, disclose the unused
+PR filters and skip PR selection and tracker access. This scope-role skill
+remains in `roles/`: optional tracker access uses CONVENTIONS.md §1's capability
+exception. Missing Linear access on that path
+refuses the requested project pass with missing evidence; it never broadens to
+an unfiltered or label-only proposal. An explicit later invocation without
+`--project` can still deliver the core GitHub proposal.
 
-- **The completeness promise weakens.** Unfiltered, this skill promises a
-  disposition for *every* open PR. Filtered, it promises one for every PR in the
-  filter, and the proposal must say so in its header along with how many were
-  excluded (Step 5). A filtered proposal that does not name its filter is
-  indistinguishable from a full one a month later, and will be read as one.
-- **It filters PRs only.** Branches and worktrees carry no labels. Under
-  `branches`, `worktrees`, or `all`, the flag applies to the PR pass and to
-  nothing else — say that in the proposal rather than letting an unfiltered
-  branch table sit under a filtered header.
-
-This is a filter on *which* work is scored, never on *how* it is scored. Every
-verdict still cites a scope-doc line.
+Always state the exact inputs, canonical project/team IDs if used, measured
+unfiltered total, scored count and excluded count. A zero-match filter is a valid
+empty proposal, with its filters visible. Filters affect **only the PR pass**;
+branch/worktree passes, when requested, cover everything and are disclosed
+separately. Filtering changes which work is scored, never its scope criteria.
 
 ## Configuration — read `.agents/stack.yml` first
 
@@ -52,23 +54,38 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   declaration (this project has no protected class) — say so explicitly in the
   proposal, so the absence is visible rather than silent.
 - **`spec_output_dir`** — the proposal is written to its **parent** directory as
-  `triage-<YYYY-MM-DD>.md`. Missing or null → **ask the user** where to write
-  it; do not guess a docs path.
+  `triage-<YYYY-MM-DD>.md` (collision handling in Step 5). Missing or null →
+  **ask the user** where to write it; do not guess a docs path.
+- **`identities.maintainer`, `identities.reviewer`, `identities.implementer`,
+  `ci.checks`** — read for
+  status interpretation using the referenced review/CI contracts. Missing keys
+  make the affected assessment **UNKNOWN**, naming the key; they do not turn
+  zero findings into clearance or stop unrelated scope scoring. This is the
+  explicit **Triage reporting exception** in CONVENTIONS.md §2, not pr-loop's
+  configuration refusal policy; it authorizes no gate or external action.
+- **`workspace_contract`, `issue_prefix`** — used only with `--project`, through
+  the referenced project-filter procedure. No tracker configuration is needed
+  without that flag.
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
 ## Hard rule: read-only
 
 > **Never run `gh pr close`, `gh pr merge`, `gh pr edit`, `git branch -d`,
-> `git worktree remove`, `git push`, or any other mutating command.**
+> `git worktree remove`, `git push`, or any other external-state mutation.**
+
+Never invoke `/pr-loop`, a paid reviewer, `/review-claude-pr`, or
+`/review-comments`; never post a review/comment, reply, resolve a thread, edit
+Linear, or execute a verdict. Reading their contracts below grants no execution
+permission. Only session scratch and the proposal file may be written.
 
 Closing someone's PR is outward-facing and hard to reverse — a closed PR loses
 its review thread's place in the maintainer's attention even though the commits
 survive. You write the proposal file and stop. The maintainer executes, or asks
 you to execute a named subset after reading it.
 
-This holds even if the proposal is obviously correct, and even if asked to
-"just clean it up" — confirm the specific list first.
+This holds even if the proposal is obviously correct or the request says
+"just clean it up". Stop with a reviewable list of actions.
 
 **Enforcement honesty:** this is **prompt-level**. Nothing in the harness blocks
 a mutating `gh` or `git` call; the contract asks, and the proposal file is the
@@ -82,19 +99,36 @@ tool-list-enforced; say which case you are in if the user asks.
 week and a stale figure in a proposal is a claim you cannot support:
 
 ```bash
-DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
-# --limit is a cap with no truncation signal, so a repo at or above it reports
-# the cap as if it were the count. Ask for more than could exist, then assert.
-gh pr list --state open --limit 1000 --json number \
-  | python3 -c 'import json,sys;d=json.load(sys.stdin);n=len(d);print(n,"open PRs");sys.exit(1) if n>=1000 else None' \
-  || echo "TRUNCATED — raise the limit and re-measure before reporting any count"
-git branch --no-merged "$DEFAULT_BRANCH" | wc -l   # unmerged local branches
-git worktree list | wc -l                          # worktrees
+DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name) || exit 1
+SCRATCH=$(mktemp -d) || exit 1  # private to this run
+# Flatten all pages; retain errors and fail closed on an incomplete inventory.
+gh api --paginate --slurp 'repos/{owner}/{repo}/pulls?state=open&per_page=100' \
+  > "$SCRATCH/open-pages.json" || exit 1
+python3 - "$SCRATCH/open-pages.json" <<'PY' || exit 1
+import json, sys
+pages = json.load(open(sys.argv[1]))
+if not isinstance(pages, list) or not pages or not all(isinstance(p, list) for p in pages):
+    sys.exit("UNKNOWN inventory: expected a non-empty array of PR-list pages")
+rows = [row for page in pages for row in page]
+if not all(isinstance(row, dict) and type(row.get("number")) is int and row["number"] > 0 for row in rows):
+    sys.exit("UNKNOWN inventory: invalid PR records")
+print(len(rows), "open PRs")
+PY
+git branch --no-merged "$DEFAULT_BRANCH" | wc -l
+git worktree list --porcelain | sed -n '/^worktree /p' | wc -l
 ```
 
-Report the counts you measured, dated. Measure the **whole** backlog here even
-when `--label` was passed — the unfiltered total is what the excluded count in
-the proposal header is computed against.
+Check exit status and API/GraphQL errors, including errors alongside partial
+data, before consuming any result. Do not pipe an unsuccessful fetch into a
+successful count. Exhaust pagination with advancing cursors/links; a cap or
+missing page is **UNKNOWN**, never an empty backlog. If the inventory cannot be
+completed, report the missing evidence and stop the PR proposal; independent
+requested branch/worktree findings can still be reported separately.
+
+Date the measurements and record the repo/default branch. Count the whole open
+PR inventory even with filters. Counts describe this inventory timestamp; retain
+and disclose any later CLOSED/MERGED transitions instead of silently dropping
+rows. Branch/worktree counts are measurements, not a scored pass by default.
 
 > **Worked example (OGUR).** On 2026-08-04, when this procedure was first
 > written, that was 27 open PRs (oldest untouched since April), 80 unmerged
@@ -122,52 +156,31 @@ If the scope doc has no recognisable NOT list, say so — a scope contract that
 only says yes cannot produce a `CLOSE`, and that is a finding about the
 document, not about the backlog.
 
-## Step 2 — cheap metadata pass
+## Step 2 — metadata and evidence for every scored PR
 
-Do not read every diff. Get the facts first, in one call:
+Select from the complete inventory, applying the project procedure when
+requested and all requested labels. Deduplicate by repository and PR number.
+Record selection evidence and exclusions before scoring. Do not infer project
+membership from a prerequisite mention.
 
-```bash
-# --limit is a CAP, not a page size: gh silently returns the first N and says
-# nothing about the rest. A repo with 101+ open PRs would produce a proposal
-# that claims to cover every open PR while omitting the remainder from every
-# bucket and every total. Ask for more than could exist, then assert.
-# LABEL_ARGS is empty unless --label was passed; one `--label <name>` per flag.
-LABEL_ARGS=()   # e.g. LABEL_ARGS=(--label MVP2)
-gh pr list --state open --limit 1000 "${LABEL_ARGS[@]}" \
-  --json number,title,isDraft,headRefName,updatedAt,additions,deletions,mergeable,statusCheckRollup \
-  > /tmp/triage-prs.json
-SCORED=$(python3 -c 'import json;print(len(json.load(open("/tmp/triage-prs.json"))))')
-echo "open PRs fetched: $SCORED (filter: ${LABEL_ARGS[*]:-none})"
-```
+Read `references/pr-status.md` once with the file-reading tool and follow it
+top to bottom for **every** scored PR, including `CLOSE` and `PARK`. If unreadable,
+stop. Collect body, complete changed files, state/head/base, CI,
+all reviews/threads/replies and available loop reports. This is evidence
+collection, not a fresh review. Missing status evidence is reported as UNKNOWN
+with its error; keep known facts and do not manufacture zeros.
 
-If `SCORED` equals the limit you passed, assume the list was truncated: raise the
-limit and re-run, or **fail closed and disclose the cap** in the proposal. Never
-report bucket totals over a subset while promising a disposition for every open
-PR.
-
-Assert against the **filtered** count, not the whole-backlog total from Step 0 —
-a filter that returns 1000 rows is as truncated as an unfiltered one, and the
-Step 0 number would not reveal it.
-
-If `--label` was passed, record `SCORED` and the Step 0 total now; both go in the
-proposal header. `SCORED` of zero is a result, not a failure: write the proposal
-with an empty disposition set and say which label matched nothing, because the
-likeliest cause is a misspelled label rather than an empty partition.
-
-Then bucket mechanically, before any judgement:
-
-- **Stale** — no update in >30 days. Age is not a verdict, but it is evidence: a
-  PR nobody touched in three months is a PR nobody needs.
-- **Huge** — >5,000 lines changed. These are usually data snapshots or generated
-  artifacts, not reviewable features, and they need a different disposition than
-  code PRs.
-- **Conflicted** — `mergeable` is `CONFLICTING`.
-- **Red** — failing checks.
+Bucket mechanically before judgement: stale (>30 days without an update), huge
+(>5,000 changed lines), conflicted (`mergeable=CONFLICTING`), red (failing checks).
+These are prompts for inspection, never verdicts by themselves.
 
 ## Step 3 — classify
 
-Read titles and branch names first. Only open the diff for PRs you cannot
-classify from metadata — typically fewer than a third of them.
+Read the current body and actual changed files for intent as required by Step 2.
+Inspect relevant diff sections when needed to explain resulting behavior or
+scope; do not review every line just to triage. Label inferred intent, and use
+**intent UNKNOWN** when evidence is insufficient. Never substitute line counts
+for the intent paragraph.
 
 | Verdict | Meaning | Criterion |
 |---|---|---|
@@ -175,6 +188,15 @@ classify from metadata — typically fewer than a third of them.
 | `REBASE+MERGE` | In scope, but conflicted or red | Cites an active-milestone IN line. Name what has to be fixed. |
 | `CLOSE` | Superseded, abandoned, or on the NOT list | **Must name the superseding PR/branch/commit, or the NOT-list row.** A `CLOSE` with neither is a `PARK`. |
 | `PARK` | Real work, wrong milestone | Cites a later-milestone IN line or a NOT-list row. Branch stays; PR closes with a pointer, or converts to draft. |
+
+Keep scope disposition separate from readiness: `MERGE` is a proposal under
+the criterion above, never permission. Unknown CI/review, a draft, dependency,
+unresolved P0–P2 thread, evidence gap or human hold must appear explicitly even
+when GitHub reports `mergeStateStatus=CLEAN`. A green in-scope candidate with a
+review/human hold can retain its scope disposition, but is not ready. Red or
+conflicted candidates stay `REBASE+MERGE`; do not change verdict meanings to
+encode loop outcomes. CLOSED/MERGED transitions are retained with their state
+and removed from actionable merge candidates.
 
 ### Judgement rules
 
@@ -189,6 +211,28 @@ classify from metadata — typically fewer than a third of them.
 - **When genuinely torn, `PARK`.** Parking is reversible and costs a line in a
   file. Closing is a conversation with a human. Asymmetric risk, asymmetric
   default.
+
+### Every PR pass needs a complete merge order
+
+Every proposal that scores PRs must include a **recommended merge order** for
+all `MERGE` and `REBASE+MERGE` candidates, not only the first few actions. Order
+PRs by their actual dependencies and shared-file collisions, and say why that
+order is safe. When one candidate is red or conflicted, keep it in the ordered
+list at the point it can proceed and name the checks or conflict resolution
+that must happen first. Do not imply that a blocked PR is ready to merge.
+
+Use the complete, stable file snapshots from Step 2 for intersections, including
+both `filename` and `previous_filename` for renames. Inspect shared-file diff
+sections when they could affect order. Independent lanes may proceed in
+parallel; table position alone must not create a dependency. Every candidate
+must occur exactly once in the order/lanes, including held candidates with the
+condition that releases them. If file evidence is incomplete or the head is
+unstable, label ordering UNKNOWN and name what must be re-read. If the
+available evidence cannot establish a safe relative order, name the unresolved
+dependency and the information needed to decide it; do not invent an order.
+Under any filter, calculate collisions within the scored set and state that an
+excluded PR may still touch the same files. If no PR is eligible to merge, say
+so and give the ordered next actions needed to reach a mergeable state.
 
 ### Protected branches are a special class
 
@@ -219,7 +263,7 @@ edits, it needs adding to the list before this proposal is executed."
 
 Only when asked for `branches`, `worktrees`, or `all`.
 
-`--label` does not reach this step — refs carry no labels. If it was passed
+`--label` and `--project` do not reach this step. If either was passed
 alongside `branches`, `worktrees`, or `all`, the branch and worktree tables cover
 **everything**, while the PR tables above them cover only the filter. Label both
 in the proposal; a reader who assumes one header governs the whole file will
@@ -248,55 +292,78 @@ git worktree list
 
 ## Step 5 — write the proposal
 
-Write `<parent of spec_output_dir>/triage-<YYYY-MM-DD>.md` (or the path the user
-gave when `spec_output_dir` was absent):
+Write `<parent of spec_output_dir>/triage-<YYYY-MM-DD>.md` (or the supplied
+path). **Never overwrite an existing proposal.** If occupied, use
+`triage-<YYYY-MM-DD>-<filter-slug>-<HHMMSS>-<unique-run-ID>.md`, with `all-prs`
+for no filter. For filtered runs, join the project/label values with `-`,
+lowercase, replace runs of characters outside `[a-z0-9-]` with `-`, collapse
+repeated `-`, trim edge hyphens, truncate to 40 characters and trim again. Use
+`filtered` if empty. This is a single filename component, never a raw project
+name/path. Claim the path with exclusive creation (`open(..., "x")` or host
+equivalent); retry a collision with a fresh run ID. Announce the actual path and
+time zone. This also protects two projects sharing an output directory.
+
+Use a compact overview plus concrete per-PR paragraphs and a linked appendix:
 
 ```markdown
-# Triage — <date>
+# Triage — <date/time and zone>
 
-**Scored against:** `<scope_doc>` (as of <date>)
-**Filter:** <none | label=<name> — <scored> of <total> open PRs scored, <n> excluded>
+**Scored against:** <scope_doc, revision/date and literal headings>
+**Repository / inventory time:** <repo, default branch, timestamp>
+**Filter:** <none | project inputs → canonical IDs/team; labels>
+**Coverage:** <scored> of <total> initially open PRs; <excluded> excluded;
+<project exclusions among label matches / label-only or both exclusions>; <state transitions>
+**Passes:** PR <filtered/unfiltered>; branches/worktrees <not scored | unfiltered>
 **Measured:** <n> open PRs · <n> unmerged branches · <n> worktrees
 **Totals:** <n> MERGE · <n> REBASE+MERGE · <n> CLOSE · <n> PARK
+**Evidence gaps:** <surface/errors/caps/unstable reads, or none>
 
-## Merge this week
-| PR | Title | IN line | Blocker |
-|---|---|---|---|
+## PR overview
+| PR | Verdict + scope line / supersession | State/draft · head → base | Mergeability / CI | Posted loop / derived review | Open P0/P1/P2/P3 + unknown | Holds |
+|---|---|---|---|---|---|---|
+<one row per PR; link details and thread appendix; full SHAs in detail>
 
-## Rebase then merge
-| PR | Title | IN line | What's broken |
-|---|---|---|---|
+## PR details
+### <PR link and title> — <verdict>
+<One short paragraph: stated intent and main behavioral changes, grounded in
+linked current body/files/diff. Cite scope and name supersession for CLOSE.>
 
-## Close
-| PR | Title | Superseded by / NOT-list row |
-|---|---|---|
+<Full head/base refs+SHAs; mergeStateStatus distinct from mergeability;
+CI mode and named buckets/missing expected checks with links;
+reviewed SHA vs current SHA; posted loop verdict/source/head/date/rounds or
+UNKNOWN; separately derived review assessment and stale history;
+P0/P1/P2/P3/unknown counts and appendix link; optional ledger availability;
+explicit dependency, evidence and human holds; snapshot time/stability.>
 
-## Park
-| PR | Title | Milestone | Why not now |
-|---|---|---|---|
+## Unresolved review threads
+| PR / finding title + link | Priority / author | Outdated? | Finding/review head | Last reply / author / time | Resolution / fix evidence |
+|---|---|---|---|---|---|
+<all unresolved threads, including answered and outdated ones; link original
+finding and last reply. Unknown severity separately; known counts are lower
+bounds when collection is partial. Also link blocking summary-only findings.>
 
-## Protected branches — extract before anything
-| Branch | Matched glob | What's in it | Extraction task |
-|---|---|---|---|
+## Recommended merge order and next actions
+<Every OPEN MERGE and REBASE+MERGE candidate exactly once, in dependency order
+or explicitly independent lanes. Name actual dependency edges, rename-aware
+file intersections and every release condition. Unknown order stays explicit.
+Filtered run: intersections cover scored set only; excluded PRs may overlap.>
+<Next actions for CLOSE/PARK and requested branch/worktree findings.>
 
-## Worktrees
-| Path | Branch | Uncommitted? | Verdict |
-|---|---|---|---|
-
-## Recommended sequence
-<The order to actually do this in, and why. Merge order matters when PRs touch
-the same files — name the collisions. Under a filter, say that collisions were
-computed within the scored set only: an excluded PR touching the same files will
-not appear here.>
+## Protected branches / branches / worktrees — <not scored | unfiltered>
+<When requested, include branch/glob, extraction task, worktree path,
+uncommitted paths and verdict. Otherwise include protected PR findings only.>
 ```
 
-Write the `**Filter:**` line on every proposal, including unfiltered ones — as
-`none`. An absent line reads as "unfiltered" to a reader who does not know the
-flag exists, which is exactly the reading a filtered proposal must not permit.
+Always write the Filter line, including `none`. Before finalizing, recheck the
+selected PRs' state/head/base against collected snapshots as in the status
+reference. Reconcile scored/bucket totals, exclusions and merge-order coverage;
+unknown counts never become zero. The same evidence fields apply to every
+verdict, including CLOSE/PARK. Never collapse the three different facts
+GitHub `CLEAN`, pr-loop `CLEAN`, and human merge permission into one badge.
 
-Then print to the user: the measured counts, the filter and how many PRs it
-excluded, the totals, the recommended first three actions, and anything you were
-genuinely unsure about. **Ask before executing any of it.**
+Print measured counts, filters/exclusions, totals, first three next actions,
+actual proposal path and remaining uncertainty. Stop at the proposal. Executing
+it requires a separate, explicit instruction naming the actions.
 
 ## Calibration note
 
@@ -313,6 +380,13 @@ that condemns it.
 - Choosing the next task to start — that is the forward-looking complement;
   `triage` audits what was left unfinished, backwards.
 - Deleting worktrees or pruning branches, even ones it labels safe.
-- Filtering a tracker. `--label` is a `gh` label on a PR, nothing more. This
-  skill never reads Linear; narrowing issues to a milestone or project is `next`
-  and `linear-steward`, which take that argument themselves.
+- Repairing or ranking a tracker. Optional `--project` reads Linear only to
+  establish PR selection; forward selection is `next`, board repair is
+  `linear-steward`.
+
+## Offline checks and their limits
+
+Run `python3 -m unittest discover -s roles/triage/tests` and `python3 bin/check-stack`.
+Read `tests/README.md` for the frozen cases and scope. These checks exercise a
+fixture model and documentation invariants; they do **not** execute this prompt
+against live tools, prove API completeness, or enforce read-only behavior.

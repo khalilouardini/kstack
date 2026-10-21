@@ -1,6 +1,6 @@
 ---
 name: stack
-version: 0.3.0
+version: 0.9.2
 description: Router for the kstack skill suite — sends a request to the right skill across decide, build, review, land, and operate, and disambiguates the review and decide clusters. Use when asked to "route this", "which stack skill fits this?", "what should I use for this", or "/stack". Proactively suggest when a request matches a stack skill's purpose and the right one is not obvious. (kstack)
 ---
 
@@ -38,9 +38,13 @@ adapter, or read `roles/<role>.md` and follow it in-session.
 - "should we build X", "is this in scope", "spec this out", "write this up as a
   ticket", "is this worth building" → invoke `/spec`
 - "what should I work on next", "what's next", "pick my next ticket", "what's
-  the highest-leverage thing right now" → invoke `/next`
+  the highest-leverage thing right now", "what can I run in parallel across these
+  projects" → invoke `/next` (preserve repeated `--project`, `--parallel` and
+  `--accept-overlap` and `--accept-graph-update` flags and their values)
 - "triage the backlog", "clean up the open PRs", "which branches can we
   delete", "what's still open and does it matter" → invoke `/triage`
+  (default `prs`; preserve repeated `--project "<name-or-ID>"` and `--label`
+  filters and any explicit `branches|worktrees|all` pass)
 - "is *just this* in scope?" — scope verdict only, no spec → dispatch
   `product-manager` alone
 - "how long would this take", "does this already exist", "what would we reuse"
@@ -53,7 +57,15 @@ adapter, or read `roles/<role>.md` and follow it in-session.
 - "file this", "turn this verdict into tickets", "create the issues for it" →
   invoke `/linear-feature-intake`
 
+- "map this Linear project", "prepare an orchestration roadmap", "graph these
+  tickets", `/linear-roadmap <project|spec|prompt> [--publish]` → invoke `/linear-roadmap`
+  (local artifacts by default; preserve an explicit --publish for the graph PR;
+  tracker reads only, ticket creation stays with intake)
+
 ### Build
+
+- "run one wave", "plan a Linear batch", "build the approved wave",
+  `/wave plan|build` → invoke `/wave`
 
 - "start this ticket", "tackle ISSUE-123", "dispatch this issue", "begin work
   on this Linear ticket" → invoke `/dispatch-implementation`
@@ -93,8 +105,21 @@ nowhere.
 
 ### Operate
 
+- "update kstack", "reinstall kstack", "refresh the shared skills", "are the
+  shared skills current everywhere" → invoke `/update-stack` (preserve
+  `--check`; in established kstack context, "reinstall gstack" routes here).
+
+
+- "run session titles and PR labels periodically", "automate the sweeps",
+  "schedule these sweeps every few hours" → invoke `/sweep-schedules`
+  (takes precedence over either manual sweep route below)
+
 - "health check", "code quality", "how healthy is this codebase", "run all the
   checks", "quality score" → invoke `/health`
+- "launch the issue graph", "open the roadmap visualization", "refresh the
+  issue graph", `/issue-graph open|status|refresh [project]` → invoke
+  `/issue-graph` (renders the existing roadmap; changing its scope or dependencies
+  stays with `/linear-roadmap`)
 - "was this week fruitful", "engineering retro", "what did we ship", "how'd we
   do this sprint" → invoke `/delivery-retro`
 - "label my sessions", "what is each session working on", "retitle the agent
@@ -148,7 +173,7 @@ One axis: **who consumes the explanation, and how far from you they are.**
 
 | Unit of work | Consumer | Route to |
 |---|---|---|
-| One change | you or a colleague, in this conversation | `/summarize-change` — six-part briefing in chat, nothing written |
+| One change | you or a colleague, in this conversation | `/summarize-change` — six-part briefing in chat, intent first, nothing written |
 | One change | someone studying it later without you | `/explain-diff-html` — offline page, diagrams, quiz, validator-gated |
 | A period, many PRs | whoever asks whether the time was well spent | `/delivery-retro` — outcomes vs the previous equal period |
 
@@ -165,9 +190,10 @@ One axis: **which direction the work is moving**.
 |---|---|---|
 | A new idea coming **in** | "should we build this at all?" | `/spec` — `product-manager` runs first and alone; only an active-milestone IN fans out to `tech-lead` + `designer`, then `qa` |
 | One narrow question about an idea already understood | "is just this in scope?" / "how long?" / "which component?" / "what proves it?" | the single role contract, dispatched alone |
-| The backlog, **forward** | "what do I pick up next?" | `/next` — reads the tracker, recommends exactly one thing, read-only |
-| Work already open, **backward** | "what do we do with everything still unfinished?" | `/triage` — scores open PRs, branches, worktrees; writes a proposal, executes nothing |
+| The backlog, **forward** | "what do I pick up next?" | `/next` — reads the tracker, recommends one issue or an independent batch with optional repeated `--project` filters, read-only |
+| Work already open, **backward** | "what do we do with everything still unfinished?" | `/triage` — PR-only by default; project/label filters, intent and review/CI/thread status; branches/worktrees on request; proposal only |
 | A decision already made, needing a record | "file it" | `/linear-feature-intake` — executes a verdict, never forms one |
+| A project needing an execution map | "graph these tickets" | `/linear-roadmap` — local typed roadmap and Mermaid; --publish explicitly opens/updates its graph PR; tracker reads only |
 
 Two properties worth preserving when you choose:
 

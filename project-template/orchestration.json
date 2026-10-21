@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "title": "Example proposed project",
+  "projects": [
+    {
+      "key": "example",
+      "title": "Example proposed project",
+      "linear_id": null,
+      "scope_source": "TODO: cited prompt/spec/owner scope source",
+      "authorization": "draft"
+    }
+  ],
+  "policy": {
+    "implementation_model": "claude-opus-5-5",
+    "default_effort": "high",
+    "max_sessions": 2,
+    "review_rounds": 3,
+    "max_plan_revisions": 2,
+    "review_concurrency": 1
+  },
+  "nodes": [
+    {
+      "id": "scope",
+      "title": "Scope decision",
+      "kind": "human",
+      "project": "example",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "human",
+      "acceptance": [
+        "TODO: runnable acceptance criterion from source"
+      ],
+      "source": "TODO: cited issue/spec/owner source",
+      "effort": null
+    },
+    {
+      "id": "feature",
+      "title": "Feature units",
+      "kind": "group",
+      "project": "example",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "implementer",
+      "acceptance": [
+        "TODO: runnable acceptance criterion from source"
+      ],
+      "source": "TODO: cited issue/spec/owner source",
+      "effort": null
+    },
+    {
+      "id": "contract",
+      "title": "Frozen contract",
+      "kind": "unit",
+      "project": "example",
+      "unit_of": "feature",
+      "issue_ref": null,
+      "owner": "implementer",
+      "acceptance": [
+        "TODO: runnable acceptance criterion from source"
+      ],
+      "source": "TODO: cited issue/spec/owner source",
+      "effort": null
+    },
+    {
+      "id": "api",
+      "title": "API unit",
+      "kind": "unit",
+      "project": "example",
+      "unit_of": "feature",
+      "issue_ref": null,
+      "owner": "implementer",
+      "acceptance": [
+        "TODO: runnable acceptance criterion from source"
+      ],
+      "source": "TODO: cited issue/spec/owner source",
+      "effort": null
+    },
+    {
+      "id": "ui",
+      "title": "UI unit",
+      "kind": "unit",
+      "project": "example",
+      "unit_of": "feature",
+      "issue_ref": null,
+      "owner": "implementer",
+      "acceptance": [
+        "TODO: runnable acceptance criterion from source"
+      ],
+      "source": "TODO: cited issue/spec/owner source",
+      "effort": null
+    },
+    {
+      "id": "eval",
+      "title": "Acceptance evidence",
+      "kind": "evidence",
+      "project": "example",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "implementer",
+      "acceptance": [
+        "TODO: runnable acceptance criterion from source"
+      ],
+      "source": "TODO: cited issue/spec/owner source",
+      "effort": null
+    },
+    {
+      "id": "merge",
+      "title": "Review and merge decision",
+      "kind": "human",
+      "project": "example",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "human",
+      "acceptance": [
+        "TODO: runnable acceptance criterion from source"
+      ],
+      "source": "TODO: cited issue/spec/owner source",
+      "effort": null
+    },
+    {
+      "id": "release",
+      "title": "Release verification",
+      "kind": "release",
+      "project": "example",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "implementer",
+      "acceptance": [
+        "TODO: runnable acceptance criterion from source"
+      ],
+      "source": "TODO: cited issue/spec/owner source",
+      "effort": null
+    },
+    {
+      "id": "contract_review",
+      "title": "Contract review and merge decision",
+      "kind": "human",
+      "project": "example",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "human",
+      "acceptance": [
+        "TODO: runnable acceptance criterion from source"
+      ],
+      "source": "TODO: cited issue/spec/owner source",
+      "effort": null
+    },
+    {
+      "id": "release_review",
+      "title": "Deployment and release decision",
+      "kind": "human",
+      "project": "example",
+      "unit_of": null,
+      "issue_ref": null,
+      "owner": "human",
+      "acceptance": [
+        "TODO: runnable acceptance criterion from source"
+      ],
+      "source": "TODO: cited issue/spec/owner source",
+      "effort": null
+    }
+  ],
+  "edges": [
+    {
+      "from_event": "approve",
+      "to": "contract",
+      "to_event": "plan",
+      "type": "human_decision",
+      "source": "TODO: cited prerequisite",
+      "from": "scope"
+    },
+    {
+      "from_event": "merge",
+      "to": "api",
+      "to_event": "build",
+      "type": "start_after",
+      "source": "TODO: cited prerequisite",
+      "from": "contract"
+    },
+    {
+      "from_event": "merge",
+      "to": "ui",
+      "to_event": "build",
+      "type": "start_after",
+      "source": "TODO: cited prerequisite",
+      "from": "contract"
+    },
+    {
+      "from_event": "merge",
+      "to": "ui",
+      "to_event": "merge",
+      "type": "merge_after",
+      "source": "TODO: cited prerequisite",
+      "from": "api"
+    },
+    {
+      "from_event": "pass",
+      "to": "merge",
+      "to_event": "approve",
+      "type": "evidence_required",
+      "source": "TODO: cited prerequisite",
+      "from": "eval"
+    },
+    {
+      "from_event": "approve",
+      "to": "ui",
+      "to_event": "merge",
+      "type": "human_decision",
+      "source": "TODO: cited prerequisite",
+      "from": "merge"
+    },
+    {
+      "from_event": "merge",
+      "to": "release",
+      "to_event": "release",
+      "type": "release_after",
+      "source": "TODO: cited prerequisite",
+      "from": "ui"
+    },
+    {
+      "from": "api",
+      "from_event": "build",
+      "to": "eval",
+      "to_event": "pass",
+      "type": "verify_after",
+      "source": "TODO: cited prerequisite"
+    },
+    {
+      "from": "ui",
+      "from_event": "build",
+      "to": "eval",
+      "to_event": "pass",
+      "type": "verify_after",
+      "source": "TODO: cited prerequisite"
+    },
+    {
+      "from": "ui",
+      "from_event": "build",
+      "to": "merge",
+      "to_event": "approve",
+      "type": "review_after",
+      "source": "TODO: cited prerequisite"
+    },
+    {
+      "from": "merge",
+      "from_event": "approve",
+      "to": "api",
+      "to_event": "merge",
+      "type": "human_decision",
+      "source": "TODO: cited prerequisite"
+    },
+    {
+      "from": "contract",
+      "from_event": "build",
+      "to": "contract_review",
+      "to_event": "approve",
+      "type": "review_after",
+      "source": "TODO: cited prerequisite"
+    },
+    {
+      "from": "contract_review",
+      "from_event": "approve",
+      "to": "contract",
+      "to_event": "merge",
+      "type": "human_decision",
+      "source": "TODO: cited prerequisite"
+    },
+    {
+      "from": "ui",
+      "from_event": "merge",
+      "to": "release_review",
+      "to_event": "approve",
+      "type": "review_after",
+      "source": "TODO: cited prerequisite"
+    },
+    {
+      "from": "release_review",
+      "from_event": "approve",
+      "to": "release",
+      "to_event": "release",
+      "type": "human_decision",
+      "source": "TODO: cited prerequisite"
+    }
+  ]
+}

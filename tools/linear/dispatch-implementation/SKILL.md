@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.1.0
+version: 0.5.0
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -12,7 +12,7 @@ An existing, approved Linear issue is ready to be picked up by Claude or Codex.
 Invoke as:
 
 ```text
-/dispatch-implementation <ISSUE-ID> [--executor claude|codex] [--model <name>]
+/dispatch-implementation <ISSUE-ID> [--executor claude|codex] [--model <name>] [--plan-only] [--accept-graph-update <PR#>]... [--local-graph]
 ```
 
 The exact issue identifier is required. Invoking this skill is explicit authorization
@@ -23,6 +23,16 @@ scope, or create another issue.
 Not for deciding what to work on next (`next`), admitting a new feature (`spec` and
 `linear-feature-intake`), repairing historical tracker drift (`linear-steward`), or
 starting work that has no approved issue.
+
+
+Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
+procedure. It replaces graph publication with fresh local indexed validation and
+candidate/closure admission; scope, native blockers, evidence, human decisions
+and plan/merge approvals remain mandatory. Forward this invocation's explicit
+flag and canonical owner/index/manifest pins through composed execution skills.
+Recheck the owner files before writes; never substitute an older dispatch-worktree
+copy. Changed pins require a new plan. Reject repeated local flags and mixed
+local/PR graph sources. No graph publication or extra tracker writes are granted.
 
 ## Configuration and required access
 
@@ -43,7 +53,19 @@ and read-back remain mandatory; a second approval prompt for that one row is not
 
 ## 1. Resolve the issue and prove it is startable
 
-Before any git write:
+Before any git or tracker write, follow the canonical
+`tools/linear/linear-roadmap/references/publication-gate.md` from the physical
+stack root. Verify this issue and its relevant dependency closure on fresh main,
+including resumed work and --plan-only. Unrelated missing tickets are coverage
+warnings, not a dispatch refusal. A selected unmapped maintenance repair may use
+the bounded local audit before any workspace/status write; retain its main SHA,
+full live evidence and exact delta. UNKNOWN selected evidence or semantic changes
+require reviewed publication. Accept repeatable --accept-graph-update only for
+verified reviewed PRs under that contract. Carry audit paths/digests and explicit
+flags to later build/land; each transition rechecks fresh evidence. A prior plan
+or wave approval supplies no bypass or new scope authorization.
+
+Then:
 
 1. Fetch the exact issue with relations and its project/milestone fields.
 2. List the team's issue statuses and resolve their ids. Judge lifecycle by status
@@ -115,6 +137,16 @@ write landed; it is not a global guarantee about other sessions.
 
 ## 4. Route plan-only, then stop for approval
 
+**Graph node / `--plan-only` mode (prompt-level):** run §1–3 unchanged,
+including the isolated workspace and status ledger/write/read-back. In §4,
+write the acceptance-cited plan in the current agent and return it; launch no
+separate executor and grant no implementation permission. For `/wave`, use
+PLAN from `tools/linear/wave/references/records.md`; refusals return STOPPED with
+stop_reason and evidence rather than waiting. `/wave build --approve` supplies
+the human approval for that exact wave/plan, resumes the same dispatch worktree
+with the returned plan context, and records the approval ids in WAVE_REPORT.
+All Refusals still apply. Ordinary invocation follows the executor route below.
+
 Select the executor and model from explicit flags when supplied. Otherwise choose by
 risk, ambiguity, relevant strengths, and expected horizon, and state the choice in
 one sentence. Do not choose by task size alone.
@@ -138,6 +170,9 @@ can drift from the approved plan.
 The implementation session owns code and tests, not tracker truth beyond evidence it
 has actually produced.
 
+- It opens a PR only as `identities.maintainer`, through `/land` or with that
+  account's verified token bound via `GH_TOKEN` — never as the implementer or
+  reviewer account, and never by relying on the active global `gh` account.
 - If it opens a PR and the workspace contract defines a review status for that
   evidence, apply that transition with the same resolve → ledger → write → read-back
   discipline.

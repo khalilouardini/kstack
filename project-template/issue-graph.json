@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "viewer_root": "/absolute/path/to/issue-graph",
+  "url": "http://127.0.0.1:31415",
+  "service": null,
+  "projects": {
+    "example_project": {"workspace": "example"}
+  }
+}

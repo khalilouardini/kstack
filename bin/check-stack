@@ -3,7 +3,8 @@
 
 Checks every skill (`*/SKILL.md` under router/, core/, roles/, tools/) and every
 role contract (`roles/*.md`) against CONVENTIONS.md, plus the shell scripts under
-any `bin/`. Exits non-zero if anything fails. `--list` prints the catalog instead.
+any `bin/`, plus the bundled offline checks. Exits non-zero if
+anything fails. `--list` prints the catalog instead.
 Stdlib only; paths resolve against this file's repo, so run it from anywhere.
 """
 
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -310,14 +312,69 @@ def main(argv: list[str]) -> int:
         check_doc(path, r)
     scripts = check_scripts(r)
     pointers = check_codex_pointers(r)
-    routing_tests = subprocess.run(
-        [sys.executable, "-m", "unittest", "discover", "-s",
-         str(REPO / "tools/github/pr-loop/tests")],
+    harness = REPO / "tools/linear/wave/tests/run.mjs"
+    if harness.is_file():
+        if shutil.which("node") is None:
+            r.warn("tools/linear/wave/tests/run.mjs", "harness", "node absent; wave harness did not run")
+        else:
+            out = subprocess.run(["node", str(harness)], capture_output=True, text=True)
+            print(out.stdout, end="")
+            if out.returncode:
+                r.fail("tools/linear/wave/tests/run.mjs", "harness", out.stderr.strip() or "wave harness failed")
+
+    review_tests = REPO / "tools/github/pr-loop/tests"
+    out = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s", str(review_tests)],
         capture_output=True, text=True,
     )
-    if routing_tests.returncode:
-        r.fail("tools/github/pr-loop/tests", "routing", routing_tests.stderr.strip())
+    print(out.stdout, end="")
+    print(out.stderr, end="")
+    if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+        r.fail("tools/github/pr-loop/tests", "harness", "review tests failed or none discovered")
 
+    roadmap_tests = REPO / "tools/linear/linear-roadmap/tests"
+    if roadmap_tests.is_dir():
+        out = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(roadmap_tests)],
+            capture_output=True, text=True,
+        )
+        print(out.stdout, end="")
+        print(out.stderr, end="")
+        if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+            r.fail("tools/linear/linear-roadmap/tests", "harness", "roadmap tests failed or none discovered")
+
+    triage_tests = REPO / "roles/triage/tests"
+    if triage_tests.is_dir():
+        out = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(triage_tests)],
+            capture_output=True, text=True,
+        )
+        print(out.stdout, end="")
+        print(out.stderr, end="")
+        if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+            r.fail("roles/triage/tests", "harness", "triage fixtures failed or none discovered")
+
+    viewer_tests = REPO / "tools/linear/issue-graph/tests"
+    if viewer_tests.is_dir():
+        out = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(viewer_tests)],
+            capture_output=True, text=True,
+        )
+        print(out.stdout, end="")
+        print(out.stderr, end="")
+        if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+            r.fail("tools/linear/issue-graph/tests", "harness", "viewer tests failed or none discovered")
+
+    update_tests = REPO / "core/update-stack/tests"
+    if update_tests.is_dir():
+        out = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(update_tests)],
+            capture_output=True, text=True,
+        )
+        print(out.stdout, end="")
+        print(out.stderr, end="")
+        if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+            r.fail("core/update-stack/tests", "harness", "installation audit tests failed or none discovered")
 
     for where, check, msg in r.warns:
         print(f"WARN  {where}  [{check}] {msg}")

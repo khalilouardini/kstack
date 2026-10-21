@@ -1,6 +1,6 @@
 ---
 name: land
-version: 0.2.0
+version: 0.6.0
 description: Land an agent session's work safely — dedicated branch, concurrent-session guards re-run before every commit, the repo's own lint and test gates from .agents/stack.yml, atomic commits, then one PR. Stops at the PR; merging is a human decision. Use when asked to "land this", "commit and push", "open a PR", "ship it", or "/land". (kstack)
 ---
 
@@ -9,7 +9,18 @@ description: Land an agent session's work safely — dedicated branch, concurren
 ## When to invoke
 
 Work is done in the working tree and needs to become a reviewable PR. Invoke as
-`/land` (or `/land <type>/<name>` to name the branch yourself).
+`/land [<type>/<name>] [--accept-graph-update <PR#>]... [--local-graph]`.
+
+For Linear-linked implementation, before commits/pushes follow
+`tools/linear/linear-roadmap/references/publication-gate.md` from the physical
+stack root. Report project coverage warnings separately; verify the linked units
+and their relevant dependency closure on fresh main before commits/pushes.
+Mapped eligible work may proceed despite unrelated missing tickets. A selected
+missing maintenance unit may use the contract's bounded local reconciliation;
+include its main SHA, live evidence and exact delta in the implementation PR.
+Scope/dependency/release/human-gate changes require reviewed publication, or this
+invocation's explicitly accepted reviewed graph PR. Graph-only repair PRs retain
+their exception. This does not relax any land gate.
 
 This skill assumes **other agent sessions may be sharing this working directory
 and the machine's global state right now**. Most of its steps exist for that
@@ -17,6 +28,16 @@ reason, and they re-run before every commit rather than once at the start.
 
 It stops at the PR. It does not merge, and it is not an auto-ship pipeline —
 see "What this skill is NOT for".
+
+
+Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
+procedure. It replaces graph publication with fresh local indexed validation and
+candidate/closure admission; scope, native blockers, evidence, human decisions
+and plan/merge approvals remain mandatory. Forward this invocation's explicit
+flag and canonical owner/index/manifest pins through composed execution skills.
+Recheck the owner files before writes; never substitute an older dispatch-worktree
+copy. Changed pins require a new plan. Reject repeated local flags and mixed
+local/PR graph sources. No graph publication or extra tracker writes are granted.
 
 ## Configuration — read `.agents/stack.yml` first
 
@@ -32,10 +53,10 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   the same list for the same reason.)
 - **`issue_prefix`** — when set, an issue key may appear in the branch name and
   PR title. Optional; absent means plain branch names.
-- **`identities.implementer`** — the implementation-agent account that opens
-  the PR (Claude by default). Missing or null → **refuse**, naming
-  `identities.implementer`. Resolve its token for forge API calls; never switch
-  global `gh` identity.
+- **`identities.maintainer`** — the human owner's account, which opens every
+  PR. Missing or null → **refuse**, naming `identities.maintainer`. Resolve its
+  token for forge API calls; never switch global `gh` identity. The implementer
+  and reviewer accounts act only after a review loop starts on the open PR.
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
@@ -104,6 +125,12 @@ Two things actually protect you, in order:
    catches drift that already happened rather than preventing what happens next.
    In a shared worktree this is the best available check — not a guarantee, and
    not a substitute for (1).
+
+**Headless graph node (prompt-level):** wherever this procedure asks a human
+to decide — including unaccounted tracked modifications (Step 2) or a red gate
+not caused by the change (Step 7) — return `STOPPED` with `stop_reason` and the
+concrete evidence instead of waiting. Preserve the workspace; never resume on
+your own judgement. This changes no gate, identity, or refusal rule.
 
 ## Step 0 — baseline, before you touch anything
 
@@ -265,10 +292,10 @@ git push -u origin <your-branch>
 Then open the PR:
 
 ```bash
-IMPLEMENTER="<identities.implementer>"
-IMPLEMENTER_TOKEN=$(gh auth token --hostname github.com --user "$IMPLEMENTER")
-test "$(GH_TOKEN="$IMPLEMENTER_TOKEN" gh api user --jq .login)" = "$IMPLEMENTER"
-GH_TOKEN="$IMPLEMENTER_TOKEN" gh pr create --base <default-branch> --title "<type>: <what changed>" --body "<body>"
+MAINTAINER="<identities.maintainer>"
+MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
+test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
+GH_TOKEN="$MAINTAINER_TOKEN" gh pr create --base <default-branch> --title "<type>: <what changed>" --body "<body>"
 ```
 
 Body: what changed and why, the gate results as evidence (`<gates.lint>` clean,
@@ -289,7 +316,7 @@ one.
 
 `gh` auth is **global mutable state**, shared by every shell and every concurrent
 session on the machine. Never call `gh auth switch` from this skill. Bind PR API
-calls to the verified implementer token with `GH_TOKEN`, which is process-local
+calls to the verified maintainer token with `GH_TOKEN`, which is process-local
 and safe for parallel sessions. Git transport authentication is separate from
 PR authorship: SSH keys and HTTPS credential helpers may identify the pusher,
 while the token-bound `gh pr create` determines the visible PR author.
@@ -319,7 +346,7 @@ other destructive git commands prompt. That covers one failure mode of invariant
 7. **Never rewrite a commit you did not author** — check `git patch-id --stable`
    first, and leave origin-duplicated commits for the rebase to drop.
 8. **Never switch global `gh` identity.** Bind forge API calls to the verified
-   implementer token; leave Git transport authentication independent.
+   maintainer token; leave Git transport authentication independent.
 
 ## What this skill is NOT for
 

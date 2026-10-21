@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""Check graph ticket coverage at a Git ref or local index; no network or writes."""
+import argparse
+import hashlib
+import json
+from pathlib import Path, PurePosixPath
+import re
+import runpy
+import subprocess
+import sys
+
+UUID = re.compile(r'^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+IDENTIFIER = re.compile(r'^[A-Z][A-Z0-9]*-[1-9][0-9]*$')
+API = runpy.run_path(str(Path(__file__).with_name('graph-record')))
+
+
+def git(repo, *args):
+    result = subprocess.run(['git', '-C', str(repo), *args], capture_output=True, text=True)
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or 'Git read failed')
+    return result.stdout
+
+
+def safe_path(value):
+    if not isinstance(value, str) or not value or '\\' in value:
+        raise ValueError('view_path must be a repository-relative path')
+    path = PurePosixPath(value)
+    if path.is_absolute() or '..' in path.parts or path.as_posix() != value:
+        raise ValueError('view_path must stay inside the repository')
+    return value
+
+
+def read_blob(repo, sha, path):
+    # A missing blob is a coverage gap; a symlink or unreadable tree is an error.
+    entry = git(repo, 'ls-tree', sha, '--', path).strip()
+    if not entry:
+        return None
+    if not entry.startswith('100644 blob ') and not entry.startswith('100755 blob '):
+        raise ValueError(f'{path}: expected a regular file at {sha}')
+    return git(repo, 'show', f'{sha}:{path}')
+
+
+def diagram_nodes(markdown):
+    nodes = set()
+    declaration = re.compile(r'(?<![\w-])(?:subgraph\s+)?([\w-]+)\s*[\[({]+\s*"([^"]*)"')
+    for block in re.findall(r'```mermaid[^\n]*\n(.*?)```', markdown, re.S):
+        block = re.sub(r'\A\s*---[^\n]*\n.*?\n---[^\n]*(?:\n|$)', '', block, flags=re.S)
+        block = re.sub(r'%%\{.*?\}%%', '', block, flags=re.S)
+        block = re.sub(r'(?m)^\s*%%[^\n]*', '', block)
+        if not re.match(r'\s*(?:flowchart|graph)\b', block):
+            continue
+        # Consume whole declarations so mentions inside labels/edge text do not count.
+        for line in block.splitlines():
+            line = re.sub(r'\|"[^"\n]*"\|', '', line)
+            nodes.update((m[1], m[2]) for m in declaration.finditer(line))
+    return nodes
+
+
+def coverage(snapshot, read_text, manifest):
+    if not isinstance(snapshot, dict) or snapshot.get('complete') is not True:
+        raise ValueError('complete paginated Linear evidence is required')
+    projects = snapshot.get('projects')
+    if not isinstance(projects, list) or not projects:
+        raise ValueError('projects must contain the exact audited Linear projects')
+    seen_projects, seen_issues, seen_identifiers, results = set(), set(), set(), []
+    for project in projects:
+        pid, name = project.get('project_id'), project.get('project_name')
+        if not isinstance(pid, str) or not UUID.fullmatch(pid) or pid in seen_projects:
+            raise ValueError('project_id must be a unique canonical Linear UUID')
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError('project_name is required')
+        seen_projects.add(pid)
+        path = safe_path(project.get('view_path'))
+        issues = project.get('issues')
+        if not isinstance(issues, list):
+            raise ValueError('issues must include every status and archived ticket')
+        for issue in issues:
+            iid, identifier = issue.get('id'), issue.get('identifier')
+            if not isinstance(iid, str) or not UUID.fullmatch(iid) or iid in seen_issues:
+                raise ValueError('issue id must be a unique canonical Linear UUID')
+            if not isinstance(identifier, str) or not IDENTIFIER.fullmatch(identifier) or identifier in seen_identifiers:
+                raise ValueError('issue identifier must be valid and unique')
+            seen_issues.add(iid)
+            seen_identifiers.add(identifier)
+        text = read_text(path)
+        view_nodes = diagram_nodes(text or '')
+        # Legacy views declare their own ticket key at the beginning of a label.
+        view_keys = {m[1] for _, label in view_nodes
+                     if (m := re.match(r'^([A-Z][A-Z0-9]*-[1-9][0-9]*)(?=[:\s]|$)', label))}
+        missing_manifest = []
+        rendered_refs = set()
+        if manifest is not None:
+            keys = {p['key'] for p in manifest['projects'] if p['linear_id'] == pid}
+            nodes = [n for n in manifest['nodes'] if n['project'] in keys]
+            refs = {n['issue_ref'] for n in nodes}
+            expected = diagram_nodes('```mermaid\n' + API['render'](manifest) + '```')
+            # UUID membership alone cannot cover a node omitted from the Markdown.
+            rendered_refs = {n['issue_ref'] for n in nodes if any(
+                (node_id, label) in view_nodes for node_id, label in expected
+                if node_id == ('group_' if n['kind'] == 'group' else 'node_') + n['id'])}
+            missing_manifest = [i['identifier'] for i in issues if i['id'] not in refs]
+        missing_view = [i['identifier'] for i in issues
+                        if i['identifier'] not in view_keys and i['id'] not in rendered_refs]
+        project_in_manifest = manifest is None or any(p['linear_id'] == pid for p in manifest['projects'])
+        state = 'CURRENT' if text is not None and project_in_manifest and not missing_view and not missing_manifest else 'UPDATE_REQUIRED'
+        results.append({'project_id': pid, 'project_name': name, 'view_path': path,
+                        'state': state, 'view_exists': text is not None,
+                        'project_in_manifest': project_in_manifest,
+                        'total_count': len(issues), 'covered_count': len(issues) - len(set(missing_view + missing_manifest)),
+                        'missing_view': missing_view, 'missing_manifest': missing_manifest})
+    return {'state': 'CURRENT' if all(
+        p['state'] == 'CURRENT' for p in results) else 'UPDATE_REQUIRED', 'projects': results}
+
+
+def check(repo, ref, snapshot):
+    sha = git(repo, 'rev-parse', '--verify', f'{ref}^{{commit}}').strip()
+    index_text = read_blob(repo, sha, 'orchestration/index.json')
+    manifest = None
+    if index_text is not None:
+        index = json.loads(index_text)
+        API['check_schema'](index, json.loads(API['INDEX_SCHEMA'].read_text()))
+        manifest_text = read_blob(repo, sha, index['manifest'])
+        if manifest_text is None:
+            raise ValueError('published index points to a missing manifest')
+        manifest = API['validate'](json.loads(manifest_text))
+    return {'ref': ref, 'sha': sha, **coverage(
+        snapshot, lambda path: read_blob(repo, sha, path), manifest)}
+
+
+def local_file(repo, path):
+    target = (Path(repo).resolve() / safe_path(path)).resolve()
+    if not target.is_relative_to(Path(repo).resolve()):
+        raise ValueError(f'{path}: local file escapes the owning repository')
+    return target.read_text(encoding='utf-8') if target.exists() else None
+
+
+def check_local(repo, index_path, snapshot):
+    repo = Path(repo).resolve()
+    index_path = Path(index_path)
+    if not index_path.is_absolute():
+        index_path = repo / index_path
+    if index_path.resolve() != repo / 'orchestration/index.json':
+        raise ValueError('local index must be the owning repository orchestration/index.json')
+    before = index_path.read_bytes()
+    manifest, revision = API['load_index'](index_path)
+    index = json.loads(before)
+    result = coverage(snapshot, lambda path: local_file(repo, path), manifest)
+    if index_path.read_bytes() != before or 'sha256:' + hashlib.sha256(
+            (repo / index['manifest']).read_bytes()).hexdigest() != revision:
+        raise ValueError('local graph changed during validation; check it again')
+    return {**result, 'source_mode': 'local', 'index_path': str(index_path.resolve()),
+            'manifest_path': index['manifest'], 'source_revision': index['source_revision'],
+            'index_digest': 'sha256:' + hashlib.sha256(before).hexdigest(),
+            'manifest_digest': revision}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--repo', type=Path, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument('--ref', help='fresh origin/main or verified graph PR head')
+    source.add_argument('--local-index', type=Path, help='owning repository orchestration/index.json')
+    parser.add_argument('--issues', type=Path, required=True, help='complete live Linear evidence JSON')
+    args = parser.parse_args()
+    try:
+        snapshot = json.loads(args.issues.read_text())
+        result = (check_local(args.repo, args.local_index, snapshot) if args.local_index
+                  else check(args.repo, args.ref, snapshot))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
+        print(json.dumps({'state': 'UNKNOWN', 'error': str(error)}))
+        return 1
+    print(json.dumps(result, indent=2))
+    return 0 if result['state'] == 'CURRENT' else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

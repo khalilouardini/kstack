@@ -16,6 +16,12 @@ bin/install                  # claude: symlinks into ~/.claude/skills/<name>
 bin/install --host codex     # codex: generated pointer files into ~/.codex/skills/
 ```
 
+After changes merge into the shared stack, `/update-stack` refreshes that
+recorded installation once for both hosts. `/update-stack --check` reports its
+source SHA and adapter status. Project-local copies remain separate; the audit
+reports them without deleting them. Do not rerun adoption/configuration steps
+in every project just to refresh the shared skills.
+
 `<stack-root>` is wherever you cloned it; you will need its **absolute path** in
 step 3. Install is per machine, not per project — a second project needs only
 steps 2 onward.
@@ -44,9 +50,11 @@ skills that need it and leaves the rest working.
 | `gates.test_full` | `/health --full`, and `/land`'s full-suite path. |
 | `scope_doc` | the four role contracts, `/spec`, `/triage`, and `/next` gating. Without it they ask for the path and still refuse to invent a verdict. |
 | `identities.maintainer` + `identities.reviewer` + `identities.implementer` | The GitHub review cluster. Codex normally fills reviewer and Claude implementer; unattended `/pr-loop` requires all three roles. |
+| `ci.checks` | `/pr-loop`'s `CLEAN` verdict: which PR checks must be green at the reviewed head (`required`, `all`, or `none`). `/pr-loop` refuses without it. |
 | `review_gate.skill_path` + `review_gate.scope` | stack review skills defer to your project's own review gate on the paths it claims. |
 | `workspace_contract` | `/dispatch-implementation`, `/linear-steward`, `/linear-feature-intake`, `/linear-release-audit` need the tracker's status and mutation rules. Without it they refuse writes. |
 | `issue_prefix` | `/session-titles` labels by issue key, and `/next` resolves issue references. |
+| `issue_graph.config` | `/issue-graph open` and `status` use an existing local viewer; `refresh` also needs the indexed roadmap and fresh Linear reads. A saved host-local binding under `${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/issue-graph.json` also works. See [the binding format](../tools/linear/issue-graph/references/binding.md). |
 | `protected_branches` | `/triage` stops proposing CLOSE on branches that carry unextracted work. |
 | `role_appendix_dir` | roles answer with your traps, factories, and component inventory instead of asking for them. |
 | `spec_output_dir` | `/spec` writes where you want instead of asking. |
@@ -177,6 +185,8 @@ Land and operate:
 - "health check" / "quality score" → `/health`
 - "was this week fruitful" → `/delivery-retro`
 - "what is each session working on" → `/session-titles`
+- "run title and PR-label sweeps every few hours" → `/sweep-schedules`
+  (desktop scheduler; defaults to three hours, requires label rules and session tools)
 - audit or repair the tracker → `/linear-steward`
 - audit a release against its gate criteria → `/linear-release-audit`
 - unsure which of the above → `/stack`
@@ -217,6 +227,52 @@ a domain skill. Both answers are useful; guessing is not.
 > what changed in each migrated file, is in
 > [`../docs/MIGRATION-ogur.md`](../docs/MIGRATION-ogur.md). Read it as an
 > example of applying the rule of thumb, not as a checklist for your repo.
+
+## Optional: prepare a project orchestration map
+
+After scope and tracker setup, use `/linear-roadmap <project>` to map existing
+approved tickets. For new work, `/spec` supplies the verdict and
+`/linear-feature-intake` creates the approved records first. Prompt-only input
+can produce a draft, with no launch authorization.
+
+Keep the shared lifecycle at the installed stack's root; copy/adapt
+[`ORCHESTRATION.md`](ORCHESTRATION.md) and [`orchestration.json`](orchestration.json)
+into the consuming root and the one active `orchestration/<slug>.json`. Adapt
+[`orchestration-index.json`](orchestration-index.json) into `orchestration/index.json`;
+its source pin records adoption provenance; supported schemas and a clean installed source determine compatibility. Groups describe subunits without new sessions; one
+executable issue maps to one persistent session. `/next` reads indexed conditions
+and checks live evidence. `/wave` retains its current human plan checkpoint.
+
+Each project's Markdown graph must include all its Linear tickets on main.
+Linear-roadmap reports coverage gaps as maintenance warnings. Next/wave, dispatch,
+land and implementer review workflows verify selected work and its dependency
+closure; unrelated missing tickets do not freeze mapped candidates. At most three
+missing in-scope maintenance units may use a local reconciliation record containing
+main SHA, live issue evidence and exact delta. Scope/dependency/release/human-gate
+changes require reviewed publication. An explicit --accept-graph-update uses a
+validated reviewed pending graph for one invocation; build requires the flag again.
+Legacy graphs still need cited closure audits and reviewed mapping repairs.
+See the canonical publication-gate contract in the physical KStack checkout.
+
+Use `/linear-roadmap <project>` for local JSON, orchestration Markdown and scope
+updates; add `--publish` explicitly to open or update the graph PR. Updating the
+map leaves existing wave membership and approved plans intact. Revalidation uses
+each mapped track's graph/evidence closure; unrelated ticket, graph or main
+changes do not interrupt it. Changed relevant conditions stop only affected tracks
+while independent audited siblings continue. Local drafts alone grant no admission.
+
+
+For a local roadmap, explicitly pass `--local-graph`
+to wave plan and repeat it on wave build alongside --approve. This uses fresh local
+indexed/candidate admission without graph publication to GitHub or Linear. Scope,
+native blockers, dependencies, evidence and human plan/merge decisions still apply.
+Changed local index/manifest/provenance pins require a new plan; source_revision
+remains the original adoption provenance across compatible stack upgrades.
+
+The human maintainer manually publishes/links the shared team-owned Linear contract
+under the workspace rules and verifies read-back; the roadmap skill never writes it. Keep
+each pilot document with its project. Publishing a graph does not execute it;
+the persistent-session controller remains an experimental integration requirement.
 
 ## Verify, then delete the old copies
 

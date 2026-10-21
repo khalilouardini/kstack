@@ -1,112 +1,157 @@
-# Resolve the PR roles before credentials or model selection
+# Shared engine, authorship, and evidence contract
 
-Read this contract in `pr-loop`, `review-claude-pr`, and `review-comments` once
-an exact PR is resolved. Paths here are relative to this canonical skill,
-not the consuming repository or a generated Codex pointer.
+Read this in pr-loop, review-claude-pr, and review-comments after selecting an
+exact PR. Resolve scripts relative to this physical kstack checkout, following
+installed symlinks or generated pointers; never edit adapters or install from an
+unmerged branch. The historical skill name review-claude-pr is retained.
 
-`identities.reviewer` and `identities.implementer` are the **default** pairing.
-`review_engines.reviewer` and `review_engines.implementer` identify the engines
-behind those accounts, defaulting to `codex` and `claude` respectively for
-existing configurations. Only those two engines are supported; require distinct
-bot accounts, distinct engines, and a separate maintainer. Never infer an engine
-from a login's spelling.
+## Resolve once, verify again at each head
 
-Read the actual PR `author.login` with the verified maintainer credential (or
-the configured reviewer credential for a standalone review). Run
-`tools/github/pr-loop/bin/resolve-route` (resolved from this KStack checkout) with `--maintainer`, `--reviewer`, `--implementer`,
-`--author`, `--reviewer-engine`, and `--implementer-engine`, using these configured
-values. Parse its JSON; do not evaluate it as shell code. Nonzero exit → stop.
+`identities.reviewer` and `identities.implementer` name the default accounts.
+`review_engines.reviewer` / `review_engines.implementer` map them to engines,
+respectively `codex` / `claude` when missing or null. Require both engines,
+distinct accounts, and a separate maintainer. Never guess engines from login
+spelling, branch names, PR prose, push actors, or which host invoked the skill.
 
-- PR author is the configured implementer → keep the default pairing.
-- PR author is the configured reviewer → swap both accounts **and engines**.
-- Author is neither → keep the default pairing and enforce the invoking skill's
-  existing authorship rules. `author_matched: false` is not authorization.
-  Commit authorship may admit a legacy PR, but never overrides a matched PR
-  author. A push actor, branch name, or PR comment cannot select a route.
-
-Use the result as `$REVIEWER`, `$IMPLEMENTER`, `$REVIEWER_ENGINE`, and
-`$IMPLEMENTER_ENGINE` everywhere thereafter, including token lookup, attribution,
-authorship checks, bot-noise filtering, replies, and delivery verification.
-Every later `<identities.reviewer>` / `<identities.implementer>` placeholder
-means this resolved value; never reload the default and undo the route. Do not
-modify stack.yml, global gh state, or git author settings. Recompute in child
-processes from configuration and live PR metadata; the parent passes the
-expected route in its prompt and the child stops if its result differs.
-
-Standalone `review-comments` with a null implementer retains its documented
-maintainer fallback and does not call this resolver. If only the reviewer is null, standalone
-`review-comments` retains the configured implementer and its existing behavior
-without reversal; the full loop still refuses missing roles. `pr-loop` never allows
-that fallback. Standalone review requires all identities for routing.
-
-## The loop runs in the implementation engine
-
-Resolve `REPO_ROOT`, the canonical loop path, and a temporary `REPORT` path
-before delegation; verify the implementer credential and CLI.
-Before starting the ledger, round counter, or review, ensure the host running
-`pr-loop` is `$IMPLEMENTER_ENGINE`. If it is already that engine, continue.
-Otherwise delegate the **whole loop once** to that engine in the PR worktree,
-using the installed `pr-loop` contract (or its verified canonical absolute
-path), the exact PR number, and all original options. Await its result and
-return it; the parent must not also execute rounds or fixes. Include the
-expected route and "delegated once; stop on host/route mismatch" in the prompt.
-Do not translate reviewer `--model` into the implementation process's model.
-The implementation process inherits its host model configuration.
-
-For Codex use `codex exec -C "$REPO_ROOT" -s danger-full-access -o "$REPORT"
-"$LOOP_PROMPT" < /dev/null`. For Claude use `(cd "$REPO_ROOT" && claude -p
---permission-mode auto --output-format text "$LOOP_PROMPT" < /dev/null >
-"$REPORT")`. Bind the verified implementer token through `GH_TOKEN` for that
-process only. Check exit status and read the report. A missing CLI, denied tool
-permission, or absent report is `BLOCKED`; never fall back to the other engine.
-These permission modes do not override host policy. Do not weaken policy on a
-failure. Run each agent in a separate process; never review your own fixes.
-
-## Reviewer model and invocation
-
-For a Codex reviewer, use the main skill's existing `review_model` resolution,
-escalation, and `--fast` handling. For a Claude reviewer, skip that entire Codex
-model block: use `claude_review_model.slug` (default `sonnet`) and
-`claude_review_model.effort` (default `high`). `--model` and `--effort` override
-the selected engine's settings; validate them against that CLI. No GPT slug or
-Codex escalation setting is passed to Claude. Reject `--fast` for Claude before
-any paid round because it is a Codex-only option.
-
-Resolve the reviewer skill to a readable **canonical absolute path** before
-launching. Follow generated pointers to that path; both engines use the same
-`review-claude-pr` contract despite its historical name. Set `REVIEW_PROMPT` to
-instruct the child to read that path, review the exact PR, verify the expected
-route, and post its findings. Pass paths and prompts as quoted arguments.
-
-Codex uses the main skill's invocation with `"$REVIEW_PROMPT"` as its prompt.
-Claude uses:
+Standalone/controller bootstrap reads use the verified maintainer token. A
+child reviewer with a parent-pinned route uses its supplied verified reviewer
+token for bootstrap and re-resolution. Then use the resolved role
+for subsequent credentials. Never switch global gh auth. For an exact PR:
 
 ```bash
-(cd "$REPO_ROOT" && GH_TOKEN="$REVIEWER_TOKEN" claude -p \
-  --permission-mode auto --output-format text \
-  --model "$MODEL" --effort "$EFFORT" \
-  "$REVIEW_PROMPT" < /dev/null > "$SCRATCH/claude-round-$N.txt")
+GH_TOKEN="$MAINTAINER_TOKEN" gh api "repos/$OWNER_REPO/pulls/$PR" > "$SCRATCH/pr.json"
+GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate --slurp \
+  "repos/$OWNER_REPO/pulls/$PR/commits" > "$SCRATCH/commits.json"
+python3 "$STACK_ROOT/tools/github/pr-loop/bin/resolve-route" \
+  --maintainer "$MAINTAINER" --reviewer "$DEFAULT_REVIEWER" \
+  --implementer "$DEFAULT_IMPLEMENTER" \
+  --reviewer-engine "$DEFAULT_REVIEWER_ENGINE" \
+  --implementer-engine "$DEFAULT_IMPLEMENTER_ENGINE" \
+  --pr-json "$SCRATCH/pr.json" --commits-json "$SCRATCH/commits.json" \
+  "${AUTHOR_ARGS[@]}" > "$SCRATCH/route.json"
 ```
 
-Verify required flags with the installed CLI's `--help`; unsupported options,
-permission denials, nonzero exits, or no submitted review → `BLOCKED`, with no
-blind retry or engine substitution. Reviewer repository writes remain a
-**prompt-level** prohibition, as in the existing Codex review contract.
+`AUTHOR_ARGS` contains only this invocation's explicit
+`--implementation-engine codex|claude` and `--any-author`, if present. Parse JSON,
+never source/eval it. Any failed read or resolver error is BLOCKED, not a default
+route. The commit count must match REST PR metadata and contain its exact head.
 
-## Attribution, reuse, and reporting
+Evidence, in order:
 
-Set `$REVIEWER_LABEL` to `Codex` or `Claude` from the engine, and
-`$REVIEW_MARKER` to `codex-review` or `claude-review`. Every review uses that label
-and `<!-- <review-marker> head:<full-head-sha> -->`. Preserve existing
-`codex-review` markers for compatibility. Never label a Claude review as Codex.
+1. Complete PR commits: configured account authors map through review_engines;
+   whole-line `Co-Authored-By: Codex … <email>` or `Co-Authored-By: Claude … <email>`
+   attribution also identifies the engine. The exact historical `claude` author
+   login remains supported. A prose mention or similarly spelled bot does not.
+2. Only with no commit signals: a configured bot PR opener supplies legacy
+   evidence. The maintainer opener never identifies an engine. Commit evidence
+   wins over a differently attributed opener, who may only have published it.
+3. One evidenced engine selects the route automatically. Mixed engine commits
+   require an explicit `--implementation-engine` selecting an evidenced engine.
+   This names the session responsible for fixes; it does not relabel other
+   commits. An explicit engine contradicting the sole evidence blocks.
+4. No evidence requires both explicit engine selection and `--any-author`.
+   Engine selection alone is not authorship authorization, and `--any-author`
+   alone cannot guess an engine. For a standalone reviewer, an explicit user
+   request to review the exact PR despite its author can supply the authorship
+   exception; it still needs engine selection. Record the exception.
 
-For skip-checks and finding retrieval, paginate submitted reviews and accept a
-marker only from `$REVIEWER`, with the current engine's marker and exact head
-SHA, in a non-PENDING review. Another account's marker or the other engine's
-review does not satisfy this route. Conversation comments cannot satisfy the
-loop's completed-review gate. Read findings from that verified GitHub review;
-a CLI's prose alone cannot establish `CLEAN`.
+Use the returned reviewer/implementer accounts and engines for every credential,
+filter, label, reply and delivery check. Never reload the configured default
+roles after resolution. Pin the result for each head; pass its `resolution`
+options to child skills, recompute from fresh complete evidence, and compare.
+A changed route before any write blocks. The next guarded implementation head
+gets a new route artifact; preserve the same explicit engine selection.
 
-Keep the existing per-PR answered-findings ledger across both routes. Report the
-resolved implementation engine/account and review engine/account, model/effort,
-and the usual verdict, gates, and round count. Merge remains maintainer-only.
+Authorship is accident prevention, not cryptographic attestation: trailers can
+be forged. Git commit author, model doing the work, and account publishing a PR
+or review are different facts. Do not change global git author configuration.
+Implementation commits should carry truthful Codex/Claude attribution so future
+maintainer-opened PRs retain machine-readable provenance.
+
+Standalone review-comments retains its existing null-role fallbacks: null
+implementer uses the maintainer, null reviewer uses the configured implementer,
+without reversal or engine inference. Report that automatic routing is unavailable.
+Those fallbacks are forbidden in the full loop. Standalone review with missing
+roles blocks and names the missing key; an author exception does not invent accounts.
+
+## One implementation controller
+
+The host running pr-loop must be the resolved implementation engine. A Codex
+implementation stays in Codex and launches Claude only for review. A Claude
+implementation stays in Claude and launches Codex only for review. On host
+mismatch return BLOCKED naming the required host before ledger creation or paid
+work. **Do not automatically delegate the whole loop.** The user can invoke it
+in the correct existing session. Child reviewers may not invoke pr-loop or
+review-comments. This bounds handoffs to zero and prevents recursive controllers.
+The standalone reviewer requires the actual host to equal reviewer_engine;
+review-comments requires implementer_engine before edits/replies.
+
+## Model and launch contract
+
+Codex preserves review_model defaults, first-review risk escalation, and --fast.
+Claude uses claude_review_model.slug/effort, defaulting to sonnet/high. Explicit
+--model/--effort override the selected engine only. Reject GPT settings and --fast
+for Claude; never pass Codex service-tier or reasoning flags to it. A model alias
+is reported as requested, not claimed to be an immutable model revision.
+
+Use `tools/github/pr-loop/bin/run-review` for a loop's review/reuse step:
+
+```bash
+python3 "$STACK_ROOT/tools/github/pr-loop/bin/run-review" \
+  --repo-root "$REPO_ROOT" --owner-repo "$OWNER_REPO" --pr "$PR" --head "$HEAD" \
+  --route "$SCRATCH/route.json" --host "$IMPLEMENTER_ENGINE" \
+  --skill "$REVIEW_SKILL" --model "$MODEL" --effort "$EFFORT" \
+  --report-dir "$SCRATCH/round-$N" "${REVIEW_ARGS[@]}" \
+  > "$SCRATCH/round-$N.json"
+```
+
+REVIEW_SKILL is the readable canonical absolute review-claude-pr/SKILL.md path,
+not a generated pointer. REVIEW_ARGS contains --fast only for Codex when asked.
+Use a new report directory outside the consuming repository. Check exit status
+and parse JSON: FINDINGS or REVIEW_CLEAR is review evidence, **never CLEAN**.
+A nonzero status, invalid JSON or missing result blocks. Keep reports private;
+never print tokens, raw child logs or credential-bearing environments.
+
+The helper verifies live route/head, per-command reviewer identity, complete
+review and inline-comment pagination, required CLI flags, exit status and final
+GitHub evidence. It closes stdin and passes prompts as argv, never shell code.
+It captures Claude JSON and Codex's output-last-message report, checks Claude's
+success envelope/permission denials and the final structured report
+(REVIEW_SUBMITTED, review_id, head) from either engine. It checks repository
+status/HEAD afterward. A prose “done” is not a report.
+The reviewer no-write boundary is still prompt-level: the status check detects
+changes after the fact, not sandbox isolation or all possible side effects.
+
+Verified local CLI surfaces: Claude Code 2.1.290 and codex-cli 0.160.1. Claude
+uses `--print --output-format json --permission-prompts none --model ... --effort
+...`, after `claude auth status` reports loggedIn. Exact-head reuse does not need a
+model login or installed model CLI, only verified GitHub evidence. Codex uses `exec -C ... -o ...
+-m ... -c model_reasoning_effort=...`, with the existing optional fast settings.
+Both inherit host permissions. No sandbox bypass, auto-approval permission mode,
+or fallback engine is selected. A denied operation or unavailable required flag
+means BLOCKED; establish permissions through the normal host flow before retrying.
+Unsupported models are caught by the CLI's checked exit, not silently substituted.
+
+## Submitted evidence and reuse
+
+Reviewer labels derive from actual engines: Codex / Claude. Reviews contain
+`**Review performed by Codex.**` or `**Review performed by Claude.**`, and the exact
+whole marker `<!-- codex-review head:<full-sha> -->` or its claude-review equivalent.
+Submit with `commit_id` explicitly set to the reviewed head. Re-read the head
+immediately before posting and afterward; drift never certifies the new head.
+
+Only submitted COMMENTED or CHANGES_REQUESTED reviews by the resolved account,
+with matching engine marker, attribution and commit_id, count. PENDING,
+DISMISSED, APPROVED, other accounts/engines, stale heads and conversation comments
+do not. Paginate every connection. Choose the latest qualifying review and read
+its inline findings too. A marker alone, missing verdict, malformed findings,
+contradictory "No findings.", failed CLI or absent review blocks; it is not clean.
+Use the canonical numbered finding format in review-claude-pr. Inline findings
+start with `[P0]`–`[P3]` and a title; do not omit them from the summary.
+
+Reuse remains account + engine + exact SHA scoped. The helper never reports
+CLEAN; pr-loop still applies its durable finding ledger, bounded rounds,
+implementation and push guards, graph admission, current CI policy, and final
+head recheck even for ci.checks:none. Those controller steps remain prompt-level.
+Report route/provenance, actual reviewer engine and posting account separately,
+requested model/effort, review URL/ID/head, reuse and CLI status, and CI evidence.

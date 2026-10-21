@@ -2,12 +2,180 @@
 
 ## Unreleased
 
-`pr-loop` reverses accounts and engines for PRs opened by the configured
-reviewer: Codex-authored PRs receive Claude reviews and Codex fixes. Shared
-routing aligns replies and attribution, scopes review reuse to account/engine/head,
-and retains the default Claude → Codex flow. `review_engines` and
-`claude_review_model` configure the pairing and Claude model independently of
-Codex model routing.
+`/pr-loop` 0.9.0, `/review-claude-pr` 0.4.0 and `/review-comments` 0.6.0:
+bidirectional independent review with commit-based engine provenance, explicit
+mixed-authorship selection, and one implementation controller. Add a tested
+CLI runner that verifies per-command identity, exact-head submitted review
+and inline evidence, catches failures, and keeps Claude/Codex flags separate.
+Retain main's model routing, fast mode, graph admission and concurrency guards.
+Host permissions are inherited. Deployment and a live authenticated review
+remain rollout checks; this does not enable Codex /wave build.
+
+Add --local-graph to wave and composed execution
+skills. Explicit local graph use retains fresh candidate/closure, scope, dependency,
+evidence and human approval checks without graph publication. Build requires renewed
+local approval and matching saved pins; B3 re-audits local files even when main is
+unchanged. Preserve source_revision as adoption provenance across stack upgrades.
+
+`/wave` 0.8.0: a B3 review no longer stops before round 1 because main moved
+after B1. With the default `review_concurrency` of 1, a later track's review
+starts after earlier tracks' rounds, and any merge in that window moved main and
+made the node return BLOCKED with rounds 0. A read-only B3 admission node now
+observes live main before each project-linked track's pr-loop. When main moved,
+it re-runs graph-admission at live main; the script proceeds only when the
+validated main is an ancestor, `git merge-tree --write-tree` merges the PR head
+cleanly and the candidate graph/evidence digests preserve the approved conditions.
+Anything else stays BLOCKED before any write. New READMISSION record.
+
+`/wave` 0.7.0 reconciles per-track admission with compatible stack updates and
+repair publication. Saved own-closure graph and evidence digests permit a local
+repair to become published while retaining full origin checks during local
+execution. Missing or changed relevant evidence stops only the affected track;
+unrelated graph changes and independently verified siblings remain admissible.
+`/linear-roadmap` 0.6.2 preserves local refresh defaults and source provenance.
+
+Roadmap admission now treats `source_revision` as adoption provenance, rather than
+requiring equality with the installed kstack HEAD. `/linear-roadmap` 0.5.1,
+`/next` 0.8.2 and `/wave` 0.5.2 use supported index/manifest schemas for
+compatibility, so stack upgrades alone need no graph-only repin PR. Dirty source,
+unsupported schemas, scope, dependency and approval checks still refuse as before.
+Regression fixtures verify unchanged admission across stack updates, preserved
+provenance and unrelated coverage warnings.
+
+`/wave` 0.5.2 preserves plan approval across the required contract merge and other
+main/graph-PR SHA movement when fresh audits confirm the same effective graph and
+approved issue closure. Historical reports are validated against their own pins;
+current pending graphs still require explicit flags and exact-head review. Covers
+contract plan/build round trips, later-day resumes, graph publication and malformed
+historical evidence without relaxing scope, contract or changed-evidence checks.
+
+`/wave` 0.6.2: A1 is told the format of `TRACK.project`. The script matches it
+exactly against `graph_publication.projects[]`, but the A1 prompt never named
+the format, so an A1 that returned `"MVP 2.1 (<uuid>)"` instead of the bare UUID
+stopped Run A with "no unambiguous eligible candidate audit". The A1 prompt and
+records.md now require the publication's `project_id` verbatim (or null), and a
+stopped Run A records, per failing track, the `project` value and how many
+publication projects it matched.
+
+`/linear-roadmap` 0.6.0 refreshes local JSON, orchestration Markdown and scope
+files by default; `--publish` explicitly opens or updates the graph PR. Local
+mapping does not grant execution admission or alter a running wave's membership.
+`/wave` 0.6.0 compares per-candidate graph/evidence closure digests across plan
+and build instead of locking approval to the whole graph or main SHA. Unrelated
+graph/ticket/main changes preserve approval after a fresh audit; changed or
+missing relevant evidence stops only the affected track, not independent siblings.
+
+Add `/update-stack` to refresh the recorded canonical checkout from the remote
+default branch, reinstall both host adapters through `bin/install`, and report
+source/host/project evidence. Dirty or divergent source checkouts stop updates.
+A read-only installation audit detects stale targets/frontmatter, missing or
+orphaned adapters, and bounded project-local copies; `--check` never fetches or
+installs. Updates are manually invoked, with no schedule or merge hook.
+
+`/wave` Run B no longer refuses because main moved after Run A. When A2 finds
+shared literals, B1 requires A3's contract PR on the default branch, so merging
+it always moved main and no wave with a contract could build. Run B now decides
+on the graph and closure digests it already compared; a changed digest or a
+different project still refuses, and B1 verifies
+Run A's main is an ancestor of the fetched default branch.
+
+`graph-admission` compares a closure issue's live `prerequisites` once per issue:
+the edges into every node sharing its `issue_ref`, in manifest order. A unit and
+its human review node with one `issue_ref` could not both match before, so no
+such candidate was admissible. Live-dependency drift still refuses.
+
+`/triage` 0.3.1 hardens inventory error handling and review-evidence fixtures,
+retains contradictory same-head findings and unknown severities as holds, and
+reports ledger/container provenance. Shared project-resolution and complete-file
+references are now consumed by both `/next` 0.8.1 and triage. CI discovery names
+permission-aware policy/workflow fallbacks and caches base evidence; labels
+prefilter costly project mapping with honest exclusion counts. Missing audit
+configuration has an explicit reporting-only exception in CONVENTIONS.md.
+
+
+`/triage` 0.3.0 adds repeatable Linear project filters (union, intersected with
+all requested GitHub labels) and evidence for every PR disposition: intent,
+state/head/base, CI coverage, posted loop versus derived review status, and a
+linked unresolved-thread appendix. Reuses `/next` membership/file verification
+and review contracts without running them. Proposals disclose unknown/unstable
+reads, all merge candidates in dependency order or independent lanes, and use
+exclusive collision-safe output creation. Default remains GitHub-only PR triage;
+project lookup fails closed, and branch/worktree passes remain separate.
+Synthetic offline fixtures and prompt-reference checks run in `bin/check-stack`;
+they do not enforce live agent behavior. Router and README preserve invocation
+filters. Refresh adapters through `bin/install --host codex` after deployment.
+
+Add `/issue-graph open|status|refresh` for an installed local roadmap viewer.
+Refresh derives views from the indexed JSON and fresh Linear evidence, preserves
+typed event conditions and unverified checkpoints, and backs up one workspace
+before replacing its caches without changing saved views or notes.
+
+`/pr-loop` 0.6.0: `CLEAN` requires CI. After a finding-free review, step 3a
+reads the PR's checks at the reviewed head, waits up to `--ci-wait` minutes
+(default 30) for pending ones, and exits `BLOCKED` on a red or timed-out check
+instead of `CLEAN`. A head that moves while it waits starts the next round. New
+key `ci.checks` (`required` | `all` | `none`) says which checks count; missing →
+`/pr-loop` refuses. Buckets come from `gh pr checks --json`, which exits 0 on
+pending and failing checks alike (gh 2.89.0), so the exit code is never read.
+kstack's own `stack.yml` sets `none`: it has no GitHub CI.
+
+Separate project graph coverage warnings from execution eligibility across next,
+wave, dispatch, land, investigate and review workflows. Unrelated missing tickets
+no longer freeze mapped work. Add `graph-admission` for pinned candidate/closure
+evidence and at most three missing maintenance units within approved scope,
+recording main SHA, full live issue evidence and exact node delta without a
+preliminary graph PR. Scope, dependencies, release criteria and human gates still
+require reviewed publication. Wave retains admission digests through plan/build
+and requires fresh candidate evidence before implementation.
+
+`/summarize-change` 0.2.0 briefs a change by its intent instead of its
+behavior. The six parts are now intent with its source, approach and the system
+constraints it touches, diff vs intent (delivered / beyond intent / short of
+intent), sensitive vs mechanical ranges, blast radius, and decision needed.
+Intent comes from the tracker issue, the `/spec` file, the PR body, then
+commits, in that order; the diff still decides what the code does. An intent
+inferred from the diff alone is labelled as inferred. `--tight` emits the same
+six parts under per-part caps, at most 250 words, and states how many items each
+cap dropped.
+
+Add repeatable `--accept-overlap <PR#>` to `/next` and `/wave plan`: humans may
+accept file overlap with named open PRs, recorded in kickoffs and plan risks for
+rebasing onto the default branch after a merge, while scope, graph, dependency,
+foundation and within-batch checks hold. Complete diff snapshots and caller
+preflight preserve refusal reasons; default ranking stays unchanged. Workflow
+records carry track risks but omit unused/excluded overlap reports.
+
+Require `/linear-roadmap` to create or update the consuming product’s scope
+contract when needed, covering project purpose, boundaries, acceptance gates and
+product impact. Preserve approved scope and mark unauthorized changes as drafts.
+
+Add `/linear-roadmap` to prepare reusable project/subunit roadmaps from existing
+Linear work, specs or prompts. A versioned JSON contract and stdlib validator
+generate Mermaid and check combined event dependencies; `/next` consults these
+conditions using live evidence. One machine-readable index names the combined
+manifest and checks its source revision. PLAN_ONLY has a planning handoff and is
+excluded from wave tracks. Root lifecycle and consuming-project templates keep
+shared policy separate from pilot data. Document the missing session
+controller and automatic-plan path; existing `/wave` approval remains unchanged.
+
+New `sweep-schedules` sets up recurring session-title and PR-label application
+through the desktop scheduler, every three hours by default. Setup reuses a
+matching schedule, saves bounded apply authorization, and keeps unchanged runs
+quiet. Manual sweep defaults remain dry-run. `session-titles` now prefers the
+supported Codex desktop rename API; scheduled runs never rewrite the private
+CLI session index. Installation alone does not activate a schedule.
+
+Add `/wave`: a two-run Claude Code Workflow batch with human plan approval, contract seam checks and bounded review; Codex selects only.
+
+Upgrade the default Codex reviewer from `gpt-6-sol` to `gpt-6.1-sol`,
+keeping high reasoning effort and the existing Astra escalation and Luna override.
+
+PRs are now opened by `identities.maintainer`, not `identities.implementer`.
+`land` binds the maintainer token for `gh pr create`; `dispatch-implementation`
+requires the same account instead of whatever global `gh` account is active.
+`pr-loop` and `review-claude-pr` treat a maintainer-opened PR with a
+`Co-Authored-By: Claude` trailer as the standard agent-built case; the
+implementer and reviewer accounts act only once a review loop starts.
 
 New `tools/github/pr-label-sweep`: adds GitHub labels to open PRs from rules in
 a new `pr_labels.rules` block of `.agents/stack.yml` — the linked tracker
@@ -50,7 +218,8 @@ Filtering weakens the skill's completeness promise, so the proposal now carries
 a mandatory `**Filter:**` header line — `none` when unfiltered — plus the scored
 and excluded counts, the truncation assertion moves to the filtered count, and
 the branch/worktree tables state that no label reached them. `--label` is a
-GitHub PR label only; `triage` still never reads a tracker.
+GitHub PR label only; that path stays GitHub-only. Optional Linear project
+filtering is described in the current triage procedure.
 
 New `core/summarize-change`: briefs one change in the session as six fixed parts
 — verdict, decision, behavioral change map with `file:line`, blast radius with

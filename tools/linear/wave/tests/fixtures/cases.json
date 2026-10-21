@@ -1,0 +1,158 @@
+[
+  {
+    "number": 30,
+    "name": "unrelated roadmap and main changes preserve approved wave"
+  },
+  {
+    "number": 31,
+    "name": "changed or unmapped track does not interrupt independent siblings"
+  },
+  {
+    "number": 28,
+    "name": "plan reports do not shadow build admission"
+  },
+  {
+    "number": 29,
+    "name": "Run B filters previously discarded audit reports"
+  },
+  {
+    "number": 26,
+    "name": "candidate closure evidence is required"
+  },
+  {
+    "number": 27,
+    "name": "bounded reconciliation and approval drift"
+  },
+  {
+    "number": 25,
+    "name": "unrelated maintenance addition does not freeze mapped work"
+  },
+  {
+    "number": 18,
+    "name": "unknown selected project blocks execution"
+  },
+  {
+    "number": 19,
+    "name": "graph bypass malformed values refuse"
+  },
+  {
+    "number": 20,
+    "name": "graph bypass binding and fresh build consent"
+  },
+  {
+    "number": 21,
+    "name": "uncovered tracks cannot enter execution"
+  },
+  {
+    "number": 33,
+    "name": "A1 project is the publication project_id; a decorated name refuses"
+  },
+  {
+    "number": 22,
+    "name": "project-less tracks are exempt"
+  },
+  {
+    "number": 23,
+    "name": "uncovered projects do not block covered tracks"
+  },
+  {
+    "number": 24,
+    "name": "publication freshness and SHA evidence"
+  },
+  {
+    "number": 1,
+    "name": "empty selection"
+  },
+  {
+    "number": 2,
+    "name": "no shared literals"
+  },
+  {
+    "number": 3,
+    "name": "contract before plans"
+  },
+  {
+    "number": 4,
+    "name": "missing contract directory"
+  },
+  {
+    "number": 5,
+    "name": "approval subset"
+  },
+  {
+    "number": 6,
+    "name": "stopped build"
+  },
+  {
+    "number": 7,
+    "name": "seam mismatch"
+  },
+  {
+    "number": 8,
+    "name": "rounds exhausted"
+  },
+  {
+    "number": 9,
+    "name": "no merge"
+  },
+  {
+    "number": 10,
+    "name": "schema agreement"
+  },
+  {
+    "number": 11,
+    "name": "sequential review"
+  },
+  {
+    "number": 12,
+    "name": "plan-only excluded before wave approval"
+  },
+  {
+    "number": 13,
+    "name": "accepted overlap prompt and risk transport"
+  },
+  {
+    "number": 14,
+    "name": "no overlap flags preserve plan prompts"
+  },
+  {
+    "number": 15,
+    "name": "overlap refusals precede agents"
+  },
+  {
+    "number": 16,
+    "name": "complete diff evidence and rename paths"
+  },
+  {
+    "number": 17,
+    "name": "all plans stopped returns STOPPED without build command"
+  },
+  {
+    "number": 32,
+    "name": "contract merged between plan and build"
+  },
+  {
+    "number": 34,
+    "name": "main moved between B1 and B3 with unchanged closure readmits the review"
+  },
+  {
+    "number": 35,
+    "name": "moved main with a changed closure digest blocks review"
+  },
+  {
+    "number": 36,
+    "name": "approved local graph preserves full candidate admission through review"
+  },
+  {
+    "number": 37,
+    "name": "local graph requires valid fresh explicit source approval at both checkpoints"
+  },
+  {
+    "number": 38,
+    "name": "local graph retains closure and human plan approval checks"
+  },
+  {
+    "number": 39,
+    "name": "local review requires a fresh matching graph audit even when main is unchanged"
+  }
+]

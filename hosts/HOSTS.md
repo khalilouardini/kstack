@@ -11,6 +11,7 @@ written down; skills and adapters point here instead of restating them.
 | `hooks:` frontmatter | honored — registers `PreToolUse` | **not read** |
 | Enforcement of `careful` / `freeze` | hook-enforced | **prompt-level only** |
 | Tool vocabulary in prose | named tools (`Read`, `Bash`, …) resolve | name the capability, not the tool |
+| Workflow tool | Claude Code only; `/wave` runs the graph | absent; `/wave plan` runs A1 selection only and says the graph did not run; build refuses |
 | Regeneration needed after an edit | no, except frontmatter for the codex copy | yes, whenever frontmatter changes |
 
 ## Install
@@ -34,6 +35,46 @@ no regeneration because it was never duplicated.
 Symlink-vs-pointer is the only structural difference in install. It exists
 because Codex resolves skills from its own directory and does not follow the
 same layout, not because the two hosts need different content.
+
+## Refresh after a merge
+
+Invoke `/update-stack` to update the recorded root in
+`${KSTACK_STATE:-$HOME/.kstack}/stack-root` from the remote default branch and
+run that checkout's installer for both hosts. The canonical checkout must be
+clean and able to fast-forward; local edits are preserved by stopping, never
+stashed/reset automatically. `/update-stack --check` is read-only and labels
+its remote-tracking evidence as potentially stale.
+
+The read-only `core/update-stack/bin/installation-status` helper verifies every
+expected Claude symlink and Codex pointer's target/name/version/description,
+root record and source SHA. It can scan explicit projects and immediate sibling
+repos plus their registered worktrees for local skill copies. Global installation
+status and project-local copies are separate results, with the scan boundary
+reported. Neither it nor check-stack proves what an already-running agent has
+loaded; ask that session to re-read a changed skill or restart if needed.
+
+A global reinstall does not rewrite project configuration, remove local skills,
+or activate an update schedule. Use the normal installer for all adapter writes.
+
+## Independent CLI review
+
+pr-loop runs in the implementation engine's session. Codex implementations call
+Claude Code CLI for review, then Codex fixes; Claude implementations call Codex
+CLI for review, then Claude fixes. A host mismatch blocks before paid work;
+there is no recursive whole-loop handoff. Posting accounts are verified per
+command and do not establish which engine performed the work.
+
+The shared contract is `tools/github/pr-loop/references/routing.md`. Its runner
+uses a canonical absolute review skill path, exact PR/head, closed stdin, pinned
+engine-specific model/effort, captured output and checked exit status. It checks
+installed CLI help/auth and submitted GitHub review evidence. Host permissions
+are inherited; unavailable CLI/auth or denied actions block without bypasses or
+fallback self-review. The reviewer no-write boundary remains prompt-level.
+
+This capability does not add a Workflow tool to Codex. Native /wave build in
+Codex remains unavailable; that needs a separate execution backend. Update the
+canonical source and regenerate adapters only after merge via the normal
+installer/update-stack flow, then re-read skills in active sessions.
 
 ## Hooks — the one difference that changes a guarantee
 

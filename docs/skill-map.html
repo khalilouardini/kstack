@@ -346,11 +346,12 @@ const SKILLS = [
 
   { n:"/spec", t:"roles", p:1, e:"ro", does:"The product gate. The scope role runs first and alone; only an in-scope verdict fans out to tech-lead and designer, then qa. A rejection costs one agent instead of four.", says:["should we build X?","spec this out","is this worth building"] },
   { n:"/next", t:"linear", p:1, e:"ro", does:"Reads the whole board — cycles, priorities, deadlines, blockers — and recommends exactly one thing to pick up, with a ranked top three and paste-ready kickoff text.", says:["what's next?","what should I work on"] },
-  { n:"/triage", t:"roles", p:1, e:"ro", does:"Scores every open PR, unmerged branch and worktree against the scope doc. Writes a dated proposal; closes, merges and deletes nothing.", says:["triage the backlog","which branches can we delete"] },
+  { n:"/triage", t:"roles", p:1, e:"ro", does:"Reports PR intent, scope, merge/CI and review/thread evidence. Optional project/label filters; branches and worktrees on request. Proposal only.", says:["triage the backlog","which branches can we delete"] },
   { n:"product-manager", t:"roles", p:1, e:"tool", does:"One verdict, citing the exact line of the scope doc that justifies it. Defaults to OUT. Refuses to write specs, estimate, or soften a rejection.", says:["is this in scope?"] },
   { n:"tech-lead", t:"roles", p:1, e:"prompt", does:"Reuse-vs-build delta naming real files and symbols, the seam it touches, collisions with open PRs, an estimate in half-days. Refuses to estimate what it cannot name.", says:["how long would this take?","does this already exist?"] },
   { n:"designer", t:"roles", p:1, e:"tool", does:"Which existing components render this, what data shape they need, what states it has. Refuses to invent a component when one exists; a spec conflict stops the run.", says:["which component renders this?"] },
   { n:"qa", t:"roles", p:1, e:"tool", does:"Acceptance criteria that are runnable checks, plus the false-positive definition that stops a demo being mistaken for evidence.", says:["what would prove this works?"] },
+  { n:"/linear-roadmap", t:"linear", p:1, e:"prompt", does:"Maps existing tickets or drafts a proposed project graph. Writes local typed JSON and Mermaid; a bundled validator checks event dependencies. No tracker writes or session launch.", says:["map this Linear project","prepare an orchestration roadmap"] },
   { n:"/linear-feature-intake", t:"linear", p:1, e:null, does:"Turns a scope verdict into the right tracker records and nothing else. Searches for duplicates first; performs no scope assessment of its own.", says:["file this","turn this into tickets"] },
 
   { n:"/dispatch-implementation", t:"linear", p:2, e:"prompt", does:"Starts one approved issue in one isolated branch and worktree. Only after that evidence exists, automatically moves the Linear issue to the contract's started status and reads it back before launching a plan-only executor.", says:["start this ticket","tackle ISSUE-123","dispatch this issue"] },
@@ -366,12 +367,14 @@ const SKILLS = [
 
   { n:"/land", t:"core", p:4, e:null, does:"Dedicated branch, gates green, atomic commits, PR opened — with the concurrent-session guards: re-verify the branch and the staged set before every commit. Stops at the PR.", says:["land this","commit and push","open a PR"] },
 
+  { n:"/update-stack", t:"core", p:5, e:"prompt", does:"Refreshes the recorded canonical checkout from main, reinstalls both host adapters and reports source/host/project evidence. Check-only mode is read-only; dirty or divergent sources stop updates.", says:["update kstack","reinstall kstack","refresh the shared skills"] },
   { n:"/health", t:"core", p:5, e:"ro", does:"Runs the project's own gates, scores them, and reports the trend against the last run. Never edits, never fixes.", says:["how healthy is this codebase?","quality score"] },
   { n:"/delivery-retro", t:"gh", p:5, e:"ro", does:"Was this period fruitful versus the previous equal period? Measures outcomes, flow, quality and focus — and refuses commits, lines and PR counts as scores.", says:["was this week fruitful?","what did we ship"] },
   { n:"/session-titles", t:"gh", p:5, e:"ro", does:"Sweeps open agent sessions across both harnesses, resolves each to a branch, PR and issue key, and retitles them so the session list is scannable.", says:["what is each session working on?"] },
   { n:"/pr-label-sweep", t:"gh", p:5, e:null, does:"Adds the milestone, area and client labels your rules call for to every open PR, each citing the tracker project, changed path or title keyword that fired it. Add-only; never creates a label.", says:["label my PRs","sweep PR labels"] },
   { n:"/linear-steward", t:"linear", p:5, e:null, does:"Structural health of the tracker: unprojected, stale, GitHub-contradicted, duplicated, superseded, ungateable. Mutates nothing unless explicitly applied.", says:["audit the board","these statuses are wrong"] },
   { n:"/linear-release-audit", t:"linear", p:5, e:"ro", does:"Audits a release against its gate criteria using tracker and GitHub evidence together. Headline finding: issues marked done with no acceptance evidence.", says:["is the release ready?","what's blocking the release"] },
+  { n:"/issue-graph", t:"linear", p:5, e:"prompt", does:"Opens an installed local roadmap viewer, checks its freshness, or refreshes one snapshot from indexed JSON and fresh Linear data. Preserves typed conditions and unverified checkpoints, saved views and notes.", says:["launch the issue graph","refresh the issue graph"] },
 ];
 
 const PHASES = [

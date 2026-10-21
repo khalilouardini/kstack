@@ -48,6 +48,8 @@ project: <slug>
 scope_doc: <path|null>          # scope/priority contract — roles, spec, triage, next
 workspace_contract: <path|null> # Linear workspace rules — tools/linear
 issue_prefix: <PREFIX|null>     # e.g. OGUR — session-titles, next, pr-label-sweep
+issue_graph:                   # local roadmap visualization — issue-graph
+  config: <path|null>          # JSON viewer binding; absolute or relative to consuming repo
 gates:                          # `lint` + `test` are the two any skill may assume.
   lint: <cmd|null>              # must pass before any commit/push claim
   test: <cmd|null>              # fast suite
@@ -65,18 +67,18 @@ review_model:                   # which model reviews, and how hard — pr-loop 
   escalate_above_files: <int|null>  # optional changed-file trigger
   escalate_paths: []                # fnmatch globs; any matching changed path triggers
   escalated_effort: <effort|null>
-# Engines behind the default identity slots; PR authorship can reverse roles.
-review_engines:
-  reviewer: codex
-  implementer: claude
-# Used only when the resolved reviewer is Claude; Codex uses review_model.
-claude_review_model:
-  slug: sonnet
-  effort: high
+review_engines:                  # account→engine mapping; does not infer from logins
+  reviewer: codex                # codex | claude, null/missing → codex
+  implementer: claude            # the other engine, null/missing → claude
+claude_review_model:             # Claude review rounds only; no Codex flags
+  slug: sonnet                  # null/missing → sonnet (alias, not immutable revision)
+  effort: high                  # null/missing → high
+ci:
+  checks: <required|all|none>   # PR checks /pr-loop needs green before CLEAN
 identities:
-  maintainer: <gh-login|null>   # human owner: governs and merges
+  maintainer: <gh-login|null>   # human owner: opens PRs, governs, merges
   reviewer: <gh-login|null>     # review agent; Codex by default
-  implementer: <gh-login|null>  # implementation agent: opens PRs, fixes, replies
+  implementer: <gh-login|null>  # implementation agent: fixes and replies in a review loop
 protected_branches: []          # fnmatch globs (`demo/*`) matched against the
                                 # branch name; triage may never propose CLOSE for one
 role_appendix_dir: <path|null>  # per-role project appendices (traps, factories, gates)
@@ -86,11 +88,18 @@ pr_labels:                      # pr-label-sweep only
                                 # paths (fnmatch), text (regex); a rule fires on ANY match
 ```
 
-Review model settings default rather than refuse, and the
+`issue_graph.config` points to the JSON viewer binding described in
+`tools/linear/issue-graph/references/binding.md`. A saved host-local binding at
+`${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/issue-graph.json` also supplies
+the installation and workspace mapping when this key is unset. Opening and
+inspecting an existing viewer need no tracker access; refresh needs fresh Linear
+reads and the indexed roadmap.
+
+`review_model` and `claude_review_model` default rather than refuse, and the
 reason is the asymmetry: an unset gate command silently passes a check that
 never ran, while an unset review model can safely use a documented, pinned
 default rather than inheriting the host's interactive setting. Refusing there
-would cost more than defaulting. The default is `gpt-6-sol`/`high`. On the
+would cost more than defaulting. The default is `gpt-6.1-sol`/`high`. On the
 first review of a PR,
 configured risk triggers select `gpt-6-astra`/`high`; later heads return to
 the base lane unless `--model` explicitly pins Astra. Raw size triggers are
@@ -99,20 +108,38 @@ disabled by default because generated data and fixtures can inflate them.
 the resolved model, effort, and where each came from in its report, so the
 default is never silent.
 
-The review skills resolve roles per PR: a PR opened by `identities.reviewer`
-swaps the default accounts and their `review_engines`; a PR opened by
-`identities.implementer` keeps them. The PR author takes precedence over commit
-authors and push actors. Missing `review_engines` defaults to reviewer `codex`,
-implementer `claude` for compatibility. The accounts and engines must be distinct.
-The loop runs in the implementation engine and launches the other engine for
-review. `claude_review_model` defaults to `sonnet` / `high`; `review_model` and
-its escalation settings are Codex-only. Overrides apply to the selected reviewer;
-`--fast` is rejected for Claude. Resolution never rewrites project configuration.
+The review skills share `tools/github/pr-loop/references/routing.md`: resolve
+implementation from complete commit attribution, with a legacy bot-opener
+fallback only when no commit signals exist. Explicit --implementation-engine
+resolves mixed provenance; absent agent evidence also requires --any-author.
+The maintainer opening a PR does not select an engine. Account mapping defaults
+preserve the Claude implementation → Codex review flow without changing existing
+configuration. The implementation host controls fixes; host mismatch blocks
+without automatic delegation. Claude settings never inherit review_model or
+--fast. Review reuse requires account, actual engine and exact head evidence.
 
 **Missing-key policy — never silently default.** A skill that needs a key and
 does not find it either asks the user (interactive judgment calls) or refuses
-with the exact key name (gates and identities always refuse — a gate that
-defaults open is not a gate).
+with the exact key name (gates, identities and `ci.checks` always refuse — a
+gate that defaults open is not a gate).
+
+**Triage reporting exception:** `/triage` reads `identities.maintainer`,
+`identities.reviewer`, `identities.implementer` and `ci.checks` as evidence
+interpretation inputs, not as authorization for a gate or write. When one is
+missing, it names the exact key and marks the affected attribution/assessment
+UNKNOWN with an evidence hold; it can retain unrelated scope facts. It never
+invents an identity, CI mode, successful gate or merge permission. This exception
+does not apply to review, implementation, publication or merge procedures,
+which continue to refuse their required missing identities/gates/CI mode.
+
+`wave.max_review_rounds` missing/null defaults to 3, announced: observed later
+rounds addressed interactions among earlier fixes, so a bounded three-round run
+leaves further decisions human. `wave.review_concurrency` defaults to 1,
+announced, because concurrent reviewer processes share an account quota window.
+Both must be positive integers. `wave.contract_dir` has no project-neutral
+default; missing/null with shared literals refuses naming that exact key.
+These defaults bound work rather than invent evidence; gates and identities
+continue to refuse when absent.
 
 ## 3. Skill file anatomy
 

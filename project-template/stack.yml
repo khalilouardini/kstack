@@ -39,6 +39,14 @@ workspace_contract: null         # e.g. docs/product/tracker-contract.md
 # null → session-titles falls back to PR numbers only.
 issue_prefix: null               # e.g. ACME  → matches ACME-123
 
+# Local issue-graph viewer binding. Paths may be absolute or relative to the
+# consuming repo; use project-template/issue-graph.json as the format example.
+# A host-local binding saved under KSTACK_STATE/projects/<project>/issue-graph.json
+# also works, keeping machine-specific paths out of Git. No installation or
+# background synchronization is enabled by this block.
+issue_graph:
+  config: null
+
 # The commands this repo considers authoritative. Skills run YOUR commands and
 # never infer one from the file tree — an inferred gate that passes proves
 # nothing. Both keys refuse rather than default.
@@ -85,7 +93,7 @@ review_gate:
 # in its report. This block never refuses: an unset review model can use a
 # pinned default rather than inheriting an unknown host setting.
 review_model:
-  slug: gpt-6-sol                # normal independent-review lane
+  slug: gpt-6.1-sol                # normal independent-review lane
   effort: high                   # low | medium | high | xhigh | max
   escalated_slug: gpt-6-astra    # first review only, when a risk trigger fires
   escalate_above_lines: null    # optional; raw additions + deletions
@@ -93,19 +101,32 @@ review_model:
   escalate_paths: []            # project-specific fnmatch globs; [] disables
   escalated_effort: high
 
-# GitHub logins. No defaults, ever — the human governs and merges, the reviewer
-# publishes findings (Codex by default), and the implementer opens PRs, fixes,
-# and replies (Claude by default). A skill refuses when a role it needs is null.
-# Engines behind the default identity slots; PR authorship can reverse roles.
+# Map the configured accounts to actual engines, never infer from login names.
+# Missing/null retains the legacy default. Roles swap for Codex implementation.
+# Commit attribution selects the route; mixed provenance needs an explicit
+# --implementation-engine codex|claude. Human-only PRs also need --any-author.
 review_engines:
   reviewer: codex
   implementer: claude
-# Used only when the resolved reviewer is Claude; Codex uses review_model.
+
+# Claude reviewer only. Codex escalation and --fast never apply to this block.
 claude_review_model:
-  slug: sonnet
-  effort: high
+  slug: sonnet                  # alias; set a supported full model ID to pin
+  effort: high                  # supported by the installed Claude CLI
+
+# Which of a PR's checks /pr-loop needs green at the reviewed head before it may
+# report CLEAN. `required` reads the base branch's required status checks; use
+# `all` when the base branch marks none as required (`required` would never turn
+# green there); `none` only for a repo with no CI, and the loop's report says so.
+# null → /pr-loop refuses.
+ci:
+  checks: null                   # required | all | none
+
+# GitHub logins. No defaults, ever — the human opens PRs, governs, and merges;
+# once a review loop starts, the reviewer publishes findings (Codex by default)
+# and the implementer fixes and replies (Claude by default). A skill refuses when a role it needs is null.
 identities:
-  maintainer: null               # human account that governs and merges
+  maintainer: null               # human account that opens PRs, governs, merges
   reviewer: null                 # review-agent account; Codex by default
   implementer: null              # implementation-agent account; Claude by default
 
@@ -142,3 +163,9 @@ pr_labels:
   #   paths: ["src/server/**"]
   # - label: MVP-2
   #   linear_project: ["Road to MVP-2"]
+
+# Missing/null rounds and concurrency use announced defaults, not host settings.
+wave:
+  max_review_rounds: 3  # three bounds unattended review; later rounds address fix interactions
+  review_concurrency: 1  # reviewer processes share one account quota window
+  contract_dir: null  # project-specific; refuse if shared literals need a contract
