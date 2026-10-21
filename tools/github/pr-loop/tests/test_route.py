@@ -158,6 +158,28 @@ class EvidenceTests(unittest.TestCase):
             self.assertEqual(value['status'], status)
             self.assertEqual(value['findings'][0]['path'], 'file.py')
 
+    def test_range_citation_and_priority_mention_in_assessment(self):
+        body = ('### Findings\n1. **[P2] Fix this** — `file.py:8-12`\n'
+                '### Overall assessment\nThe [P2] issue is reproducible.')
+        value = self.check([review(body=body)])
+        self.assertEqual(value['status'], 'FINDINGS')
+        self.assertEqual(value['findings'], [dict(priority=2, title='Fix this', path='file.py')])
+
+    def test_clean_assessment_allows_trailing_sentence(self):
+        value = self.check([review(body='### Overall assessment\nNo findings. Tests pass.')])
+        self.assertEqual(value['status'], 'REVIEW_CLEAR')
+
+    def test_prior_count_requires_matching_account_engine_and_commit(self):
+        valid = review(engine='codex', reviewer='review-bot')
+        invalid = [review(engine='codex', reviewer='build-bot'),
+                   review(engine='claude', reviewer='review-bot'),
+                   review(engine='codex', reviewer='review-bot', commit_id='b' * 40),
+                   review(engine='codex', reviewer='review-bot', state='PENDING'),
+                   review(engine='codex', reviewer='review-bot', submitted_at=None)]
+        self.assertEqual(rt.prior_review_count([[valid, *invalid]], 'review-bot', 'codex'), 1)
+        with self.assertRaises(rt.Blocked):
+            rt.prior_review_count([valid], 'review-bot', 'other')
+
     def test_inline_cannot_be_lost_or_cleaned_away(self):
         comment = {'pull_request_review_id': 123, 'body': '[P1] Missing check\nExplanation', 'path': 'a.py'}
         with self.assertRaises(rt.Blocked):

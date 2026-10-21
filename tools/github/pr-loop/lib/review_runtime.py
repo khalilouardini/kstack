@@ -15,7 +15,6 @@ class Blocked(ValueError):
 ENGINES = {'codex', 'claude'}
 SHA = re.compile(r'[0-9a-f]{40}')
 TRAILER = re.compile(r'^Co-Authored-By: (Codex|Claude)\b[^\n]*<[^<>\s]+@[^<>\s]+>\s*$', re.I)
-PRIORITY = re.compile(r'\[P[^\]]*\]')
 
 
 def pages(value):
@@ -120,9 +119,10 @@ def review_evidence(reviews, comments, reviewer, engine, head):
         raise Blocked('review has wrong commit, missing submission, or false engine attribution')
     findings = []
     for line in body.splitlines():
-        if not PRIORITY.search(line):
+        # Priority mentions in the assessment are prose, not findings.
+        if not re.match(r'^\s*(?:\d+\.\s+)?(?:\*\*)?\[P[^\]]*\]', line):
             continue
-        match = re.fullmatch(r'\d+\. \*\*\[P([0-3])\] (.+?)\*\* — `(.+?):\d+`', line)
+        match = re.fullmatch(r'\d+\. \*\*\[P([0-3])\] (.+?)\*\* — `(.+?):\d+(?:-\d+)?`', line)
         if not match:
             raise Blocked('malformed review finding; expected numbered priority/title/path:line')
         findings.append(dict(priority=int(match[1]), title=match[2], path=match[3]))
@@ -135,12 +135,31 @@ def review_evidence(reviews, comments, reviewer, engine, head):
         item = dict(priority=int(match[1]), title=match[2], path=comment['path'])
         if item not in findings:
             findings.append(item)
-    no_findings = bool(re.search(r'^No findings\.$', body, re.M))
+    no_findings = bool(re.search(r'^\s*No findings\.(?:\s|$)', body, re.M))
     if (not findings and not no_findings) or (findings and no_findings):
         raise Blocked('absent or contradictory review verdict')
     return dict(review_id=review['id'], review_url=review.get('html_url'), head=head,
                 reviewer=reviewer, engine=engine, findings=findings,
                 status='FINDINGS' if any(f['priority'] <= 2 for f in findings) else 'REVIEW_CLEAR')
+
+
+def prior_review_count(reviews, reviewer, engine):
+    """Count submitted reviews with matching account, engine and commit marker."""
+    if engine not in ENGINES:
+        raise Blocked('invalid reviewer engine')
+    marker = re.compile(rf'<!-- {engine}-review head:([0-9a-f]{{40}}) -->')
+    label = 'Codex' if engine == 'codex' else 'Claude'
+    count = 0
+    for review in pages(reviews):
+        body = review.get('body') or ''
+        match = marker.search(body)
+        if ((review.get('user') or {}).get('login', '').casefold() == reviewer.casefold()
+                and review.get('state') in ('COMMENTED', 'CHANGES_REQUESTED')
+                and review.get('submitted_at') and match
+                and review.get('commit_id') == match[1]
+                and f'**Review performed by {label}.**' in body):
+            count += 1
+    return count
 
 
 def command(engine, repo, model, effort, prompt, report, fast=False):
@@ -330,6 +349,19 @@ def route_main():
         args['pr'] = decode(Path(args.pop('pr_json')).read_text())
         args['commits'] = decode(Path(args.pop('commits_json')).read_text())
         print(json.dumps(resolve(**args)))
+    except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        parser.exit(2, 'BLOCKED: ' + str(exc) + '\n')
+
+
+def prior_count_main():
+    parser = argparse.ArgumentParser(description='Count verified historical reviewer submissions')
+    parser.add_argument('--reviews', required=True)
+    parser.add_argument('--reviewer', required=True)
+    parser.add_argument('--engine', required=True, choices=sorted(ENGINES))
+    args = parser.parse_args()
+    try:
+        reviews = decode(Path(args.reviews).read_text())
+        print(prior_review_count(reviews, args.reviewer, args.engine))
     except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
         parser.exit(2, 'BLOCKED: ' + str(exc) + '\n')
 

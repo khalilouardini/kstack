@@ -320,7 +320,12 @@ preflight. The previous round may have posted the first kstack review marker,
 after which an automatic Astra escalation must expire:
 
 ```bash
-# PRIOR_REVIEW_COUNT is the verified same-account/engine historical count above.
+# Count only submitted reviews with this account's Codex marker bound to the
+# review's commit_id. Fetch every page before selecting the first-review model.
+GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate --slurp \
+  "repos/$OWNER_REPO/pulls/$PR/reviews" > "$SCRATCH/prior-reviews.json"
+PRIOR_REVIEW_COUNT=$(python3 "$STACK_ROOT/tools/github/pr-loop/bin/prior-review-count" \
+  --reviews "$SCRATCH/prior-reviews.json" --reviewer "$REVIEWER" --engine codex)
 SIZE=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json additions,deletions \
   --jq '.additions + .deletions')
 GH_TOKEN="$MAINTAINER_TOKEN" gh pr diff "$PR" --name-only > "$SCRATCH/changed-paths-raw.txt"
