@@ -101,6 +101,19 @@ review_model:
   escalate_paths: []            # project-specific fnmatch globs; [] disables
   escalated_effort: high
 
+# Map the configured accounts to actual engines, never infer from login names.
+# Missing/null retains the legacy default. Roles swap for Codex implementation.
+# Commit attribution selects the route; mixed provenance needs an explicit
+# --implementation-engine codex|claude. Human-only PRs also need --any-author.
+review_engines:
+  reviewer: codex
+  implementer: claude
+
+# Claude reviewer only. Codex escalation and --fast never apply to this block.
+claude_review_model:
+  slug: sonnet                  # alias; set a supported full model ID to pin
+  effort: high                  # supported by the installed Claude CLI
+
 # Which of a PR's checks /pr-loop needs green at the reviewed head before it may
 # report CLEAN. `required` reads the base branch's required status checks; use
 # `all` when the base branch marks none as required (`required` would never turn

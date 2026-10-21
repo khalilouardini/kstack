@@ -7,6 +7,15 @@
 Build still checks the approved literals across ticket branches and blocks
 review on missing or mismatched evidence.
 
+`/pr-loop` 0.9.0, `/review-claude-pr` 0.4.0 and `/review-comments` 0.6.0:
+bidirectional independent review with commit-based engine provenance, explicit
+mixed-authorship selection, and one implementation controller. Add a tested
+CLI runner that verifies per-command identity, exact-head submitted review
+and inline evidence, catches failures, and keeps Claude/Codex flags separate.
+Retain main's model routing, fast mode, graph admission and concurrency guards.
+Host permissions are inherited. Deployment and a live authenticated review
+remain rollout checks; this does not enable Codex /wave build.
+
 Add --local-graph to wave and composed execution
 skills. Explicit local graph use retains fresh candidate/closure, scope, dependency,
 evidence and human approval checks without graph publication. Build requires renewed

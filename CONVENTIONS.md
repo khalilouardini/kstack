@@ -67,6 +67,12 @@ review_model:                   # which model reviews, and how hard — pr-loop 
   escalate_above_files: <int|null>  # optional changed-file trigger
   escalate_paths: []                # fnmatch globs; any matching changed path triggers
   escalated_effort: <effort|null>
+review_engines:                  # account→engine mapping; does not infer from logins
+  reviewer: codex                # codex | claude, null/missing → codex
+  implementer: claude            # the other engine, null/missing → claude
+claude_review_model:             # Claude review rounds only; no Codex flags
+  slug: sonnet                  # null/missing → sonnet (alias, not immutable revision)
+  effort: high                  # null/missing → high
 ci:
   checks: <required|all|none>   # PR checks /pr-loop needs green before CLEAN
 identities:
@@ -89,7 +95,7 @@ the installation and workspace mapping when this key is unset. Opening and
 inspecting an existing viewer need no tracker access; refresh needs fresh Linear
 reads and the indexed roadmap.
 
-`review_model` is the one block that defaults rather than refuses, and the
+`review_model` and `claude_review_model` default rather than refuse, and the
 reason is the asymmetry: an unset gate command silently passes a check that
 never ran, while an unset review model can safely use a documented, pinned
 default rather than inheriting the host's interactive setting. Refusing there
@@ -101,6 +107,16 @@ disabled by default because generated data and fixtures can inflate them.
 `--model gpt-6-luna --effort high` is the economy override. The skill states
 the resolved model, effort, and where each came from in its report, so the
 default is never silent.
+
+The review skills share `tools/github/pr-loop/references/routing.md`: resolve
+implementation from complete commit attribution, with a legacy bot-opener
+fallback only when no commit signals exist. Explicit --implementation-engine
+resolves mixed provenance; absent agent evidence also requires --any-author.
+The maintainer opening a PR does not select an engine. Account mapping defaults
+preserve the Claude implementation → Codex review flow without changing existing
+configuration. The implementation host controls fixes; host mismatch blocks
+without automatic delegation. Claude settings never inherit review_model or
+--fast. Review reuse requires account, actual engine and exact head evidence.
 
 **Missing-key policy — never silently default.** A skill that needs a key and
 does not find it either asks the user (interactive judgment calls) or refuses
