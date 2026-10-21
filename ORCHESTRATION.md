@@ -143,6 +143,12 @@ that reuse the existing skills. No new `/orchestrate` command exists yet. Valida
 host session capabilities before choosing its API; do not invent launch flags,
 Workflow options or a Desktop automation API.
 
+The [wave throughput design](docs/wave-throughput-design.md) scopes a smaller
+precursor: compare one fixed wave with three manually dispatched sessions, remove
+unnecessary scheduling waits, then prove persistent ticket sessions. It proposes
+measurements and acceptance criteria while preserving human plan approval and
+merge decisions. It does not implement this project-wide controller.
+
 ## Session and plan policy
 
 - One coordinator session uses Ultracode. Ticket sessions implement only their
