@@ -187,6 +187,12 @@ def cli_report(engine, text):
         raise Blocked('missing reviewer report')
     if engine == 'claude':
         data = decode(text)
+        if isinstance(data, dict) and data.get('permission_denials'):
+            names = sorted({str(d.get('tool_name', 'unknown')) for d in data['permission_denials']
+                            if isinstance(d, dict)})
+            names = [n for n in names if re.fullmatch(r'[A-Za-z0-9_]+', n)]
+            raise Blocked('Claude tool permission denied: ' + ', '.join(names or ['unknown'])
+                          + '; use the normal host approval flow before retrying')
         if (not isinstance(data, dict) or data.get('type') != 'result'
                 or data.get('subtype') != 'success' or data.get('is_error') is not False
                 or data.get('permission_denials') != []):
@@ -275,7 +281,10 @@ def execute(args):
               'and stop on mismatch. The parent has authorized this exact review and posting it. '
               'Post one submitted COMMENT review with commit_id pinned to that exact head and '
               'the engine-specific marker. Never edit implementation, commit, push, fix findings, '
-              'or start/delegate pr-loop. Use only the verified reviewer account for GitHub calls. '
+              'or start/delegate pr-loop. Your process already has GH_TOKEN bound to '
+              f'{route["reviewer"]}; verify it with gh api user and use it for all GitHub reads '
+              'and review submission. Do not obtain or use a maintainer credential, and do not '
+              'reset to the configured default reviewer. Recompute provenance with this same token. '
               'Respect host permissions; denial, absent evidence or moved head means BLOCKED. '
               'Your final response must be only a JSON object: '
               '{"status":"REVIEW_SUBMITTED","review_id":123,"head":"<full reviewed SHA>"}. '

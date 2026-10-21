@@ -118,6 +118,7 @@ class RunnerTests(unittest.TestCase):
     def test_permission_denial_blocks_even_if_review_exists(self):
         result, report, _ = self.invoke(mode='denied')
         self.assert_blocked(result, report)
+        self.assertIn('Claude tool permission denied: Bash', report['reason'])
 
     def test_error_envelope_blocks(self):
         result, report, _ = self.invoke(mode='error-envelope')

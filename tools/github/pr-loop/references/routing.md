@@ -15,12 +15,14 @@ spelling, branch names, PR prose, push actors, or which host invoked the skill.
 
 Standalone/controller bootstrap reads use the verified maintainer token. A
 child reviewer with a parent-pinned route uses its supplied verified reviewer
-token for bootstrap and re-resolution. Then use the resolved role
+token for bootstrap and re-resolution. Set BOOTSTRAP_TOKEN to that token in a
+child, or to MAINTAINER_TOKEN standalone; the child never obtains a maintainer
+credential. Then use the resolved role
 for subsequent credentials. Never switch global gh auth. For an exact PR:
 
 ```bash
-GH_TOKEN="$MAINTAINER_TOKEN" gh api "repos/$OWNER_REPO/pulls/$PR" > "$SCRATCH/pr.json"
-GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate --slurp \
+GH_TOKEN="$BOOTSTRAP_TOKEN" gh api "repos/$OWNER_REPO/pulls/$PR" > "$SCRATCH/pr.json"
+GH_TOKEN="$BOOTSTRAP_TOKEN" gh api --paginate --slurp \
   "repos/$OWNER_REPO/pulls/$PR/commits" > "$SCRATCH/commits.json"
 python3 "$STACK_ROOT/tools/github/pr-loop/bin/resolve-route" \
   --maintainer "$MAINTAINER" --reviewer "$DEFAULT_REVIEWER" \
@@ -131,6 +133,11 @@ Both inherit host permissions. No sandbox bypass, auto-approval permission mode,
 or fallback engine is selected. A denied operation or unavailable required flag
 means BLOCKED; establish permissions through the normal host flow before retrying.
 Unsupported models are caught by the CLI's checked exit, not silently substituted.
+Because stdin is closed and permission prompts have no interactive host, required
+GitHub reads/posting and proof commands must already be permitted by the host.
+A denial is a rollout blocker: approve the concrete operation through the normal
+Claude permission flow before retrying. Never add a broad allowlist or bypass
+permissions to turn a blocked run green.
 
 ## Submitted evidence and reuse
 

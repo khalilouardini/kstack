@@ -79,7 +79,7 @@ report = {'status': 'BLOCKED' if mode == 'blocked-report' else 'REVIEW_SUBMITTED
           'review_id': 999 if mode == 'wrong-report-id' else 123, 'head': 'a' * 40}
 if name == 'claude':
     emit({'type': 'result', 'subtype': 'success', 'is_error': mode == 'error-envelope',
-          'permission_denials': ['Bash'] if mode == 'denied' else [], 'result': json.dumps(report)})
+          'permission_denials': [{'tool_name': 'Bash'}] if mode == 'denied' else [], 'result': json.dumps(report)})
 if name == 'codex':
     Path(args[args.index('-o') + 1]).write_text(json.dumps(report))
     print('events are not the final report')
