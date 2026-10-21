@@ -694,6 +694,35 @@ tests.push(
    const warnings=await run('plan',(f,a)=>{localArgs(f,a);a.approved_local_graph.coverage_exit=1;
      a.approved_local_graph.coverage_state='UPDATE_REQUIRED';});
    assert.equal(warnings.result.state,'AWAITING_APPROVAL','unrelated missing tickets remain warnings');
+   const contract=await run('plan',(f,a)=>{localArgs(f,a);f.responses['A2 shared-literal scan'].literals=f.literals;a.wave.contract_dir=null;});
+   assert.equal(contract.result.state,'AWAITING_APPROVAL');
+   assert.equal(contract.result.contract,null);
+   assert.deepEqual(contract.result.literals,fixture.literals);
+   assert.ok(!contract.calls.some(c=>c.label==='A3 contract'));
+   for(const c of contract.calls.filter(c=>c.label.startsWith('A4')))
+     assert.ok(c.prompt.includes(JSON.stringify(fixture.literals)),c.label);
+   for(const outcome of ['pass','mismatch','absent','incomplete']) {
+     const checked=await run('build',(f,a)=>{
+       localArgs(f,a);a.plan_record=contract.result;a.wave.contract_dir=null;
+       f.responses['B2 seam check']=outcome==='absent'?null:{exit:outcome==='mismatch'?1:0,
+         table:outcome==='incomplete'?[]:seamTable(f).map(row=>outcome==='mismatch'&&row.branch==='codex/t-2'&&row.file==='file2.txt'
+           ?{...row,state:'MISMATCH',evidence:'absent'}:row),open_questions:[]};
+     });
+     const seam=checked.calls.find(c=>c.label==='B2 seam check');
+     assert.ok(seam,'local agreements must still be checked');
+     assert.ok(seam.prompt.includes('temporary file outside the repository'));
+     assert.ok(seam.prompt.includes(JSON.stringify(fixture.literals.map(({literal,files})=>({literal,files})))));
+     for(const c of checked.calls.filter(c=>c.label.startsWith('B1'))) {
+       assert.ok(c.prompt.includes(JSON.stringify(fixture.literals)),c.label);
+       assert.ok(!c.prompt.includes('first verify its PR is merged'),c.label);
+     }
+     if(outcome==='pass') assert.equal(checked.result.seam_check.state,'PASSED');
+     else {
+       assert.equal(checked.result.seam_check.state,'FAILED');
+       assert.ok(!checked.calls.some(c=>c.label==='B3 review T-2'));
+       assert.equal(checked.result.tracks[1].state,'SEAM_MISMATCH');
+     }
+   }
  },
  async()=>{
    for(const mutate of [a=>a.selection.push(...localFlags),

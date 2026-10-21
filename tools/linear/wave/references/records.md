@@ -41,6 +41,12 @@ Contract files are JSON lists of {literal, files}; SHARED_LITERAL additionally
 records the participating issue ids and why agreement is required. Write
 <contract_dir>/<wave-id>.json and a test using the consuming repo's own runner:
 JSON permits exact strings without Markdown escaping and stdlib parsing.
+This publication procedure applies to published-graph waves. With an approved
+local graph, `RUN_A.contract` stays null and `RUN_A.literals` is the approved
+agreement snapshot; a null contract does not imply an empty literal list.
+A4/B1 receive that snapshot. B2 materializes only its `{literal, files}` projection
+in a temporary file outside the repository and checks the built branches; no
+separate contract PR, tracked contract file or bookkeeping test is created.
 
 WAVE_REPORT retains every selected track, including unapproved and dropped
 tracks. open_questions contains only questions actually checked against sibling

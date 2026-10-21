@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.9.0
+version: 0.9.1
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -72,6 +72,26 @@ Before B3, obtain a fresh local admission report even if main has not moved.
 Forward the explicit flag and absolute owner/pins through dispatch, land, pr-loop
 and review-comments. Host support below is unchanged.
 
+## Local wave metadata stays local
+
+With an explicitly approved local graph, never open a separate PR for the wave
+run, its plan, shared-literal contract or bookkeeping. A2 still scans agreements;
+store them in `RUN_A.literals`, keep `RUN_A.contract` null and skip A3. Each A4
+plan receives those exact agreements. The human approves that snapshot with the
+plans; implementation and any required product regression tests belong in the
+ticket PRs. A new product interface or scope change still needs its own normal
+authorization; a local snapshot cannot supply it.
+
+Run B uses the approved literals directly, with no contract merge prerequisite.
+When literals exist, B2 writes their `{literal, files}` projection to a temporary
+JSON file outside the repository and runs the same seam checker against the
+built branches. Missing, incomplete or mismatched seam evidence still blocks
+review. `wave.contract_dir` is unnecessary in this mode. Repeat `--local-graph`
+on build and retain the existing graph pins and plan approval checks.
+Published-graph waves retain the contract PR procedure below. Older local Run A
+records that already contain a published contract retain their merge check;
+run a new plan to use the local-only handoff.
+
 ## Project-level orchestration design
 
 For the requested single Ultracode coordinator and one persistent Desktop session
@@ -92,7 +112,7 @@ Read every composed procedure by physical path, never copy its rules here.
 - `wave.review_concurrency`: missing/null → default 1, announce it. Concurrent
   reviewer processes share an account's quota window. Both keys must be positive
   integers; malformed values refuse with the exact key.
-- `wave.contract_dir`: missing/null → permitted only when A2 is empty; otherwise
+- `wave.contract_dir`: missing/null → permitted for a local graph or when A2 is empty; otherwise
   refuse naming `wave.contract_dir`. No defensible project-neutral location exists.
   When set, require a relative directory contained in the repo; reject traversal,
   absolute paths and symlink escape before launching the graph.
@@ -225,7 +245,8 @@ only the contract and its test via land; B2 runs seam-check and verifies questio
 B3 admission only observes. All are prompt-level.
 
 Run A selects (A1), scans shared literals in issue descriptions and scopes (A2),
-then, only if necessary, prepares a contract PR (A3) before dispatch plans (A4).
+then, only for published graphs when necessary, prepares a contract PR (A3)
+before dispatch plans (A4). Local graphs follow **Local wave metadata stays local**.
 The contract is `<contract_dir>/<wave-id>.json`, a JSON list of `{literal, files}`,
 plus a test in the consuming runner that asserts those strings. A3 uses its own
 branch/worktree and reads `core/land/SKILL.md` top to bottom. JSON provides exact
@@ -239,7 +260,8 @@ contract PR actually reached the fetched default branch, rebases, then builds
 only the approved plan. After all B1s, B2 runs the deterministic
 `tools/linear/wave/bin/seam-check` against the built branches, contract and fetched
 base. It emits a literal × branch × file table; nonzero exit or absent evidence
-blocks affected tracks. No contract → B2 does not run and the report says so.
+blocks affected tracks. No shared literals and no contract → B2 does not run
+and the report says so. Local literals require B2 even with `contract: null`.
 B3 reads `tools/github/pr-loop/SKILL.md` top to bottom with the round cap and
 parses its existing verdict report; it has no new adaptation. Review concurrency
 limits only B3, so a later track's review can start long after B1 validated main.
@@ -270,7 +292,7 @@ read-back still depend on nodes faithfully following the canonical procedures.
 
 ## Checkpoints
 
-1. Run A returns `AWAITING_APPROVAL`, plans, contract PR and the exact Run B
+1. Run A returns `AWAITING_APPROVAL`, plans, any published contract PR and the exact Run B
    invocation plus JSON handoff. Human reads plans, merges the contract PR if
    present, then invokes `/wave build --approve <ids|all>`. Local graph use also
    requires repeating --local-graph explicitly. One decision per wave;
@@ -285,7 +307,8 @@ read-back still depend on nodes faithfully following the canonical procedures.
 
 Missing Workflow support → A1-only plan degradation, or build refusal. Missing
 approval/Run A record, invalid required config, missing project-filter support,
-unknown ids, non-empty A2 without `wave.contract_dir`, unmerged/missing contract,
+unknown ids, published-graph shared literals without `wave.contract_dir`,
+an unmerged/missing published contract,
 unreadable canonical procedures or dispatch refusal → report and stop with
 evidence. Headless land stops rather than waiting. Stopped or mismatched tracks
 never enter B3 (script check). No tracker authorship beyond dispatch's own
@@ -305,4 +328,5 @@ With N=3, Run A normally uses 6 agents (3+N with contract), or 5 without A3;
 Run B uses 10 (3N+1 with B2), or 9 without B2: one B1, one B3 admission and one B3
 review per project-linked track. Project-less tracks have no admission node.
 Counts are before stopped-track reductions.
+Local graphs skip A3 but still run B2 when shared literals exist.
 There is no implicit retry past terminal review verdicts.
