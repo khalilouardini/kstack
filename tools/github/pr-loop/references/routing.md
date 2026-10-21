@@ -126,7 +126,9 @@ never print tokens, raw child logs or credential-bearing environments.
 
 The helper verifies live route/head, per-command reviewer identity, complete
 review and inline-comment pagination, required CLI flags, exit status and final
-GitHub evidence. It closes stdin and passes prompts as argv, never shell code.
+GitHub evidence. Claude runs with its normal `auto` permission classifier and
+no interactive responder; any denied tool call blocks the round. It closes stdin
+and passes prompts as argv, never shell code.
 It captures Claude JSON and Codex's output-last-message report, checks Claude's
 success envelope/permission denials and the final structured report
 (REVIEW_SUBMITTED, review_id, head) from either engine. It checks repository

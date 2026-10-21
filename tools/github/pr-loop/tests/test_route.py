@@ -207,8 +207,10 @@ class InvocationTests(unittest.TestCase):
     def test_separate_engine_flags_and_permissions(self):
         claude = rt.command('claude', '/repo', 'sonnet', 'high', 'prompt $x', '/report')
         self.assertEqual(claude[-1], 'prompt $x')
+        self.assertEqual(claude[claude.index('--permission-mode') + 1], 'auto')
         self.assertIn('--permission-prompts', claude)
-        for forbidden in ['-c', 'service_tier', '--permission-mode', '--dangerously-skip-permissions']:
+        self.assertEqual(claude[claude.index('--permission-prompts') + 1], 'none')
+        for forbidden in ['-c', 'service_tier', 'bypassPermissions', '--dangerously-skip-permissions']:
             self.assertNotIn(forbidden, ' '.join(claude))
         codex = rt.command('codex', '/repo', 'gpt-6.1-sol', 'high', 'prompt', '/report', True)
         self.assertIn('service_tier="fast"', codex)

@@ -174,7 +174,10 @@ def command(engine, repo, model, effort, prompt, report, fast=False):
     if engine == 'claude':
         if fast or model.startswith(('gpt-', 'o1', 'o3', 'o4')):
             raise Blocked('Claude cannot use Codex --fast or GPT model settings')
-        return ['claude', '--print', '--output-format', 'json', '--permission-prompts', 'none',
+        # Use Claude's normal auto classifier. Unapproved prompts remain denied
+        # because this child has no interactive permission responder.
+        return ['claude', '--print', '--output-format', 'json', '--permission-mode', 'auto',
+                '--permission-prompts', 'none',
                 '--model', model, '--effort', effort, prompt]
     if engine != 'codex' or model.startswith(('claude', 'sonnet', 'opus', 'haiku')):
         raise Blocked('invalid Codex engine/model')
@@ -286,7 +289,8 @@ def execute(args):
     if not shutil.which(engine):
         raise Blocked('missing reviewer CLI: ' + engine)
     help_text = run([engine, 'exec', '--help'] if engine == 'codex' else [engine, '--help'], cwd=repo)
-    required = (['--print', '--output-format', '--permission-prompts', '--model', '--effort']
+    required = (['--print', '--output-format', '--permission-mode', '--permission-prompts',
+                 '--model', '--effort']
                 if engine == 'claude' else ['--cd', '--output-last-message', '--model', '--config'])
     if args.fast and engine == 'codex':
         required += ['--enable']

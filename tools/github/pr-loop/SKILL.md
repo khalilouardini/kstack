@@ -116,6 +116,10 @@ preflight below. If unreadable, stop. It owns provenance, role selection, host
 checks, canonical skill resolution and CLI invocation. Bootstrap the controller
 before running its resolver:
 
+Keep bootstrap, routing, preflight, and rounds in one persistent shell process
+(or one private controller script). The exit trap removes `SCRATCH`; running
+bootstrap alone in an ephemeral shell destroys the pinned route before step 1.
+
 ```bash
 PR=<number>
 MAINTAINER="<identities.maintainer>"
@@ -172,19 +176,23 @@ mkdir -p "$STATE_DIR"
 LEDGER="$STATE_DIR/$OWNER-$REPO-$PR"
 touch "$LEDGER"
 
-# Codex reviewers only: read model routing configuration here; resolve it again immediately before each
-# paid review, because the first-review exception expires after round 1.
-# Precedence per slot: invocation flag > first-review escalation > base config
-# > stack default. Explicit flags pin their slots for every round.
+# Shared invocation flags and Claude defaults. Explicit model/effort flags pin
+# their slots for every round, regardless of the resolved reviewer engine.
 FAST="<true iff --fast was passed; otherwise false>"
 REVIEW_ARGS=()
 if [ "$FAST" = true ]; then REVIEW_ARGS=(--fast); fi
-BASE_MODEL="<review_model.slug, or gpt-6.1-sol>"
-BASE_EFFORT="<review_model.effort, or high>"             # --effort overrides
 PINNED_MODEL="<--model value, if passed>"
 PINNED_EFFORT="<--effort value, if passed>"
 MODEL_PINNED="<true iff --model was passed>"
 EFFORT_PINNED="<true iff --effort was passed>"
+CLAUDE_BASE_MODEL="<claude_review_model.slug, or sonnet>"
+CLAUDE_BASE_EFFORT="<claude_review_model.effort, or high>"
+
+# Codex reviewers only: resolve this routing again before each paid review,
+# because the first-review exception expires after round 1. Precedence per
+# slot: invocation flag > first-review escalation > base config > default.
+BASE_MODEL="<review_model.slug, or gpt-6.1-sol>"
+BASE_EFFORT="<review_model.effort, or high>"
 ESCALATED_MODEL="<review_model.escalated_slug, or gpt-6-astra>"
 ESCALATED_EFFORT="<review_model.escalated_effort, or high>"
 ESCALATE_ABOVE="<review_model.escalate_above_lines, or empty>"
@@ -209,9 +217,9 @@ GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json number,state,isDraft,headRe
 ```
 
 Require state OPEN and the CLI, canonical skill and verified credentials named
-by the route. Missing dependencies or permissions return BLOCKED. For Claude,
-skip the Codex model variables above and use claude_review_model (sonnet/high
-when unset); --model/--effort override that pair. --fast is Codex-only.
+by the route. Missing dependencies or permissions return BLOCKED. Claude uses
+the shared pins and Claude defaults above; skip the Codex-only routing values.
+--fast is Codex-only.
 
 The shared resolver enforces authorship independently of engine choice.
 Maintainer-opened PRs with Codex/Claude commit attribution are eligible; mixed
@@ -343,9 +351,21 @@ account's text. `bin/run-review` performs the exact-head skip-check and returns
 verified evidence without another paid review if one exists. No CLI prose or
 bare marker can satisfy the gate.
 
-**2. Review.** For a Codex reviewer, resolve the model immediately before a paid round, not once in
-preflight. The previous round may have posted the first kstack review marker,
-after which an automatic Astra escalation must expire:
+**2. Review.** For a Claude reviewer, bind the exact pair that `bin/run-review`
+receives, rejecting Codex-only `--fast`:
+
+```bash
+if [ "$REVIEWER_ENGINE" = claude ]; then
+  if [ "$FAST" = true ]; then echo 'BLOCKED: --fast is Codex-only' >&2; exit 2; fi
+  MODEL="$CLAUDE_BASE_MODEL"; EFFORT="$CLAUDE_BASE_EFFORT"
+  if [ "$MODEL_PINNED" = true ]; then MODEL="$PINNED_MODEL"; fi
+  if [ "$EFFORT_PINNED" = true ]; then EFFORT="$PINNED_EFFORT"; fi
+fi
+```
+
+For a Codex reviewer only, resolve the model immediately before a paid round,
+not once in preflight. The previous round may have posted the first kstack
+review marker, after which an automatic Astra escalation must expire:
 
 ```bash
 # Count only submitted reviews with this account's Codex marker bound to the

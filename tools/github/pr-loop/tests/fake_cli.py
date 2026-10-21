@@ -52,7 +52,7 @@ if '--help' in args:
     if mode == 'unsupported':
         print('old CLI without required flags')
     else:
-        print('--print --output-format --permission-prompts --model --effort --cd --output-last-message --config --enable')
+        print('--print --output-format --permission-mode --permission-prompts --model --effort --cd --output-last-message --config --enable')
     sys.exit(0)
 if '--version' in args:
     print('fixture-cli 1.0')
