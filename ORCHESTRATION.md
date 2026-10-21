@@ -145,7 +145,9 @@ Workflow options or a Desktop automation API.
 
 The [wave throughput design](docs/wave-throughput-design.md) scopes a smaller
 precursor: compare one fixed wave with three manually dispatched sessions, remove
-unnecessary scheduling waits, then prove persistent ticket sessions. It proposes
+unnecessary scheduling waits, then prove persistent ticket sessions. A separate
+selection workstream reconciles direct dispatch with batch admission, distinguishes
+planning from building, and accounts for unused parallel capacity. It proposes
 measurements and acceptance criteria while preserving human plan approval and
 merge decisions. It does not implement this project-wide controller.
 

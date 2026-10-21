@@ -1,4 +1,4 @@
-# Make one wave competitive with three persistent ticket sessions
+# Make wave use available parallel work and compete with manual dispatch
 
 Status: proposed implementation scope, 2026-10-21. This PR changes documentation,
 not runtime behavior. The owner's request authorizes this investigation and scope;
@@ -9,6 +9,11 @@ but make the execution unit a ticket with a persistent session. Start eligible
 review work as each ticket becomes ready, use a rolling queue, and hold final
 handoffs only for dependencies that actually affect that ticket. Deliver the
 scheduling improvements independently of the larger session adapter.
+
+**Separate selection objective:** surface all authorized work that can progress,
+explain each exclusion, and make batch admission consistent with direct dispatch.
+Reducing runtime does not help if selection leaves usable workers idle. Resolve
+selection and capacity as their own delivery slice, before changing session hosts.
 
 The benchmark is `/next --parallel 3` followed by three independent
 `/dispatch-implementation` sessions, continued through equivalent review and CI.
@@ -50,6 +55,124 @@ contract-publication work for new local-graph waves. Its approved literal snapsh
 and seam validation remain requirements for this design. This design does not
 depend on that PR being merged in order to be reviewed.
 
+## Selection capacity: the OGUR-457 investigation
+
+The owner's dispatch trace raises a second problem: a directly dispatched issue
+can start planning while `/next --parallel` or `/wave plan` omits it. The earlier
+selection command and output were not supplied, so its exact historical exclusion
+is not established. Do not present the following findings as a reconstruction of
+that run.
+
+The saved OGUR-457 admission observation is from `2026-10-21T19:05:52Z`, on Ogur
+main `555b7bdf2d273d670863c3cc6a19f81eb9226acd`. Replaying its unchanged evidence
+through `graph-admission.audit`, with the original observation time supplied to
+the offline harness, gives:
+
+| Requested transition | Historical helper result | Unmet event |
+| --- | --- | --- |
+| plan | ELIGIBLE | None |
+| build | ELIGIBLE | None |
+| merge | BLOCKED | `review_ogur_457.approve` |
+
+This is a historical replay, not fresh admission or approval to build. The
+installed helper inspected for the replay is from kstack
+`c110307318a17a3494dd0dd33ece7cab0a00907c`. The saved graph has an admission edge
+to plan and a review edge to merge, with no extra build prerequisite. Unrelated
+coverage gaps (389, 392 and 502) remain warnings. A fresh Linear read also found
+no native blocking relation for 457; 411 and 433 are related issues, not native
+blockers. The active 457 worktree now calls for resume, not a duplicate dispatch.
+
+The helper validates supplied citations, ownership, acceptance and event evidence;
+the caller still owns their semantic interpretation. Its ELIGIBLE result does not
+certify plan approval, file isolation or the absence of scope contradictions.
+Consequently, “dispatch admitted plan, but the graph blocks build” is **falsified
+for this snapshot**. A batch exclusion could still be justified by concrete
+scope/dependency evidence, or could be a selector error; the omitted selection
+report is needed to distinguish them.
+
+Two details need explicit handling in the plan. The acceptance asks for client
+input/discovery plus report behavior that the issue assigns to 411 and 433. That
+requires a concrete acceptance boundary, not treating every related issue as a
+blocker. Also, scope §11.12 says the owner allocation supersedes the older blanket
+frontend exclusion and explicitly retains 457, while the §10 row names a narrower
+list of frontend exceptions. Citing §11.6 alone is inadequate. Resolve the newer
+decision's applicability before asking the owner to repeat an existing approval;
+neither silently expand 457 nor erase its recorded acceptance.
+
+The installed [next procedure at c110307](https://github.com/khalilouardini/kstack/blob/c110307318a17a3494dd0dd33ece7cab0a00907c/tools/linear/next/SKILL.md)
+contains additional capacity limits beyond graph admission:
+
+- PLAN_ONLY does not count toward `--parallel N`, and wave sends it to
+  `sequenced` rather than starting its planner.
+- Unknown candidate file scope prevents an independence claim before the planner
+  has mapped that scope. This can leave work undiscovered instead of resolving
+  the uncertainty with a bounded planning pass.
+- Any shared file between two selected candidates sequences one. The same path
+  overlap with an already-active external PR is only a warning. Thus moving one
+  task into an active session can change whether the other is admitted, even
+  though the technical interaction is unchanged.
+- Without project filters, a batch stays within one resolved milestone. Explicit
+  repeated project filters can combine authorized work across milestones.
+- N defaults to three and clamps to five. The stated justification is human
+  supervision and output size, not a measured execution limit.
+
+The procedure already asks for a maximum-cardinality batch; adding that sentence
+again is not the fix. Selection is performed by an agent, and SELECT's exclusions
+are strings. The runtime cannot verify a maximum from only the chosen tracks.
+
+### Proposed selection and capacity contract
+
+These are proposed changes, not flags or records implemented by this PR:
+
+1. **One candidate assessment across commands.** Share normalized observations
+   and reason codes between next, wave and dispatch: plan/build graph results,
+   semantic scope authority, native and technical dependencies, current owner,
+   file-scope confidence, selected filters and source revisions. Keep UNKNOWN
+   distinct from BLOCKED. Dispatch may choose a named issue while next ranks a
+   pool, but neither may reinterpret the same evidence without an explicit reason.
+   Record the exact command, skill revision and complete considered pool locally.
+2. **Separate planning from implementation.** Show implementation candidates,
+   planning candidates, decisions needed and active/resumable work independently.
+   Permit bounded read-only scope mapping before asserting build independence.
+   A plan-only item must never silently enter the build set or `--approve all`.
+   An unresolved scope boundary may yield a decision brief only where planning
+   itself is authorized; it is not permission to implement a reduced ticket.
+   Use a versioned record with explicit stage eligibility and approved-plan
+   digests; preserve the old record's strict build semantics during migration.
+3. **Use the same conflict policy for manual and batch starts.** Real dependencies,
+   shared unmerged foundations and incompatible changes remain implementation
+   constraints. Shared paths alone should create integration warnings consistently
+   for both already-active work and candidates in the same batch. Such tracks are
+   parallelizable with integration work, not certified file-disjoint. Carry exact
+   overlaps, shared interface obligations, integration order, fresh-main rebase,
+   relevant tests and renewed review at the changed head. Unknown technical
+   dependence cannot become a warning merely by relabeling it as file overlap.
+   No automatic merge, and no hidden weakening of the existing policy in old runs.
+4. **Compute and explain capacity.** Given a complete assessed pool and explicit
+   hard conflict pairs, a deterministic selector chooses the largest feasible
+   set up to N, then applies documented priority tie-breaks. Tests compare small
+   pools with an exhaustive oracle, including the A-versus-{B,C} greedy trap.
+   Bound the solver's work for larger pools; if it times out, report the best
+   known count and an upper bound, never claim maximum. Show requested capacity,
+   admitted builds, available planning work and a reason for every unfilled slot.
+   Computational optimality does not certify the agent's semantic evidence.
+5. **Separate batch size from machine budgets.** Retain three as the initial
+   pilot size. Replace the fixed five-item display ceiling in a separately tested
+   capacity change with an explicit configurable bound, including an above-five
+   case. Limit active ticket sessions, paid reviewers and expensive local tests
+   independently. Display truncation must not truncate the assessed pool. Show
+   filters that narrow selection; never silently expand to unrequested projects
+   or unapproved milestones to fill workers. Membership stays fixed after plan
+   approval; filling an execution slot from that approved set is not selecting
+   another wave.
+
+Planning and build concurrency are separate observable counts. For example,
+“3 requested: 2 build candidates, 1 planning candidate awaiting a named build
+condition” is useful; reporting three implementation-ready tracks would be false.
+Read-only planners can inspect the same files, but workspace/status ownership
+still needs coordination before dispatch writes. Concurrent expensive tests
+remain bounded on the shared 16 GB machine.
+
 ## Define what “competitive” measures
 
 Record four endpoints for each arm: all plans ready, each implementation PR open,
@@ -85,6 +208,14 @@ claim p95 confidence from a few waves. Run at least three counterbalanced paired
 repetitions per scenario, recording warm/cold cache and concurrent machine load.
 Use resettable fixture tasks for repeatability, then one bounded authorized live
 wave for external validity. Human coordination time is a separate benefit.
+
+Evaluate selection separately from execution speed. On frozen candidate pools,
+compare next, wave and direct dispatch at the same stage and snapshot. Report
+eligible count, selected count, unknown count, exclusion reasons, usable worker
+time and unresolved integration obligations. Require no unexplained exclusion of
+a feasible candidate while a requested slot is empty. Keep the same selected
+membership for the runtime benchmark so selecting easier tickets cannot masquerade
+as a speedup. Report planning progress separately from completed implementations.
 
 ## Why scheduling comes before increasing concurrency
 
@@ -125,13 +256,17 @@ fallback throughout.
 | Slice | Deliverable | Acceptance boundary |
 | --- | --- | --- |
 | 0. Baseline and host probe | Local event records, comparative fixtures, session capability report | No model downgrade or execution-policy change; time and cost remain distinguishable |
+| 0a. Selection parity and capacity | Shared candidate assessments, stage-aware planning, consistent conflict policy, deterministic selection and explicit budgets | Same evidence yields the same admission reasons across commands; no unexplained spare slot; plan-only work cannot be built through approval expansion |
 | 1. Lean scheduling | Narrow node inputs, rolling B3 queue, immediate review for tickets with no cross-ticket obligations | Tests prove early review and slot reuse; admission still runs before writes |
 | 2. Shared agreements and review continuation | Final-head agreement evidence, scoped invalidation, resumable review phases | Review may overlap builds, but readiness requires current evidence; round caps and identity rules survive resumes |
 | 3. Persistent ticket sessions | One session through plan, build and fixes; bounded local controller | Host probe proves session identity, permissions, worktree and model continuity; failures preserve recoverable state |
 | 4. Controlled pilot | Paired benchmark, compare normal manual workflow, decide defaults | Promote only with measured parity and correctness; otherwise keep legacy execution or use the manual path |
 
-In scope: one fixed wave, up to the existing supported parallel count; the first
-pilot uses three. Existing commands and selected membership remain stable.
+In scope: selecting and executing one fixed wave; the first pilot uses three.
+Selection parity ships independently of runtime speed. Stage-aware records and
+the configurable capacity bound require their own compatibility checks in 0a;
+existing runs keep their original semantics. Selected membership remains fixed
+after approval, and runtime comparisons use identical membership.
 Implementation is opt-in until the pilot passes. The existing Workflow path stays
 available, but switching engines midway requires explicit reconciliation, never
 automatic replay.
@@ -344,6 +479,14 @@ effects from our own scheduling; do not assume every repeated prompt is paid col
 
 | Scenario | Required observation |
 | --- | --- |
+| OGUR-457-shaped admission: plan/build pass, merge awaits review | No fabricated build prerequisite; preserve semantic scope concerns separately and report the actual batch exclusion |
+| Direct dispatch versus next/wave on the same snapshot | Identical stage admission reasons; ranking and requested filters explain any membership difference |
+| Two build candidates and one PLAN_ONLY candidate | Both builds remain visible; planning work is offered separately and cannot enter `--approve all` |
+| Unknown file scope but authorized planning | Bounded mapping can establish scope; no implementation until scope, dependence and approval checks pass |
+| Same file overlap before and after one task starts | Consistent integration warning; only a real dependency or incompatible change adds a hard constraint |
+| Newer named owner decision and older blanket exclusion | Both sources are reconciled; no automatic revival of a superseded restriction or invented scope waiver |
+| Greedy trap, reordered input, partial pagination, solver timeout | Deterministic maximum when proved; incomplete evidence and unproved optimality are explicit |
+| More than five candidates, multiple project filters, limited machine budget | No display-driven loss of candidates; authorized filters and configured worker/reviewer/test caps hold |
 | Three unequal independent builds | First review starts before the slowest B1 ends; readiness can be handed off per ticket |
 | Two review slots with unequal durations | Next ready job fills a freed slot without waiting for the other job in its former batch |
 | Review finding, then slow CI | Permit is reusable during fixes/CI in slice 2; same ticket session fixes; exact-head cap remains enforced |
