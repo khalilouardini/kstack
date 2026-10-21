@@ -1,16 +1,16 @@
 ---
 name: review-claude-pr
-version: 0.3.0
-description: Review an open agent-built PR (implementer-authored, or maintainer-opened with Claude-attributed commits) and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
+version: 0.4.0
+description: Review an open agent-built PR (Codex- or Claude-attributed, including maintainer-opened PRs) and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
-# review-claude-pr — review a bot-authored PR as Codex
+# review-claude-pr — review agent-built work with the independent engine
 
 ## When to invoke
 
 A PR authored by the consuming repo's implementer identity is open and needs a
 defect-first review published from the reviewer account (Codex by default).
-Invoke as `/review-claude-pr [PR# | URL]`, or with no target to run the resolution
+Invoke as `/review-claude-pr [PR# | URL] [--implementation-engine codex|claude] [--any-author]`, or with no target to run the resolution
 ladder below. This is the reviewer half of the review loop: it finds and posts
 defects, and never answers, fixes, or resolves them — that is
 `tools/github/review-comments`, and the unattended pairing of the two is
@@ -33,15 +33,13 @@ implementation edits, and structural admission does not grant human approval.
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 `CONVENTIONS.md` §2) before anything else:
 
+- **`identities.maintainer`** — required for verified bootstrap reads and role resolution.
 - **`identities.reviewer`** — the review-agent gh login, normally Codex, that
   publishes every review. Missing or null → **refuse**, naming
   `identities.reviewer`. Called `$REVIEWER` below.
-- **`identities.implementer`** — the login whose PRs this skill reviews; it is the
-  authorship precondition, not a writer. Missing or null → **refuse**, naming
-  `identities.implementer`, because the skill cannot then verify it is reviewing
-  bot-authored work. One sanctioned override: the user explicitly names a PR
-  and asks for it reviewed regardless of author — record that in the review
-  body. Called `$IMPLEMENTER` below.
+- **`identities.implementer`** — default implementation account. Required for
+  routing; missing/null refuses. Authorship exceptions do not invent identities.
+  The shared engine contract resolves both roles for this PR.
 - **`review_gate.skill_path`** and **`review_gate.scope`** — the project's
   "prove the bug" review skill and the diff paths that trigger it. Both null →
   there is no project proof gate; run the general review and say so in the
@@ -54,11 +52,19 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 
 Missing `.agents/stack.yml` altogether → refuse and name the file.
 
-This skill does not choose the model it runs on: it inherits whatever Codex
-session invoked it. Launched by `pr-loop`, that is the pair `pr-loop` resolved
-from `review_model.*`; launched by hand from an interactive Codex session, it
-is that session's own model and effort. If cost matters on a hand-run review,
-set them on the `codex` invocation — there is nothing to set here.
+This skill inherits the model of the actual reviewing session. pr-loop selects
+that engine's model/effort separately from the GitHub account publishing it.
+
+Read [../pr-loop/references/routing.md](../pr-loop/references/routing.md) after
+selecting the exact PR. Follow its complete commit provenance, explicit engine
+selection, authorship exception, attribution and evidence rules. If unreadable,
+stop. Standalone, bootstrap with the verified maintainer token before the first PR read;
+then resolve and verify the reviewer token. A child launched with a pinned
+route bootstraps with the supplied, verified reviewer token instead; recompute
+the route using that credential and do not fetch a maintainer credential. Use resolved roles everywhere below.
+The actual host must equal reviewer_engine or stop; never label the current
+engine as another engine. Compare a parent loop's pinned route and exact head
+before review and posting. Never invoke the loop or implementer from this skill.
 
 ## Non-negotiable boundaries
 
@@ -70,11 +76,11 @@ the post-submit verification checks after the fact. Treat them as hard rules.
   threads, merge, approve, dismiss, or edit the PR description. Temporary proof
   artifacts may live only in a disposable worktree or temporary directory and
   must be removed.
-- Use `$REVIEWER` for every GitHub read and write. Resolve its stored credential
+- After standalone bootstrap, use `$REVIEWER` for every GitHub read and write. Resolve its stored credential
   once with `gh auth token --user "$REVIEWER"`, pass it only through `GH_TOKEN` on
   each `gh` invocation, and never call `gh auth switch`. Never post from
   `$IMPLEMENTER`, the maintainer, or another identity.
-- Put `**Review performed by Codex.**` in the body of every submitted GitHub
+- Put `**Review performed by <REVIEWER_LABEL>.**` in the body of every submitted GitHub
   review. This means the review body attached to the PR, not the PR description.
 - Post the completed review immediately. Do not show drafts or ask the user to
   approve wording.
@@ -105,7 +111,7 @@ Resolve the target in this order, and stop rather than guess:
    ambiguity, not a tie to break.
 4. **The current branch's PR**, as the fallback:
    ```bash
-   GH_TOKEN="$REVIEWER_TOKEN" gh pr view --json number,url,state,isDraft,author,baseRefName,headRefName,headRefOid
+   GH_TOKEN="$MAINTAINER_TOKEN" gh pr view --json number,url,state,isDraft,author,baseRefName,headRefName,headRefOid
    ```
 5. **Otherwise stop and ask for an explicit target.** Absent or genuinely
    ambiguous context is a reason to stop, never a reason to review the branch
@@ -130,7 +136,7 @@ Resolve the reviewer credential and verify the writer before reviewing. Keep the
 token in this shell only; do not print it or export it into unrelated commands:
 
 ```bash
-REVIEWER="<identities.reviewer>"
+REVIEWER="<resolved reviewer account>"
 REVIEWER_TOKEN=$(gh auth token --hostname github.com --user "$REVIEWER")
 ACTIVE_LOGIN=$(GH_TOKEN="$REVIEWER_TOKEN" gh api user --jq .login)
 test "$ACTIVE_LOGIN" = "$REVIEWER"
@@ -142,22 +148,13 @@ Do not switch accounts. Prefix **every** later `gh` call in this skill with
 `GH_TOKEN="$REVIEWER_TOKEN"`. Require an open PR. A draft PR may be reviewed, but
 identify it as a draft in the summary.
 
-Confirm the PR author is `$IMPLEMENTER`. If it is not, inspect the PR commits for
-that author, then for Claude attribution: a commit authored by the `claude` login
-or carrying a whole-line `Co-Authored-By: Claude … <email>` trailer. PRs are
-opened by `identities.maintainer`, so the trailer is the normal evidence that a
-maintainer-opened PR is agent-built. If none of these hold, stop unless the user
-explicitly requested that exact PR despite its author.
-
-Use a hidden idempotency marker tied to the reviewed head SHA:
-
-```text
-<!-- codex-review head:<full-head-sha> -->
-```
-
-Check existing submitted reviews and conversation comments for that exact
-marker. If it exists, do not duplicate the review unless the user explicitly
-asked to rerun it. A new head SHA is a new review target.
+Use the shared resolver's authorship result, not an independent author heuristic.
+Only a deliberate user request for this exact PR despite its author supplies
+an exception; a controller passing a PR number does not. Pass explicit engine
+selection through unchanged. Reuse only a submitted review by the resolved
+account with the exact engine marker, matching attribution and commit_id at the
+current head. Paginate reviews and inline comments; conversation comments never
+count. Follow the shared contract's evidence validation. A new head needs review.
 
 ## 2. Inspect exactly what would merge
 
@@ -260,13 +257,14 @@ inflate a test gap into a defect without a demonstrated failure mode.
 ## 4. Submit the review immediately
 
 Prefer one GitHub review containing all inline comments, ordered by priority.
-Anchor every inline comment to a changed line on the PR head. The review body
-must follow this shape:
+Anchor every inline comment to a changed line on the PR head. Every inline finding must also appear in the numbered summary with priority,
+title and path:line; inline bodies start with [P0]–[P3] and the same title.
+The review body must follow this shape:
 
 ```markdown
-## Codex review
+## <REVIEWER_LABEL> review
 
-**Review performed by Codex.**
+**Review performed by <REVIEWER_LABEL>.**
 
 Reviewed `<short-head-sha>` against `<base-branch>`.
 
@@ -279,12 +277,22 @@ Reviewed `<short-head-sha>` against `<base-branch>`.
 
 One concise assessment, followed by material test gaps or residual risks.
 
-<!-- codex-review head:<full-head-sha> -->
+<!-- <REVIEW_MARKER> head:<full-head-sha> -->
 ```
 
 Omit `Findings` when there are none. For a clean review, post a `COMMENT` review
-whose assessment says `No findings.` and still includes the Codex attribution and
+whose assessment says `No findings.` and still includes the actual engine attribution and
 idempotency marker.
+
+Set REVIEWER_LABEL to Codex/Claude and REVIEW_MARKER to codex-review/claude-review
+from the actual engine. Re-read the remote head before submission; stop on drift.
+Set `commit_id` explicitly to the full reviewed head SHA. Preserve the existing
+Codex marker exactly; the Claude counterpart differs only by engine:
+
+```text
+<!-- codex-review head:<full-head-sha> -->
+<!-- claude-review head:<full-head-sha> -->
+```
 
 Submit through the GitHub review API so the body, event, and ordered inline
 comments are one review. Set `event` explicitly to `COMMENT` unless the user
@@ -306,12 +314,15 @@ After posting, fetch the submitted review and verify all of the following:
 
 - author login is `$REVIEWER`;
 - state matches the intended event;
-- body contains `Review performed by Codex` and the head-SHA marker;
+- body contains the actual engine label and exact head-SHA marker;
+- commit_id is the reviewed head and the remote head is still unchanged;
 - every planned finding appears either inline or in the top-level body.
 
 ## Report back
 
-Return the PR URL, submitted review URL or ID, event used, and counts by
+When launched by run-review, honor its final JSON report format with actual
+submitted review_id and head (or status BLOCKED); include human details in the
+GitHub review body. Standalone, return the PR URL, review URL or ID, event, and counts by
 priority. State that no code was changed or pushed, and whether the project proof
 gate ran, was absent (`review_gate.skill_path: null`), or failed closed. If
 posting failed, say so plainly and include the blocking error; never imply that a
