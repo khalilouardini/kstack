@@ -75,10 +75,14 @@ the offline harness, gives:
 | merge | BLOCKED | `review_ogur_457.approve` |
 
 This is a historical replay, not fresh admission or approval to build. The
-installed helper inspected for the replay is from kstack
-`c110307318a17a3494dd0dd33ece7cab0a00907c`. The saved graph has an admission edge
-to plan and a review edge to merge, with no extra build prerequisite. Unrelated
-coverage gaps (389, 392 and 502) remain warnings. A fresh Linear read also found
+replay used an unpublished local installation at kstack
+`c110307318a17a3494dd0dd33ece7cab0a00907c`, on branch
+`codex/open-pr-overlap-warnings`. Its `graph-admission` helper is byte-for-byte
+identical to the [published helper at main commit 110a379](https://github.com/khalilouardini/kstack/blob/110a3790eed7f79b5e66dd5a3c2f04a261efb56d/tools/linear/linear-roadmap/bin/graph-admission),
+verified on 2026-10-23. The local selection procedure has
+an unmerged overlap-policy change, distinguished below. The saved graph has an
+admission edge to plan and a review edge to merge, with no extra build prerequisite.
+Unrelated coverage gaps (389, 392 and 502) remain warnings. A fresh Linear read also found
 no native blocking relation for 457; 411 and 433 are related issues, not native
 blockers. The active 457 worktree now calls for resume, not a duplicate dispatch.
 
@@ -99,18 +103,23 @@ list of frontend exceptions. Citing §11.6 alone is inadequate. Resolve the newe
 decision's applicability before asking the owner to repeat an existing approval;
 neither silently expand 457 nor erase its recorded acceptance.
 
-The installed [next procedure at c110307](https://github.com/khalilouardini/kstack/blob/c110307318a17a3494dd0dd33ece7cab0a00907c/tools/linear/next/SKILL.md)
-contains additional capacity limits beyond graph admission:
+The [published next procedure at main commit 110a379](https://github.com/khalilouardini/kstack/blob/110a3790eed7f79b5e66dd5a3c2f04a261efb56d/tools/linear/next/SKILL.md)
+contains additional capacity limits beyond graph admission. These are the shipped
+baseline; the unpublished local variant is called out explicitly:
 
 - PLAN_ONLY does not count toward `--parallel N`, and wave sends it to
   `sequenced` rather than starting its planner.
 - Unknown candidate file scope prevents an independence claim before the planner
   has mapped that scope. This can leave work undiscovered instead of resolving
   the uncertainty with a bounded planning pass.
-- Any shared file between two selected candidates sequences one. The same path
-  overlap with an already-active external PR is only a warning. Thus moving one
-  task into an active session can change whether the other is admitted, even
-  though the technical interaction is unchanged.
+- Any shared file between two selected candidates sequences one. Published
+  parallel selection also excludes overlap with already-active work unless the
+  human explicitly names the open PR with `--accept-overlap <PR#>`; that exception
+  does not waive overlap between two selected candidates. The unpublished
+  `c110307` variant instead treats overlap with an active external PR as a warning.
+  That warning-only behavior is not shipped on the cited main revision. Item 3
+  below proposes consistent warnings for both cases, changing the published
+  baseline rather than assuming the local variant is already in force.
 - Without project filters, a batch stays within one resolved milestone. Explicit
   repeated project filters can combine authorized work across milestones.
 - N defaults to three and clamps to five. The stated justification is human
