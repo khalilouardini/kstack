@@ -2006,6 +2006,10 @@ for (const t of active) if (mismatched.has(t.issue_id)) log(`${t.issue_id}: skip
 phase('Review');
 const reviews={};
 const blockedReview=(r,finding)=>({pr:r.pr,verdict:'BLOCKED',rounds:0,open_findings:[finding],model_routing:[],open_questions:[]});
+const finalReviewFailure=(review,r,finding)=>review?{
+  ...review,verdict:review.verdict==='CLEAN'?'BLOCKED':review.verdict,
+  open_findings:[...review.open_findings,finding]
+}:blockedReview(r,finding);
 // review_concurrency serializes B3, so a later track's review can start long after
 // Run B validated main. A read-only node observes live main first. When main moved,
 // the script proceeds only if Run B's main is an ancestor, the PR head merges cleanly
@@ -2127,11 +2131,11 @@ observation unavailable. A bare successful exit is insufficient.`, schemas.FINAL
     const rows=finalRows.filter(h=>h.issue_id===t.issue_id && h.pr===result.pr && h.branch===t.branch);
     const head=rows[0];
     if (rows.length!==1 || !/^[0-9a-f]{40}$/.test(head?.head_sha || '')) {
-      reviews[t.issue_id]=blockedReview(result,'Final PR head could not be verified');
+      reviews[t.issue_id]=finalReviewFailure(reviews[t.issue_id],result,'Final PR head could not be verified');
     } else {
       result.head_sha=head.head_sha;
       if (reviews[t.issue_id]?.verdict==='CLEAN' && head.reviewed_head_sha!==head.head_sha)
-        reviews[t.issue_id]=blockedReview(result,'Final head has no matching review/CI evidence');
+        reviews[t.issue_id]=finalReviewFailure(reviews[t.issue_id],result,'Final head has no matching review/CI evidence');
     }
   }
   if (a.contract) {

@@ -7,7 +7,10 @@ Linear conditions on unchanged main, handles graph publication while reviews
 queue, and refreshes conditions during review rounds without rejecting owned
 fix commits. Final remote-head/review checks and deterministic seams run after
 review fixes. Semantic fingerprints ignore explicit non-authoritative progress
-notes and citation prose while preserving legacy checkpoints and full evidence.
+status markers and citation prose while preserving legacy checkpoints and full evidence.
+Free-text progress notes remain approval inputs; fixed status markers cannot hide
+new requirements. Final verification failures preserve review findings, rounds,
+model routing and open questions.
 `/pr-loop` 0.7.1 documents the per-round wave baseline and source refresh.
 
 

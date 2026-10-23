@@ -753,6 +753,23 @@ const tests=[
      assert.equal(r.result.tracks[0].state,kind==='owned_fix'?'CLEAN':'BLOCKED',kind);
      if(kind!=='missing')assert.equal(r.result.tracks[0].result.head_sha,'8'.repeat(40));
    }
+   for(const verdict of ['CLEAN','BLOCKED','ROUNDS_EXHAUSTED']) {
+     const r=await run('build',(f,a)=>{
+       a.approve=['T-1'];
+       Object.assign(f.responses['B3 review T-1'],{
+         verdict,rounds:3,open_findings:verdict==='CLEAN'?[]:['Existing finding'],
+         open_questions:[{question:'Does the sibling handle this case?',status:'stale',evidence:'Needs human verification'}]
+       });
+       f.responses['B4 final verification']=null;
+     });
+     const review=r.result.tracks[0].review;
+     assert.equal(review.verdict,verdict==='CLEAN'?'BLOCKED':verdict);
+     assert.equal(review.rounds,3);
+     assert.deepEqual(review.model_routing,fixture.responses['B3 review T-1'].model_routing);
+     assert.equal(review.open_questions.length,1);
+     assert.ok(review.open_findings.includes('Final PR head could not be verified'));
+     if(verdict!=='CLEAN')assert.ok(review.open_findings.includes('Existing finding'));
+   }
  }
 
 ];

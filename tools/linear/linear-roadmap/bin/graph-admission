@@ -84,11 +84,13 @@ def approval_body(body):
     """Exclude explicitly non-authoritative progress lines, never requirements."""
     facts = []
     fenced = None
-    requirements = re.compile(
-        r'\b(must|shall|required|acceptance|blocker|depends|scope|exclusion|release|'
-        r'approval|owner|gate|criteria|never|reject|allow|constraint|prerequisite|'
-        r'exclude|include|remove|add|change|enable|disable|forbid|permission)\b', re.I)
+    progress = re.compile(
+        r'<!-- kstack-progress: (?:PLANNED|BUILDING|PR_OPEN|REVIEWING|STOPPED|COMPLETE) -->')
+    skip_note_blanks = False
     for line in body.splitlines():
+        if skip_note_blanks and not line.strip():
+            continue
+        skip_note_blanks = False
         marker = re.match(r'^\s*(`{3,}|~{3,})(.*)$', line)
         if marker:
             token, tail = marker.groups()
@@ -98,7 +100,10 @@ def approval_body(body):
                 fenced = None
             facts.append(line)
             continue
-        if fenced is None and re.match(r'^Progress note:\s', line, re.I) and not requirements.search(line):
+        if fenced is None and progress.fullmatch(line):
+            # Keep one existing paragraph separator, rather than the empty
+            # paragraph left behind by an excluded metadata line.
+            skip_note_blanks = not facts or not facts[-1].strip()
             continue
         facts.append(line)
     while facts and not facts[-1].strip() and fenced is None:
