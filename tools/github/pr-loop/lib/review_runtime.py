@@ -332,7 +332,7 @@ def execute(args):
         from resource_slots import permit
         account_key = hashlib.sha256(route['reviewer'].casefold().encode()).hexdigest()
         admission = permit('review-' + engine + '-' + account_key, slots,
-                           root=getattr(args, 'slot_state', None), timeout=args.timeout)
+                           root=getattr(args, 'slot_state', None), timeout=args.slot_wait)
     else:
         admission = nullcontext(None)
     queued_at = time.monotonic()
@@ -412,11 +412,15 @@ def review_main():
     parser.add_argument('--host', required=True, choices=sorted(ENGINES))
     parser.add_argument('--fast', action='store_true')
     parser.add_argument('--timeout', type=int, default=1800)
+    parser.add_argument('--slot-wait', type=float, default=7200)
     parser.add_argument('--review-slots', type=int)
     parser.add_argument('--slot-state')
     args = parser.parse_args()
     try:
         print(json.dumps(execute(args)))
+    except TimeoutError as exc:
+        print(json.dumps(dict(status='SLOT_WAIT_TIMEOUT', reason=str(exc))))
+        raise SystemExit(75)
     except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError, TimeoutError) as exc:
         print(json.dumps(dict(status='BLOCKED', reason=str(exc))))
         raise SystemExit(2)

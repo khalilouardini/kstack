@@ -108,6 +108,21 @@ class RunnerTests(unittest.TestCase):
         self.assert_blocked(result, report)
         self.assertFalse(any('--print' in c['args'] for c in state['calls']))
 
+    def test_slot_wait_expiry_is_retryable_and_does_not_launch(self):
+        value = route('Codex')
+        key = hashlib.sha256(value['reviewer'].casefold().encode()).hexdigest()
+        slot = self.root / 'slots' / ('review-claude-' + key) / '0'
+        slot.parent.mkdir(parents=True)
+        (slot.parent / 'limit.json').write_text('1')
+        with slot.open('a+') as held:
+            fcntl.flock(held, fcntl.LOCK_EX)
+            result, report, state = self.invoke(extra=[
+                '--review-slots', '1', '--slot-state', str(self.root),
+                '--slot-wait', '0'])
+        self.assertEqual(result.returncode, 75)
+        self.assertEqual(report['status'], 'SLOT_WAIT_TIMEOUT')
+        self.assertFalse(any('--print' in c['args'] for c in state['calls']))
+
     def test_checkout_move_after_wait_blocks_before_paid_process(self):
         result, report, state = self.invoke(mode='checkout-moved-before-review',
             extra=['--review-slots', '1', '--slot-state', str(self.root)])

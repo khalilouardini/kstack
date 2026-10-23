@@ -2459,7 +2459,7 @@ if (mismatched.size) report.seam_check.state='FAILED';
 for (const t of active) if (mismatched.has(t.issue_id)) log(`${t.issue_id}: skipped review; SEAM_MISMATCH`);
 
 };
-phase('Review');
+if (streaming) phase('Review');
 const reviews={};
 const blockedReview=(r,finding)=>({pr:r.pr,verdict:'BLOCKED',rounds:0,open_findings:[finding],model_routing:[],open_questions:[]});
 // review_concurrency serializes B3, so a later track's review can start long after
@@ -2564,6 +2564,7 @@ if (streaming) {
   const built=await pipeline(approved,async (_previous,t)=>workerSlot(()=>buildOne(t)));
   approved.forEach((t,i)=>results[i]=built[i] || stoppedBuild(t,'B1 pipeline dropped track'));
   await legacySeams();
+  phase('Review');
   const eligible=approved.filter((t,i)=>results[i].state==='PR_OPEN' && !mismatched.has(t.issue_id));
   await pipeline(eligible,async (_previous,t)=>reviewSlot(()=>reviewOne(t)));
 }

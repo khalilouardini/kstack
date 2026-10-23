@@ -102,7 +102,8 @@ Read every composed procedure by physical path, never copy its rules here.
   experimental opt-in; other values refuse. Read `references/execution.md`
   for scheduling, enforcement limits and the pilot gates before enabling it.
 - `wave.worker_concurrency`: missing/null → 3; positive integer. Bounds A4
-  planners and, in streaming mode, ticket controllers through B1 and B3 together.
+  planners, legacy B1 builds, and streaming ticket controllers through B1 and
+  B3 together.
 - `wave.test_concurrency`: missing/null → 1; positive integer. Expensive local
   gate commands use canonical `core/land/bin/with-slot`. This is a host-wide
   cooperative process limit; project test scope and CI authority remain unchanged.

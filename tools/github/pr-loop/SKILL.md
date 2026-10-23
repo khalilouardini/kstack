@@ -11,7 +11,7 @@ description: Drive an independent Codex↔Claude review/fix loop on one PR to CL
 One open PR needs review rounds driven to a stop condition without a human in
 the seat: review → fix → reply → re-review, until the PR is clean, a
 disagreement blocks it, or the round budget runs out. Invoke as
-`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--implementation-engine codex|claude] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--review-slots N] [--test-slots N] [--accept-graph-update <PR#>]... [--local-graph]`. Not for reviewing a
+`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--implementation-engine codex|claude] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--review-slots N] [--slot-wait SEC] [--test-slots N] [--accept-graph-update <PR#>]... [--local-graph]`. Not for reviewing a
 human-authored PR, not for deciding contested design questions, and not for
 approving — see "What this skill is NOT for".
 
@@ -155,6 +155,11 @@ for the resolved engine/account, rechecks the head and existing review after
 waiting, then releases the permit when the reviewer exits. Fixes and CI hold no
 reviewer permit. Keep one controller, its existing round cap, exact-head markers
 and durable repeat-finding ledger; this option never restarts a terminal loop.
+`--slot-wait SEC` sets a separate reviewer-permit wait (default 7200 seconds);
+it never reduces the reviewer's 1800-second process timeout. If the helper
+returns `SLOT_WAIT_TIMEOUT` with exit 75, no paid review started: stop with a
+retryable queue-wait report, not a review or gate failure. A later invocation
+rechecks the current head and route before attempting the round again.
 
 `--test-slots N` bounds expensive local gates. For each lint/test/build command,
 run the configured command through `core/land/bin/with-slot --group local-tests
@@ -422,8 +427,11 @@ invocation explicitly pins `--model gpt-6-astra`. This prevents an automatic
 Astra charge for each small fix while allowing a deliberate deep re-review.
 
 For Claude, skip the Codex escalation block entirely. Run `bin/run-review`
-with the selected model/effort and inspect its JSON and exit status. Failure
-means BLOCKED with no blind retry, engine substitution or self-review.
+with the selected model/effort and inspect its JSON and exit status. Pass an
+explicit `--slot-wait` through when supplied. A `SLOT_WAIT_TIMEOUT`/75 result
+is retryable queue expiry with no paid review; report it distinctly and stop.
+Other failures mean BLOCKED with no blind retry, engine substitution or
+self-review.
 
 **3. Read the findings.** Use the helper's verified review ID/head and structured
 findings (summary plus inline). Missing/malformed evidence is BLOCKED. Apply

@@ -18,8 +18,9 @@ class Slots(unittest.TestCase):
             with slots.permit('tests', 1, root=root):
                 p = subprocess.run([sys.executable, str(BIN), '--group', 'tests', '--limit', '1',
                     '--state-root', root, '--wait', '0', '--', sys.executable, '-c', 'print("RAN")'], capture_output=True, text=True)
-                self.assertEqual(p.returncode, 2)
+                self.assertEqual(p.returncode, 75)
                 self.assertNotIn('RAN', p.stdout)
+                self.assertIn('resource slot wait expired', p.stderr)
                 with self.assertRaises(ValueError):
                     with slots.permit('tests', 2, root=root, timeout=0):
                         self.fail('increased an active limit')

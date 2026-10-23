@@ -269,6 +269,9 @@ commands through canonical `core/land/bin/with-slot --group local-tests --limit 
 -- <argv...>` from the verified worktree. Use the shell explicitly for configured
 shell commands. This host-local cooperative permit bounds command concurrency;
 it does not change required tests or override project/user test-scope rules.
+The permit wait has its own 7200-second default. Exit 75 means the wait expired
+before the gate ran; report a retryable queue delay, not a failed gate, and
+recheck the branch/head before retrying. `--wait SEC` may set another bound.
 Do not hold it during review or CI waits. Without a supplied budget this procedure
 retains its normal gate invocation.
 

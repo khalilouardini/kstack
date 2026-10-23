@@ -62,7 +62,7 @@ async function run(stage, mutate=()=>{}, source=executable) {
     let prev=item;try {for(const stage of stages) prev=await stage(prev,item,index);return prev;}catch(e){logs.push('pipeline drop '+e);return null;}
   }));
   const parallel=async thunks=>Promise.all(thunks.map(async fn=>{try{return await fn();}catch{return null;}}));
-  const phase=t=>assert.ok(['Select','Plan','Build','Seams','Review'].includes(t));
+  const phase=t=>{assert.ok(['Select','Plan','Build','Seams','Review'].includes(t));events.push('phase '+t);};
   const result=await new AsyncFunction('agent','pipeline','parallel','phase','log','args','budget',source)(agent,pipeline,parallel,phase,m=>logs.push(m),args,{});
   validate(result,schemas[stage==='plan'?'RUN_A':'WAVE_REPORT']);
   return {result,calls,events,logs,maxReview};
@@ -936,6 +936,14 @@ tests.push(async()=>{
   const prompt=r.calls.find(c=>c.label==='B1 build T-1').prompt;
   for(const marker of ['SIBLING-PLAN-PRIVATE','UNRELATED-ISSUE-BODY','UNRELATED-NODE','SELECTION-NOT-FOR-BUILDER'])assert.ok(!prompt.includes(marker));
   assert.ok(r.result.evidence.some(e=>e.includes('UNRELATED-ISSUE-BODY')),'full audit retained');
+});
+cases.push({number:48,name:'legacy review phase follows the seam barrier'});
+tests.push(async()=>{
+  const r=await run('build',(f,a)=>{a.plan_record.contract=f.contract;a.plan_record.literals=f.literals;});
+  const seamEnd=r.events.indexOf('end B2 seam check');
+  const reviewPhase=r.events.indexOf('phase Review');
+  assert.ok(seamEnd>=0);
+  assert.ok(reviewPhase>seamEnd);
 });
 
 let failed=0;

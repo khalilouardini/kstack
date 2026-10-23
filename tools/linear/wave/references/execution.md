@@ -21,11 +21,16 @@ rechecks current head, route and already-submitted review after waiting, and
 releases the permit when that process exits. Fixes and CI waits happen outside
 the permit. The existing loop controller keeps its round count and findings;
 this is not a new resumable controller or a change to CLEAN/CI semantics.
+Permit waiting has a separate 7200-second default from the reviewer's
+1800-second process timeout. Expiry returns `SLOT_WAIT_TIMEOUT`/75 before any
+paid review and can be retried after a fresh head/route check.
 
 `test_concurrency` (default 1) bounds configured expensive lint/test/build commands
 via `core/land/bin/with-slot --group local-tests --limit N -- <argv...>`.
 For shell gate commands, explicitly supply the shell and `-c` argument. The
 wrapper never interprets argv itself and returns the command's exit code.
+Its permit wait defaults to 7200 seconds; exit 75 means the gate never ran
+because the queue wait expired, so it is retryable rather than a gate failure.
 The wrapper changes concurrency only: user/project restrictions on full tests
 still apply. Release the permit before review or CI waiting.
 
