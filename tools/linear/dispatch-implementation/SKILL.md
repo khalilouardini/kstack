@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.4.0
+version: 0.5.0
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -12,7 +12,7 @@ An existing, approved Linear issue is ready to be picked up by Claude or Codex.
 Invoke as:
 
 ```text
-/dispatch-implementation <ISSUE-ID> [--executor claude|codex] [--model <name>] [--plan-only] [--accept-graph-update <PR#>]...
+/dispatch-implementation <ISSUE-ID> [--executor claude|codex] [--model <name>] [--plan-only] [--accept-graph-update <PR#>]... [--local-graph]
 ```
 
 The exact issue identifier is required. Invoking this skill is explicit authorization
@@ -23,6 +23,16 @@ scope, or create another issue.
 Not for deciding what to work on next (`next`), admitting a new feature (`spec` and
 `linear-feature-intake`), repairing historical tracker drift (`linear-steward`), or
 starting work that has no approved issue.
+
+
+Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
+procedure. It replaces graph publication with fresh local indexed validation and
+candidate/closure admission; scope, native blockers, evidence, human decisions
+and plan/merge approvals remain mandatory. Forward this invocation's explicit
+flag and canonical owner/index/manifest pins through composed execution skills.
+Recheck the owner files before writes; never substitute an older dispatch-worktree
+copy. Changed pins require a new plan. Reject repeated local flags and mixed
+local/PR graph sources. No graph publication or extra tracker writes are granted.
 
 ## Configuration and required access
 

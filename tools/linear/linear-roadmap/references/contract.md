@@ -66,6 +66,14 @@ Wave approval is tied to each mapped unit's relevant conditions, including its
 future merge gates. Fresh unrelated graph/main changes do not invalidate it;
 changed relevant conditions stop only the affected track for reapproval.
 
+
+For a local roadmap, explicitly pass `--local-graph`
+to wave plan and repeat it on wave build alongside --approve. This uses fresh local
+indexed/candidate admission without graph publication to GitHub or Linear. Scope,
+native blockers, dependencies, evidence and human plan/merge decisions still apply.
+Changed local index/manifest/provenance pins require a new plan; source_revision
+remains the original adoption provenance across compatible stack upgrades.
+
 ## Manifest fields
 
 - `schema_version`: 1; `title`: required display title.

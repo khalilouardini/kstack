@@ -166,5 +166,21 @@
   {
     "number": 42,
     "name": "final heads accept reviewed fix commits and block unreviewed drift"
+  },
+  {
+    "number": 43,
+    "name": "approved local graph preserves full candidate admission through review"
+  },
+  {
+    "number": 44,
+    "name": "local graph requires valid fresh explicit source approval at both checkpoints"
+  },
+  {
+    "number": 45,
+    "name": "local graph retains closure and human plan approval checks"
+  },
+  {
+    "number": 46,
+    "name": "local review requires a fresh matching graph audit even when main is unchanged"
   }
 ]

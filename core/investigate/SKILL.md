@@ -1,6 +1,6 @@
 ---
 name: investigate
-version: 0.3.0
+version: 0.4.0
 description: Debug a failure by finding its root cause before any fix: reproduce, gather evidence, write a hypothesis ledger with confidence, test the most falsifiable hypothesis first, then fix with a regression test that failed before it and passes after. Use when asked to "debug this", "fix this bug", "why is this broken", "investigate this error", or "root cause analysis". Proactively suggest when the user reports a stack trace, a 500, unexpected behavior, or "it was working yesterday". (kstack)
 ---
 
@@ -187,6 +187,16 @@ with main SHA, live evidence and exact delta. Scope/dependency/release/human-gat
 changes require reviewed publication or an explicitly accepted reviewed graph PR.
 Read-only investigation and failing reproductions remain allowed. Carry the local
 audit and explicit flags into land; neither waives root-cause or regression proof.
+
+Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
+procedure. It replaces graph publication with fresh local indexed validation and
+candidate/closure admission; scope, native blockers, evidence, human decisions
+and plan/merge approvals remain mandatory. Forward this invocation's explicit
+flag and canonical owner/index/manifest pins through composed execution skills.
+Recheck the owner files before writes; never substitute an older dispatch-worktree
+copy. Changed pins require a new plan. Reject repeated local flags and mixed
+local/PR graph sources. No graph publication or extra tracker writes are granted.
+
 
 1. **Fix the cause, not the symptom.** The smallest change that eliminates the
    actual problem.

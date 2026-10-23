@@ -19,7 +19,8 @@ New tickets wait for a later selection; local refreshes never enroll them in a w
 On each invocation, resolve the authoritative repository, project UUID and graph
 path without ambiguity. Fetch literal `main`, record its exact SHA and UTC check
 time, and inspect Git blobs at that SHA. Do not use an unmerged working graph or
-silently substitute a default branch. Follow cross-repository graph ownership;
+silently substitute a default branch. Explicit local approval below uses the
+local owner files instead of Git graph blobs; main remains the implementation base. Follow cross-repository graph ownership;
 never create a competing copy. An unavailable authoritative main read is UNKNOWN.
 
 Paginate all project tickets, including terminal and archived issues, and verify
@@ -198,6 +199,62 @@ Do not infer acceptance from --accept-overlap, --approve, a tracker comment or a
 previous invocation. Forward only human-supplied flags and recheck in each composed
 skill. Wave build must receive a pending-graph flag again explicitly. Ordinary
 local maintenance reconciliation requires no bypass flag.
+
+## Explicit approved local graph — --local-graph
+
+Accept the single boolean flag --local-graph. It defaults to
+`<owner-root>/orchestration/index.json`; no path argument or script is needed.
+Reject repeated local flags and combinations with --accept-graph-update. Never copy a graph across
+owners, combine overlays or silently use an older dispatch-worktree copy.
+
+This invocation explicitly approves use of the local index/manifest. No graph PR,
+graph on main or Linear publication is required or authorized. It does not approve
+scope, a plan, a human_decision event, a contract merge or an implementation merge.
+Original owner scope decisions, draft/recorded authorization, typed dependencies,
+native blockers, all event/evidence/human conditions, independence, review and
+release gates remain mandatory. Semantic scope and gate changes still require
+original authorized decisions; the flag cannot manufacture them.
+
+1. Resolve the physical owner path. Run graph-record validate-index and retain
+   clean installed-source/schema/cycle validation, source_revision provenance and
+   the raw manifest digest. A stack upgrade alone does not require repinning
+   source_revision; it records the original reviewed adoption commit.
+2. Fetch fresh implementation main and complete live project/closure evidence,
+   including full issue bodies/relations and original human/acceptance sources.
+   Run graph-coverage --repo <owner> --local-index orchestration/index.json
+   --issues <live.json>. CURRENT/UPDATE_REQUIRED are coverage observations;
+   UNKNOWN/invalid evidence blocks. Unrelated omissions remain warnings.
+3. Run graph-admission --repo <owner> --local-index orchestration/index.json
+   --main-ref <fresh-main-ref> --issues <live.json> --request <candidate.json>.
+   This uses the same candidate/closure rules above and exact local scope quotes.
+   --ref and --reconcile cannot be combined with local-index. Only ELIGIBLE build
+   candidates may enter wave tracks. The helper reports graph_sha null, explicit
+   local_graph index/manifest/provenance pins, and full local_scope_sources in
+   evidence for later scope comparison. A structural graph alone is not readiness.
+4. Pin index_path, manifest_path, index_digest, manifest_digest and source_revision
+   in the checkpoint handoff. Graph/index/source changes require a new plan and
+   human approval; fresh closure evidence is still needed when pins match. Compare
+   full relevant scope sections and exclusions against the saved local snapshots.
+   Never claim local files existed at the implementation main SHA.
+5. Repeat validation/admission before A3/A4 writes, B1 and each B3 review/fix,
+   even when main is unchanged. Forward only the human's current explicit flag
+   and absolute canonical owner/pins through dispatch, land, pr-loop and
+   review-comments. Build must supply the flag again alongside --approve;
+   no prior plan, comment or observation is consent. Contract and implementation
+   PRs, dispatch's normal tracker transitions and human merge checkpoints retain
+   their existing procedures. A graph refresh cannot enroll new wave members.
+
+Wave caller approved_local_graph is `{index_path, manifest_path, index_digest,
+manifest_digest, source_revision, checked_at, validation_exit, coverage_exit,
+coverage_state, project_ids}`. Digests are sha256:<64 lowercase hex>; validation_exit
+is 0, coverage_exit is 0/1 matching CURRENT/UPDATE_REQUIRED, and checked_at matches
+the fresh graph_publication timestamp. Set each affected project to APPROVED_LOCAL.
+Plan keeps tokens in selection; build uses graph_update_flags. The script binds
+local_graph pins to graph_publication evidence and each full helper report, then
+compares both runs before B1. Existing record.evidence arrays retain all observations;
+RUN_A/WAVE_REPORT schemas do not change. Default published/maintenance paths remain
+unchanged when the flag is absent. These rules are prompt-level except helper
+validation, wave caller/pin checks and B3 admission comparisons.
 
 ## Wave caller evidence and checkpoints
 

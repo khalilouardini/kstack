@@ -12,8 +12,8 @@ A wave is the set of mutually independent issues selected by `/next --parallel`.
 Build and human-merge this wave before selecting the next one. Invoke:
 
 ```text
-/wave plan [<milestone-id>|any] [--project "<p>"]... [--parallel N] [--accept-overlap <PR#>]... [--accept-graph-update <PR#>]...
-/wave build --approve <comma-separated-issue-ids|all> [--accept-graph-update <PR#>]...
+/wave plan [<milestone-id>|any] [--project "<p>"]... [--parallel N] [--accept-overlap <PR#>]... [--accept-graph-update <PR#>]... [--local-graph]
+/wave build --approve <comma-separated-issue-ids|all> [--accept-graph-update <PR#>]... [--local-graph]
 ```
 
 Invoking this skill explicitly opts into calling the Claude Code Workflow tool,
@@ -24,8 +24,8 @@ and name the dependency. Do not approximate selection rules.
 
 Plan accepts repeatable `--accept-overlap <PR#>` and delegates its validation
 and narrow file-overlap exception to canonical `next`. Plan and build accept
-repeatable --accept-graph-update under the publication contract below. Build accepts
-`--approve` and that graph flag; `--accept-overlap` on build is an unknown flag and must be rejected.
+repeatable --accept-graph-update or one --local-graph under
+the shared contract below. Build accepts `--approve` and graph source flags; `--accept-overlap` on build is an unknown flag and must be rejected.
 
 ## Published graph admission
 
@@ -48,6 +48,29 @@ graph digest alone does not invalidate its approval. Changed relevant conditions
 or missing evidence stop that track; independently verified siblings continue.
 Future merge gates stay in the comparison and are enforced at merge. Release
 evidence is rechecked at release; project membership alone is no start condition.
+
+## Explicit local graph source
+
+Use --local-graph on plan and repeat it explicitly
+on build alongside --approve. The default path is orchestration/index.json in
+the owning repository. Refresh it with /linear-roadmap "<project>" first when
+tickets, scope or dependencies changed; omit --publish to keep it local. Follow the shared gate's **Explicit approved local
+graph** procedure. It uses the owning local index/manifest without graph publication
+to GitHub or Linear. Scope, typed dependencies, native blockers, evidence, original
+human-decision proof, independence and both human checkpoints remain mandatory.
+This flag approves graph use only. Reject repeated local flags and mixed PR/local
+sources. Build compares saved index/manifest/provenance pins and still validates
+the approved candidates' closure digests; changed pins require a new plan.
+
+Supply approved_local_graph with canonical paths/digests, provenance, fresh UTC
+checked_at, validation_exit 0, coverage_exit/state and project_ids. Use project
+state APPROVED_LOCAL and full graph-admission --local-index reports. Coverage gaps
+remain warnings; only verified ELIGIBLE build candidates enter tracks. Local helper
+reports have graph_sha null and explicit local_graph pins; do not invent a Git SHA
+for uncommitted files. Preserve full local scope snapshots in report evidence.
+Before B3, obtain a fresh local admission report even if main has not moved.
+Forward the explicit flag and absolute owner/pins through dispatch, land, pr-loop
+and review-comments. Host support below is unchanged.
 
 ## Project-level orchestration design
 
@@ -84,7 +107,7 @@ Read every composed procedure by physical path, never copy its rules here.
 Read `hosts/HOSTS.md`. Claude Code supplies the Workflow tool. On Codex, run
 A1 only: read `tools/linear/next/SKILL.md` and follow it top to bottom in parallel
 mode with the supplied milestone/project/count tokens and every
-`--accept-overlap <PR#>` and --accept-graph-update occurrences unchanged. PLAN_ONLY candidates
+`--accept-overlap <PR#>` and --accept-graph-update / --local-graph occurrences unchanged. PLAN_ONLY candidates
 must go into SELECT.sequenced with their unmet condition/source, never TRACK.
 They do not count toward N and cannot reach `--approve all`. Render that selection
 and say **the graph did not run**; no dispatch, tracker write, contract or build.
@@ -95,14 +118,15 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
 ## Procedure
 
 1. Parse the stage and flags. For plan, accept the milestone, repeated `--project`,
-   `--parallel`, repeated `--accept-overlap <PR#>` and --accept-graph-update pairs. Before constructing args or
+   `--parallel`, repeated `--accept-overlap <PR#>`, --accept-graph-update pairs
+   or one --local-graph. Before constructing args or
    starting Workflow, validate each PR flag value with `^[1-9][0-9]*$`.
    For --accept-overlap, verify OPEN and complete live-diff evidence using
    next's **Accepted file overlaps** procedure. For --accept-graph-update,
    use the publication contract's exact-head graph-coverage procedure. Otherwise refuse and quote the
    value (or `<missing>`); do not report EMPTY. Deduplicate this read-only
    preflight while preserving all selection tokens. `/next` checks again in A1.
-   For build, accept `--approve` and repeated --accept-graph-update; reject `--accept-overlap` as unknown. Reject other unknown flags,
+   For build, accept `--approve`, repeated --accept-graph-update or one --local-graph; reject `--accept-overlap` as unknown. Reject other unknown flags,
    nonpositive N, absent build approval, or an approval list containing unknown/stopped issues. N defaults
    to `/next`'s documented 3; announce the resolved count. Resolve repo root and
    fetched default branch for implementation; use its remote-tracking ref.
@@ -112,7 +136,7 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    skill directory with `cd <installed-wave-directory> && pwd -P`, then its stack
    root. Build absolute `paths` to canonical `wave`, `next`, `dispatch`, `land`,
    `pr_loop`, `records` and `seam_check` files. If any is unreadable, stop.
-3. Build JSON `args`: `stage`, `repo_root` (absolute), `default_branch` (fetched
+3. Build JSON `args`: `stage`, `repo_root` (absolute physical path), `default_branch` (fetched
    remote-tracking ref), `gates`, `identities`, `wave`, full `stack_config`, `paths`,
    `date` (caller-supplied ISO date), unique `wave_id` and invocation `run_id`.
    Scripts have no filesystem access and cannot acquire the time. Pass gate
@@ -150,7 +174,9 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    reuses a verified PR_OPEN result and skips B1. This works on an ordinary build
    retry without a special resume flag. Do not infer new implementation approval.
 5. For both stages, obtain fresh `graph_publication` evidence and any
-   `accepted_graph_updates` snapshots under the shared publication contract.
+   `accepted_graph_updates` snapshots or `approved_local_graph` observations under
+   the shared publication contract. Local mode uses complete live candidate/closure
+   evidence against the pinned owner files and preserves local scope snapshots.
    For plan preserve graph flag/value tokens in `selection`; for build populate
    `graph_update_flags` only from the human's current build invocation. Reject
    malformed/missing values and unreviewed/invalid PR graphs before Workflow;
@@ -283,7 +309,8 @@ read-back still depend on nodes faithfully following the canonical procedures.
 
 1. Run A returns `AWAITING_APPROVAL`, plans, contract PR and the exact Run B
    invocation plus JSON handoff. Human reads plans, merges the contract PR if
-   present, then invokes `/wave build --approve <ids|all>`. One decision per wave;
+   present, then invokes `/wave build --approve <ids|all>`. Local graph use also
+   requires repeating --local-graph explicitly. One decision per wave;
    unapproved and stopped tracks remain visible. A3's contract work is the only
    preapproval code write; track implementation permission requires this checkpoint.
    If no plan is PLANNED, Run A returns STOPPED with a null build_command instead.

@@ -56,6 +56,28 @@ loaded; ask that session to re-read a changed skill or restart if needed.
 A global reinstall does not rewrite project configuration, remove local skills,
 or activate an update schedule. Use the normal installer for all adapter writes.
 
+## Independent CLI review
+
+pr-loop runs in the implementation engine's session. Codex implementations call
+Claude Code CLI for review, then Codex fixes; Claude implementations call Codex
+CLI for review, then Claude fixes. The controller reads Codex's session ID or
+Claude Code's child-session marker from its shell; missing, simultaneous, or
+mismatched markers block before paid work. There is no recursive whole-loop
+handoff. Posting accounts are verified per command and do not establish which
+engine performed the work.
+
+The shared contract is `tools/github/pr-loop/references/routing.md`. Its runner
+uses a canonical absolute review skill path, exact PR/head, closed stdin, pinned
+engine-specific model/effort, captured output and checked exit status. It checks
+installed CLI help/auth and submitted GitHub review evidence. Host permissions
+are inherited; unavailable CLI/auth or denied actions block without bypasses or
+fallback self-review. The reviewer no-write boundary remains prompt-level.
+
+This capability does not add a Workflow tool to Codex. Native /wave build in
+Codex remains unavailable; that needs a separate execution backend. Update the
+canonical source and regenerate adapters only after merge via the normal
+installer/update-stack flow, then re-read skills in active sessions.
+
 ## Hooks — the one difference that changes a guarantee
 
 Claude Code reads a `hooks:` block in skill frontmatter and runs the named

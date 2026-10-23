@@ -1,7 +1,7 @@
 ---
 name: pr-loop
-version: 0.7.1
-description: Drive an unattended reviewer↔implementer loop on one open PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED; each round runs Codex under the configured reviewer account, answers findings under the configured implementer account, then re-checks the exit gates. Bounded by a round cap, repeat-finding ledger, head-SHA marker, and pinned review model. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#> [--max-rounds N] [--merge] [--model M] [--effort E] [--fast]". (kstack)
+version: 0.9.1
+description: Drive an independent Codex↔Claude review/fix loop on one PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. The implementation session keeps fixes; the other engine reviews with verified GitHub identity and head evidence. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#>". (kstack)
 ---
 
 # pr-loop — run the review ping-pong to a stop condition
@@ -11,7 +11,7 @@ description: Drive an unattended reviewer↔implementer loop on one open PR to C
 One open PR needs review rounds driven to a stop condition without a human in
 the seat: review → fix → reply → re-review, until the PR is clean, a
 disagreement blocks it, or the round budget runs out. Invoke as
-`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--accept-graph-update <PR#>]...`. Not for reviewing a
+`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--implementation-engine codex|claude] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--accept-graph-update <PR#>]... [--local-graph]`. Not for reviewing a
 human-authored PR, not for deciding contested design questions, and not for
 approving — see "What this skill is NOT for".
 
@@ -47,6 +47,16 @@ existing PR and apply the normal same-head review marker/CI skip-check. Report
 the final PR head and gate evidence so the wave can verify final seams. These
 context checks are prompt-level and do not remove any local/remote head guard.
 
+
+Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
+procedure. It replaces graph publication with fresh local indexed validation and
+candidate/closure admission; scope, native blockers, evidence, human decisions
+and plan/merge approvals remain mandatory. Forward this invocation's explicit
+flag and canonical owner/index/manifest pins through composed execution skills.
+Recheck the owner files before writes; never substitute an older dispatch-worktree
+copy. Changed pins require a new plan. Reject repeated local flags and mixed
+local/PR graph sources. No graph publication or extra tracker writes are granted.
+
 ## Configuration — read `.agents/stack.yml` first
 
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
@@ -57,9 +67,9 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   merges.
   Missing or null → **refuse**, naming `identities.maintainer`.
 - **`identities.reviewer`** — the review-agent login, normally Codex, that
-  publishes every review. Missing or null → **refuse**, naming `identities.reviewer`.
+  publishes reviews in the default route. Missing or null → **refuse**, naming `identities.reviewer`.
 - **`identities.implementer`** — the implementation-agent login, normally
-  Claude, that authors the PR, fixes, and replies. Missing or null → **refuse**,
+  Claude, that publishes fixes and replies in the default route. Missing or null → **refuse**,
   naming `identities.implementer`. All three identities are required *here*,
   unlike `review-comments`, which degrades to human-account replies when no
   implementer is configured. This loop is unattended: posting under the
@@ -106,47 +116,85 @@ Missing `.agents/stack.yml` altogether → refuse and name the file.
 ## What this skill drives
 
 This skill is the **driver** for two review skills that already exist and are
-not changed here:
+composed by reference:
 
 - **the reviewer** — kstack [`tools/github/review-claude-pr`](../review-claude-pr/SKILL.md),
-  run by Codex, posts a `COMMENT` review as `identities.reviewer`.
+  run by the resolved independent engine, posts a `COMMENT` review as `$REVIEWER`.
 - **the implementer** — kstack [`review-comments`](../review-comments/SKILL.md),
-  fixes the code and replies as `identities.implementer`.
+  stays in this implementation session, fixes code and replies as `$IMPLEMENTER`.
 
 Neither one decides when to stop. This one does. It is **unattended by design**:
 it posts, pushes, and replies without asking. It never merges unless `--merge`
 was passed on the invocation.
 
-## Preflight — run once, stop on any failure
+## Resolve engine roles first
 
-Every variable the round uses is defined here. The round body below assumes all
-of them exist; do not run it against a partial preflight.
+Read [references/routing.md](references/routing.md) and follow it before the
+preflight below. If unreadable, stop. It owns provenance, role selection, host
+checks, canonical skill resolution and CLI invocation. Bootstrap the controller
+before running its resolver:
+
+Keep bootstrap, routing, preflight, and rounds in one persistent shell process
+(or one private controller script). The exit trap removes `SCRATCH`; running
+bootstrap alone in an ephemeral shell destroys the pinned route before step 1.
 
 ```bash
 PR=<number>
+MAINTAINER="<identities.maintainer>"
+DEFAULT_REVIEWER="<identities.reviewer>"
+DEFAULT_IMPLEMENTER="<identities.implementer>"
+DEFAULT_REVIEWER_ENGINE="<review_engines.reviewer, or codex>"
+DEFAULT_IMPLEMENTER_ENGINE="<review_engines.implementer, or claude>"
+AUTHOR_ARGS=()  # append only this invocation's explicit authorship flags
+REPO_ROOT=$(git rev-parse --show-toplevel)
+STACK_ROOT=$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")
+test -r "$STACK_ROOT/tools/github/pr-loop/SKILL.md"
+REVIEW_SKILL="$STACK_ROOT/tools/github/review-claude-pr/SKILL.md"
+test -r "$REVIEW_SKILL"
+SCRATCH=$(mktemp -d)  # outside the repository; stop if creation fails
+test -d "$SCRATCH"
+trap 'test -n "$SCRATCH" && rm -rf -- "$SCRATCH"' EXIT
+MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
+test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
+BOOTSTRAP_TOKEN="$MAINTAINER_TOKEN"  # the controller's routing reads
+OWNER_REPO=$(GH_TOKEN="$MAINTAINER_TOKEN" gh repo view --json nameWithOwner --jq .nameWithOwner)
+```
+
+Resolve the exact PR with the shared contract and pin route.json. All role
+placeholders below mean resolved roles. Never infer the engine from a bot name.
+Before creating a ledger or starting a paid review, verify the invoking host
+independently of the route:
+
+```bash
+python3 "$STACK_ROOT/tools/github/pr-loop/bin/require-controller-host" \
+  --route "$SCRATCH/route.json" || exit 2
+```
+
+An unknown, ambiguous, or mismatched host blocks. Do not use a route field as
+the host claim; no whole-loop delegation or fallback self-review.
+
+## Preflight — run once, stop on any failure
+
+Every variable the round uses is defined by the bootstrap, routing contract, or
+this preflight. Do not run the round against a partial preflight.
+
+```bash
 MAX_ROUNDS=5; N=0                                        # --max-rounds overrides MAX_ROUNDS
                                                          # N counts rounds in THIS invocation only —
                                                          # see "Resuming after ROUNDS_EXHAUSTED"
-MAINTAINER="<identities.maintainer>"                    # from .agents/stack.yml
-REVIEWER="<identities.reviewer>"                        # Codex by default
-IMPLEMENTER="<identities.implementer>"                  # Claude by default
+# REVIEWER and IMPLEMENTER were read from pinned route.json above.
 CI_CHECKS="<ci.checks>"                                  # required | all | none
 CI_WAIT_MIN=30                                           # --ci-wait overrides: minutes step 3a
                                                          # waits for pending checks
 
-codex --version                                          # the loop is not runnable without it
-MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
 REVIEWER_TOKEN=$(gh auth token --hostname github.com --user "$REVIEWER")
 IMPLEMENTER_TOKEN=$(gh auth token --hostname github.com --user "$IMPLEMENTER")
 test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
 test "$(GH_TOKEN="$REVIEWER_TOKEN" gh api user --jq .login)" = "$REVIEWER"
 test "$(GH_TOKEN="$IMPLEMENTER_TOKEN" gh api user --jq .login)" = "$IMPLEMENTER"
 
-REPO_ROOT=$(git rev-parse --show-toplevel)
-OWNER_REPO=$(GH_TOKEN="$MAINTAINER_TOKEN" gh repo view --json nameWithOwner --jq .nameWithOwner)
 OWNER=${OWNER_REPO%/*}; REPO=${OWNER_REPO#*/}
-SCRATCH=$(mktemp -d)                                     # session scratch, never inside $REPO_ROOT
-trap 'rm -rf "$SCRATCH"' EXIT
+# Reuse the bootstrap SCRATCH and pinned route.json; never overwrite them here.
 
 # durable, per-PR answered-findings ledger — OUTSIDE $SCRATCH and outside $REPO_ROOT,
 # because the repeat-finding guard must survive this invocation. See step 5.
@@ -155,17 +203,23 @@ mkdir -p "$STATE_DIR"
 LEDGER="$STATE_DIR/$OWNER-$REPO-$PR"
 touch "$LEDGER"
 
-# Read routing configuration here; resolve it again immediately before each
-# paid review, because the first-review exception expires after round 1.
-# Precedence per slot: invocation flag > first-review escalation > base config
-# > stack default. Explicit flags pin their slots for every round.
+# Shared invocation flags and Claude defaults. Explicit model/effort flags pin
+# their slots for every round, regardless of the resolved reviewer engine.
 FAST="<true iff --fast was passed; otherwise false>"
-BASE_MODEL="<review_model.slug, or gpt-6.1-sol>"
-BASE_EFFORT="<review_model.effort, or high>"             # --effort overrides
+REVIEW_ARGS=()
+if [ "$FAST" = true ]; then REVIEW_ARGS=(--fast); fi
 PINNED_MODEL="<--model value, if passed>"
 PINNED_EFFORT="<--effort value, if passed>"
 MODEL_PINNED="<true iff --model was passed>"
 EFFORT_PINNED="<true iff --effort was passed>"
+CLAUDE_BASE_MODEL="<claude_review_model.slug, or sonnet>"
+CLAUDE_BASE_EFFORT="<claude_review_model.effort, or high>"
+
+# Codex reviewers only: resolve this routing again before each paid review,
+# because the first-review exception expires after round 1. Precedence per
+# slot: invocation flag > first-review escalation > base config > default.
+BASE_MODEL="<review_model.slug, or gpt-6.1-sol>"
+BASE_EFFORT="<review_model.effort, or high>"
 ESCALATED_MODEL="<review_model.escalated_slug, or gpt-6-astra>"
 ESCALATED_EFFORT="<review_model.escalated_effort, or high>"
 ESCALATE_ABOVE="<review_model.escalate_above_lines, or empty>"
@@ -175,7 +229,7 @@ ESCALATE_PATHS=(<review_model.escalate_paths, or no elements>)
 # the reviewer contract this loop delegates to, resolved through the host's installed
 # skill path (bin/install symlinks stack skills there). If your host installs skills
 # somewhere else, assert that path instead — but assert one.
-test -r "$HOME/.codex/skills/review-claude-pr/SKILL.md"
+test -r "$REVIEW_SKILL"  # canonical absolute path from the shared routing contract
 
 # the project review gate, ONLY when review_gate.skill_path is non-null — tracked,
 # because an untracked copy is not a dependency
@@ -186,50 +240,20 @@ git -C "$REPO_ROOT" ls-files --error-unmatch "<review_gate.skill_path>" >/dev/nu
 git status --porcelain --untracked-files=all | sort > "$SCRATCH/untracked-baseline.txt"
 GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json number,state,isDraft,headRefName,headRefOid,mergeable,author
 
-# authorship scope — see below
-AUTHOR=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json author --jq .author.login)
-COMMIT_AUTHORS=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json commits --jq '[.commits[].authors[].login] | unique | join(",")')
-CLAUDE_COMMITS=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json commits \
-  --jq '[.commits[] | select(([.authors[].login] | index("claude"))
-        or (.messageBody | split("\n") | any(test("^Co-Authored-By: Claude\\b.*<[^>]+>\\s*$"; "i"))))] | length')
+# Authorship and engine scope were resolved from complete REST commit evidence.
 ```
 
-`state` must be `OPEN`. If `codex` is absent, stop and tell the user to install
-it (`npm i -g @openai/codex`) — do not fall back to reviewing your own PR
-yourself, which defeats the entire point of the loop.
+Require state OPEN and the CLI, canonical skill and verified credentials named
+by the route. Missing dependencies or permissions return BLOCKED. Claude uses
+the shared pins and Claude defaults above; skip the Codex-only routing values.
+--fast is Codex-only.
 
-If the reviewer skill file is missing, stop. `codex exec` will silently proceed
-without it, produce no review and no marker, and the loop will report `BLOCKED`
-for a reason that looks like a Codex failure but is a missing dependency.
-
-### Authorship scope — enforced here, not assumed
-
-`review-claude-pr` is scoped to PRs attributable to `$IMPLEMENTER`, but it has an
-explicit-request exception, and this loop *always* passes an exact PR number —
-which trips that exception every time. Without a check here, `/pr-loop` silently
-extends the reviewer to any PR, including a maintainer's own.
-
-Stop unless one of these holds, each machine-checked in preflight:
-
-- `$AUTHOR` or one of `$COMMIT_AUTHORS` is `$IMPLEMENTER` — a PR the implementer has already
-  touched in earlier rounds; or
-- `$CLAUDE_COMMITS` is non-zero — the standard case: every PR is opened under
-  the maintainer account (`identities.maintainer`), and an agent-built one has a
-  head commit authored by the `claude` login or carrying a
-  `Co-Authored-By: Claude` **trailer line**: a whole line
-  starting `Co-Authored-By: Claude` and ending in an `<email>` address. A prose
-  mention of the phrase mid-sentence does not count — the match is anchored per
-  line, so a human-only commit that merely discusses the trailer format stays at
-  `0`.
-
-The remaining exception is an explicit `--any-author` on the invocation — for a
-PR with no machine-attributable commit at all — which the user is stating
-deliberately; record it in the final report so the run is never mistaken for an
-in-scope one. Do not stretch the first-draft rule beyond its evidence: a PR
-whose commits carry neither the `claude` login nor the trailer is a human PR,
-however machine-generated it looks. The trailer is forgeable, but the threat
-model here is accident, not adversary — the guard exists to keep the loop off a
-maintainer's own hand-written PR, not to authenticate commits.
+The shared resolver enforces authorship independently of engine choice.
+Maintainer-opened PRs with Codex/Claude commit attribution are eligible; mixed
+provenance needs explicit --implementation-engine. --any-author is separately
+required when there is no agent evidence. Forward those exact options to both
+child skills and report any exception. Do not treat an exact PR number passed
+by this controller as an implicit authorship override.
 
 ### Bind to the PR's branch — before any round
 
@@ -321,46 +345,11 @@ This is also why the implementer must stage explicitly — `git add <path>` for 
 files it changed, never `git add -A` in a tree carrying hundreds of untracked
 paths.
 
-The reviewer invocation, verified against `codex-cli 0.147.0`:
-
-```bash
-# --fast applies only to Codex reviewer rounds. Without it, inherit the host's
-# service tier; do not force Standard mode over a user's Fast mode default.
-FAST_ARGS=()
-if [ "$FAST" = true ]; then
-  FAST_ARGS=(-c 'service_tier="fast"' --enable fast_mode)
-fi
-GH_TOKEN="$REVIEWER_TOKEN" codex exec -C "$REPO_ROOT" -s danger-full-access -o "$SCRATCH/codex-round-$N.txt" \
-  -m "$MODEL" -c model_reasoning_effort="$EFFORT" "${FAST_ARGS[@]}" \
-  "Use \$review-claude-pr to review PR #$PR and post the findings." < /dev/null
-```
-
-- `--fast` sets `service_tier="fast"` and enables the CLI's `fast_mode` feature
-  for every Codex reviewer round in this invocation. It does not change the
-  implementer session. Fast mode uses more credits where available; report
-  whether the option was requested in the final routing line. A service-tier
-  request is not proof that every request was served at that tier.
-- `-m` and `-c model_reasoning_effort` are required, and both come from the
-  preflight resolution above. Omit either and the round inherits
-  `~/.codex/config.toml`, which on a workstation tuned for interactive work is
-  the frontier model at high effort — paid again every round up to
-  `--max-rounds`. Pass `$MODEL` and `$EFFORT` even when they equal the host
-  default; the flags are what make the cost reproducible across machines.
-- `-s danger-full-access` is required: the reviewer must reach the GitHub API
-  and run `gh`, which the `workspace-write` sandbox blocks. It therefore runs
-  unsandboxed against the real repo, which is what makes the reviewer skill's
-  "make no repository edits" boundary load-bearing. Do not weaken it.
-- `-o <file>` captures the agent's final message, which is what you parse in
-  step 3 — do not scrape stdout.
-- `< /dev/null` is required: `codex exec` reads extra prompt text from stdin
-  whenever stdin is not a TTY, so an unattended run with an open pipe on stdin
-  prints `Reading additional input from stdin...` and hangs forever with no
-  review posted (observed 2026-09-21 on `codex-cli 0.147.0`: blocked 4h42m
-  without calling the model).
-- Write the capture file to the session scratchpad, never into the repo.
-
-If a future `codex` version rejects these flags, re-check `codex exec --help`
-and use what it reports rather than guessing.
+Launch and verify each independent reviewer through `bin/run-review` as specified
+in the shared routing contract. It inherits host permissions, captures reports,
+and verifies submitted GitHub evidence. Permission or authentication failures
+block; never change host policy to make a review succeed. Codex --fast retains
+the service-tier/feature settings, only when explicitly requested.
 
 ## The round
 
@@ -369,32 +358,49 @@ overrides). The cap counts rounds in *this* invocation — `--max-rounds N` mean
 "N more rounds", never "N rounds in total across every run against this PR". The
 durable bound on repeated invocations is the ledger in step 5, not `N`.
 
-**1. Skip-check (this is the cost control).** Read the current head SHA and look
-for the reviewer's marker:
+**1. Skip-check (and round bound).** Increment N and enforce MAX_ROUNDS before any paid
+review. Assign `HEAD` from the current remote head and recompute route.json from complete
+commit evidence. A foreign head requires reconciliation; the loop's own guarded
+fix head becomes the next expected head. Preserve existing graph admission.
 
 ```bash
-N=$((N+1)); test "$N" -le "$MAX_ROUNDS"   # false ⇒ stop the loop, verdict ROUNDS_EXHAUSTED
+N=$((N+1)); test "$N" -le "$MAX_ROUNDS"  # false ⇒ ROUNDS_EXHAUSTED
 HEAD=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .headRefOid)
-GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/reviews" --jq '.[].body' \
-  > "$SCRATCH/review-bodies.txt"
-grep -c "codex-review head:$HEAD" "$SCRATCH/review-bodies.txt" || true
 ```
 
-`--paginate` is not optional: that endpoint returns 30 reviews per page, and on
-a PR with more than one page the marker for the current head can sit on a later
-one. Missing it buys a duplicate Codex review and breaks the one-round-per-SHA
-invariant this skill is built around.
+After recomputing route.json with the shared resolver, require
+`test "$HEAD" = "$(route_field head)"` before skipping or launching a review.
 
-If the marker for **this exact SHA** already exists, the reviewer has already
-been paid for on this code — skip straight to step 3. A Codex round costs real
-money; never spend one on an unchanged head.
+Read all submitted reviews with --paginate --slurp. For Codex model escalation,
+PRIOR_REVIEW_COUNT counts only submitted reviews by the resolved reviewer with
+that engine's exact marker and matching commit_id; never comments or another
+account's text. `bin/run-review` performs the exact-head skip-check and returns
+verified evidence without another paid review if one exists. No CLI prose or
+bare marker can satisfy the gate.
 
-**2. Review.** Resolve the route immediately before a paid round, not once in
-preflight. The previous round may have posted the first kstack review marker,
-after which an automatic Astra escalation must expire:
+**2. Review.** For a Claude reviewer, bind the exact pair that `bin/run-review`
+receives, rejecting Codex-only `--fast`:
 
 ```bash
-PRIOR_REVIEW_COUNT=$(grep -c 'codex-review head:' "$SCRATCH/review-bodies.txt" || true)
+if [ "$REVIEWER_ENGINE" = claude ]; then
+  if [ "$FAST" = true ]; then echo 'BLOCKED: --fast is Codex-only' >&2; exit 2; fi
+  MODEL="$CLAUDE_BASE_MODEL"; EFFORT="$CLAUDE_BASE_EFFORT"
+  if [ "$MODEL_PINNED" = true ]; then MODEL="$PINNED_MODEL"; fi
+  if [ "$EFFORT_PINNED" = true ]; then EFFORT="$PINNED_EFFORT"; fi
+fi
+```
+
+For a Codex reviewer only, resolve the model immediately before a paid round,
+not once in preflight. The previous round may have posted the first kstack
+review marker, after which an automatic Astra escalation must expire:
+
+```bash
+# Count only submitted reviews with this account's Codex marker bound to the
+# review's commit_id. Fetch every page before selecting the first-review model.
+GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate --slurp \
+  "repos/$OWNER_REPO/pulls/$PR/reviews" > "$SCRATCH/prior-reviews.json"
+PRIOR_REVIEW_COUNT=$(python3 "$STACK_ROOT/tools/github/pr-loop/bin/prior-review-count" \
+  --reviews "$SCRATCH/prior-reviews.json" --reviewer "$REVIEWER" --engine codex)
 SIZE=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json additions,deletions \
   --jq '.additions + .deletions')
 GH_TOKEN="$MAINTAINER_TOKEN" gh pr diff "$PR" --name-only > "$SCRATCH/changed-paths-raw.txt"
@@ -424,11 +430,13 @@ On a follow-up head, even a high-risk path uses the base model unless the
 invocation explicitly pins `--model gpt-6-astra`. This prevents an automatic
 Astra charge for each small fix while allowing a deliberate deep re-review.
 
-Run the `codex exec` command above. Capture its report. If it exits non-zero
-or posts nothing, do not retry blindly — record it and exit `BLOCKED`.
+For Claude, skip the Codex escalation block entirely. Run `bin/run-review`
+with the selected model/effort and inspect its JSON and exit status. Failure
+means BLOCKED with no blind retry, engine substitution or self-review.
 
-**3. Read the findings.** Fetch the review for `$HEAD` and parse the
-`### Findings` list into `(priority, title, path)` triples. Classify:
+**3. Read the findings.** Use the helper's verified review ID/head and structured
+findings (summary plus inline). Missing/malformed evidence is BLOCKED. Apply
+the durable ledger below before responding. Classify:
 
 - any `P0`/`P1`/`P2` → there is work to do, continue to step 4.
 - only `P3`, or `No findings.` → run the CI gate (step 3a); exit `CLEAN` only
@@ -458,6 +466,9 @@ while [ -z "$CI" ]; do
   else sleep 60
   fi
 done
+# Required even when ci.checks:none skipped the loop.
+NOW=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .headRefOid)
+[ "$NOW" = "$HEAD" ] || CI=moved
 ```
 
 | `CI` | Verdict |
@@ -470,16 +481,17 @@ done
 
 The gate sees only checks that have registered on the head: `gh pr checks
 --required` lists required checks that have *reported*, not ones GitHub still
-expects. Step 3a runs after a Codex review, minutes after the last push, and
+expects. Step 3a runs after an independent review, minutes after the last push, and
 GitHub registers check suites within seconds of a push. An empty list waits
 instead of passing.
 
 **4. Implement and reply.** Re-run the branch-binding block first — the head moved if the
 previous round pushed — and the pre-push guard immediately before the push,
 which is a different check. Pass any explicitly supplied --accept-graph-update
-flags to the implementer; never infer them from prior rounds. Then: read
-`../review-comments/SKILL.md` with the
-Read tool and follow it top to bottom, **skipping the section "The confirm gate
+flags to the implementer; never infer them from prior rounds. Forward the pinned route and explicit --implementation-engine/--any-author too.
+The current implementation session performs the fixes; the reviewer never does.
+Then: read
+`../review-comments/SKILL.md` and follow it top to bottom, **skipping the section "The confirm gate
 — draft, do not post"**; if it is unreadable, say so and stop. That skipped
 section is the **one documented override**: it assumes an interactive run, and
 this loop has none, so post directly. Every other invariant in that skill still
@@ -493,9 +505,9 @@ repair attempt. Still failing → push nothing further, exit `BLOCKED`.
 
 **5. Loop guard — against the ledger, not against memory.** The comparison is
 "have I *already answered* this finding", and the answer has to outlive the
-process. `$SCRATCH` does not: it is `mktemp -d` under a `trap … EXIT`, so every
-capture from a previous invocation is gone before the next one starts. A guard
-that compares only to the previous in-session round cannot see a `P0` that Codex
+process. `$SCRATCH` does not: it is per-invocation temporary storage, so a later
+invocation cannot rely on its captures. A guard
+that compares only to the previous in-session round cannot see a `P0` that the reviewer
 has now raised four times across two invocations, and reads it as a first
 sighting.
 
@@ -519,7 +531,7 @@ minimum separate two findings that differ only by file. A finding parsed without
 a path falls back to `-`, which groups all path-less findings together; that is
 the one place the collision survives, and it is the conservative direction.
 
-A hit means Codex and you disagree: exit `BLOCKED` with both positions quoted,
+A hit means the reviewer and you disagree: exit `BLOCKED` with both positions quoted,
 and do not argue across another round. A miss means it is new; after the
 implementer pass in step 4 lands, record it:
 
@@ -539,7 +551,7 @@ invocation reuses the same review for free; the ledger misses, so the guard does
 not fire; and `review-comments` skips the thread because the bot commented last
 — so the round finds nothing to do and exhausts in the identical state, forever.
 Recording it means a re-raise of that same finding trips `BLOCKED`, which is
-exactly right: Codex restating a point you answered in prose *is* the
+exactly right: the reviewer restating a point you answered in prose *is* the
 disagreement the guard exists to catch.
 
 The rule the ordering protects is narrower than "wait for a push": never record
@@ -575,7 +587,8 @@ no"*.
 Without it the escalation is invisible and the next reader cannot tell a cheap
 round from an expensive one.
 
-Every verdict report also carries: the `--any-author` exception if it was used,
+Every verdict report also carries the implementation/reviewer engines and accounts,
+provenance source, final reviewed SHA and submitted review URL/ID, plus the `--any-author` exception if it was used,
 and — when `review_gate.skill_path` is null — the one-line statement that rounds
 ran without a project review gate.
 
@@ -588,7 +601,7 @@ reflects review findings only."*
 
 Re-invoking `/pr-loop <PR#>` **continues from the current head — it does not
 restart the review from round 1**, and it never re-pays for a review of code
-already reviewed. What it does *not* usually do is skip the Codex call, and the
+already reviewed. What it does *not* usually do is skip the reviewer call, and the
 reason is the round ordering:
 
 **The cap fires at the top of a round, not before the implementer.** Step 1
@@ -604,7 +617,7 @@ That is still a resume rather than a restart, but the thing being resumed is the
 *work*, not the review: the earlier rounds' fixes are pushed, their findings are
 recorded in the ledger, and only the unreviewed delta is paid for.
 
-- **The head-SHA marker (step 1) skips the Codex call only when the head has not
+- **The head-SHA marker (step 1) skips the reviewer call only when the head has not
   moved *and* preflight passes.** That second condition rules out most of the
   exits you would expect to qualify. The binding block runs before step 1 and
   asserts `HEAD == headRefOid` and a clean tracked worktree, so: a `BLOCKED` on
@@ -619,7 +632,7 @@ recorded in the ledger, and only the unreviewed delta is paid for.
   raised in step 3 before any edit — repeat finding, and design pushback — and a
   CI `BLOCKED` from step 3a. Repeat finding and design pushback re-block
   immediately on the ledger. A CI `BLOCKED` is the useful one: rerun once the
-  checks are green and step 3a reports `CLEAN` without paying for another Codex
+  checks are green and step 3a reports `CLEAN` without paying for another independent
   review.
 - **The ledger (step 5) is what stays bounded.** `N` resets to `0` on every
   invocation and `ROUNDS_EXHAUSTED` is not sticky, so nothing in the round
@@ -628,7 +641,7 @@ recorded in the ledger, and only the unreviewed delta is paid for.
   whichever invocation sees it.
 
 `--max-rounds N` is therefore always "N more rounds", and each rerun after
-exhaustion should be assumed to cost one Codex review. There is no
+exhaustion should be assumed to cost one independent review. There is no
 total-across-invocations budget, by design — the human deciding to run it again
 *is* the budget.
 
@@ -662,22 +675,21 @@ unchanged PR.
 ## Safety invariants
 
 Every invariant here is **prompt-level**: no hook blocks a violating `git`,
-`gh`, or `codex` call — the procedure asserts, and the guards check before each
+`gh`, or reviewer CLI call — the procedure asserts, and the guards check before each
 outward step. Treat them as hard rules anyway.
 
 1. **The reviewer never edits code; the implementer never reviews its own work.**
    Keep the two roles in their own skills and their own processes.
-2. **One paid Codex round per head SHA, enforced by the marker check.**
+2. **One paid reviewer round per account + engine + head, checked against submitted evidence.**
 3. **Bounded rounds and a repeat-finding guard** — an unbounded loop between two
    models is the failure mode this skill exists to prevent. The round cap bounds
    one invocation; the **durable ledger** bounds the sequence of invocations,
    because `N` resets and `ROUNDS_EXHAUSTED` does not persist. A repeat guard
-   living only in `$SCRATCH` would be erased by the `trap` before the rerun that
-   needs it.
+   living only in `$SCRATCH` would be lost before the rerun that needs it.
 4. **Global `gh` identity is never switched.** Every GitHub API call receives
    the intended role's verified token through `GH_TOKEN`.
-5. **No merge without `--merge` and green checks.** Codex posting
-   `No findings.` is not a merge authorization; CI is.
+5. **No merge without `--merge` and green checks.** A reviewer posting
+   `No findings.` or green CI is not merge authorization; the human's explicit --merge is.
 6. **Every fix lands on the PR's own branch**, verified by the binding block
    before each implementer pass and by the pre-push guard before each push — never
    on whatever happened to be checked out. Both guards assert the **branch
@@ -693,8 +705,7 @@ outward step. Treat them as hard rules anyway.
 8. **Authorship is checked in preflight**, not inherited from the reviewer
    skill, whose explicit-number exception this loop would otherwise trip on
    every run. PRs are opened under `identities.maintainer` and qualify through
-   commit-level evidence (`claude`
-   author login or `Co-Authored-By: Claude` trailer), never through the loop's
+   the shared resolver's complete commit evidence and bounded legacy fallback, never through the loop's
    impression of the PR.
 9. **All three identities are required.** No maintainer, reviewer, or implementer
    identity configured → refuse. An unattended loop does not silently reassign

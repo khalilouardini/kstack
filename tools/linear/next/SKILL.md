@@ -1,7 +1,7 @@
 ---
 name: next
-version: 0.8.2
-description: Read Linear and recommend one scoped issue, or up to five independent tracks with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. --accept-graph-update accepts a reviewed pending graph PR. --accept-overlap accepts named PR file overlap. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
+version: 0.9.0
+description: Read Linear and recommend one scoped issue, or up to five independent tracks with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. Explicit flags accept a reviewed pending PR or a local graph. --accept-overlap accepts named PR file overlap. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
 # next — what to pick up now
@@ -10,7 +10,7 @@ description: Read Linear and recommend one scoped issue, or up to five independe
 
 Someone needs to decide what starts now, and the tracker holds more open work
 than fits in one head. Invoke as
-`/next [<milestone-id>|any] [--project "<name-or-id>"]... [--parallel [N]] [--accept-overlap <PR#>]... [--accept-graph-update <PR#>]...`.
+`/next [<milestone-id>|any] [--project "<name-or-id>"]... [--parallel [N]] [--accept-overlap <PR#>]... [--accept-graph-update <PR#>]... [--local-graph]`.
 Forward-looking;
 the complement to `triage`, which audits unfinished GitHub work backwards. Not
 for deciding whether a *new* idea is in scope (that is the `spec` pipeline's
@@ -132,6 +132,16 @@ overlap** in the PR body. Whichever PR merges second rebases onto the default
 branch and re-runs the gates before its merge. If it closes unmerged, the active overlap is gone.
 PLAN_ONLY records overlap as a plan risk and stops without a rebase; human
 actions touch no files and receive no rebase instruction.
+
+
+Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
+procedure. It replaces graph publication with fresh local indexed validation and
+candidate/closure admission; scope, native blockers, evidence, human decisions
+and plan/merge approvals remain mandatory. Forward this invocation's explicit
+flag and canonical owner/index/manifest pins through composed execution skills.
+Recheck the owner files before writes; never substitute an older dispatch-worktree
+copy. Changed pins require a new plan. Reject repeated local flags and mixed
+local/PR graph sources. No graph publication or extra tracker writes are granted.
 
 ## Configuration — read `.agents/stack.yml` first
 

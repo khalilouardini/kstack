@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+`/pr-loop` 0.9.1: identify the invoking Codex or Claude Code session from
+host-provided subprocess markers before creating a ledger and again before a
+review. Missing, simultaneous, or mismatched markers block; the route can no
+longer certify its own `--host` claim.
+
+`/pr-loop` 0.9.0, `/review-claude-pr` 0.4.0 and `/review-comments` 0.6.0:
+bidirectional independent review with commit-based engine provenance, explicit
+mixed-authorship selection, and one implementation controller. Add a tested
+CLI runner that verifies per-command identity, exact-head submitted review
+and inline evidence, catches failures, and keeps Claude/Codex flags separate.
+Retain main's model routing, fast mode, graph admission and concurrency guards.
+Host permissions are inherited. Deployment and a live authenticated review
+remain rollout checks; this does not enable Codex /wave build.
+
+Add --local-graph to wave and composed execution
+skills. Explicit local graph use retains fresh candidate/closure, scope, dependency,
+evidence and human approval checks without graph publication. Build requires renewed
+local approval and matching saved pins; B3 re-audits local files even when main is
+unchanged. Preserve source_revision as adoption provenance across stack upgrades.
+
 `/wave` 0.9.0 recovers verified existing PRs before implementation, readmits fresh
 Linear conditions on unchanged main, handles graph publication while reviews
 queue, and refreshes conditions during review rounds without rejecting owned
