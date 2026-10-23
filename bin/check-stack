@@ -329,6 +329,13 @@ def main(argv: list[str]) -> int:
         if out.returncode:
             r.fail(str(selection_tests), "harness", out.stderr.strip() or "selection tests failed")
 
+    wave_host_tests = REPO / "tools/linear/wave/tests"
+    out = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", str(wave_host_tests), "-p", "test_*.py"], capture_output=True, text=True)
+    print(out.stdout, end="")
+    print(out.stderr, end="")
+    if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+        r.fail(str(wave_host_tests), "harness", "wave host tests failed or none discovered")
+
     review_tests = REPO / "tools/github/pr-loop/tests"
     out = subprocess.run(
         [sys.executable, "-m", "unittest", "discover", "-s", str(review_tests)],

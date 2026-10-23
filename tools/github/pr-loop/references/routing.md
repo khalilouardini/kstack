@@ -174,3 +174,9 @@ implementation and push guards, graph admission, current CI policy, and final
 head recheck even for ci.checks:none. Those controller steps remain prompt-level.
 Report route/provenance, actual reviewer engine and posting account separately,
 requested model/effort, review URL/ID/head, reuse and CLI status, and CI evidence.
+
+When the controller carries `--review-slots N`, pass it to every `run-review`
+invocation. The permit covers only the paid CLI process; its post-wait exact-head
+and reuse checks prevent a queued call from blindly repeating a finished review.
+The loop keeps its same controller and round ledger while other tickets use the
+permit during its fix or CI phases. Do not wrap the entire pr-loop in this permit.

@@ -1,4 +1,6 @@
 import json
+import hashlib
+import fcntl
 import os
 from pathlib import Path
 import subprocess
@@ -80,6 +82,37 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(report['reused'])
         self.assertFalse(any(c['name'] == 'claude' for c in state['calls']))
+
+    def test_review_permit_is_held_only_for_paid_process(self):
+        value = route('Codex')
+        key = hashlib.sha256(value['reviewer'].casefold().encode()).hexdigest()
+        slot = self.root / 'slots' / ('review-claude-' + key) / '0'
+        result, report, _ = self.invoke(mode='check-slot',
+            extra=['--review-slots', '1', '--slot-state', str(self.root)],
+            modify=lambda s: s.update(slot_file=str(slot)))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertGreaterEqual(report['timing']['slot_wait_seconds'], 0)
+        self.assertGreater(report['timing']['reviewer_process_seconds'], 0)
+        with slot.open('a+') as released:
+            fcntl.flock(released, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def test_review_found_after_wait_avoids_second_charge(self):
+        result, report, state = self.invoke(mode='reuse-after-wait',
+            extra=['--review-slots', '1', '--slot-state', str(self.root)])
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue(report['reused'])
+        self.assertFalse(any('--print' in c['args'] for c in state['calls']))
+
+    def test_invalid_review_limit_never_launches(self):
+        result, report, state = self.invoke(extra=['--review-slots', '0', '--slot-state', str(self.root)])
+        self.assert_blocked(result, report)
+        self.assertFalse(any('--print' in c['args'] for c in state['calls']))
+
+    def test_checkout_move_after_wait_blocks_before_paid_process(self):
+        result, report, state = self.invoke(mode='checkout-moved-before-review',
+            extra=['--review-slots', '1', '--slot-state', str(self.root)])
+        self.assert_blocked(result, report)
+        self.assertFalse(any('--print' in c['args'] for c in state['calls']))
 
     def test_wrong_host_blocks_before_commands(self):
         result, report, state = self.invoke(extra=['--host', 'claude'])

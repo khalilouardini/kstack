@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.9.0
+version: 0.10.0
 description: Drive an independent Codex↔Claude review/fix loop on one PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. The implementation session keeps fixes; the other engine reviews with verified GitHub identity and head evidence. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#>". (kstack)
 ---
 
@@ -11,7 +11,7 @@ description: Drive an independent Codex↔Claude review/fix loop on one PR to CL
 One open PR needs review rounds driven to a stop condition without a human in
 the seat: review → fix → reply → re-review, until the PR is clean, a
 disagreement blocks it, or the round budget runs out. Invoke as
-`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--implementation-engine codex|claude] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--accept-graph-update <PR#>]... [--local-graph]`. Not for reviewing a
+`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--implementation-engine codex|claude] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--review-slots N] [--test-slots N] [--accept-graph-update <PR#>]... [--local-graph]`. Not for reviewing a
 human-authored PR, not for deciding contested design questions, and not for
 approving — see "What this skill is NOT for".
 
@@ -145,6 +145,24 @@ OWNER_REPO=$(GH_TOKEN="$MAINTAINER_TOKEN" gh repo view --json nameWithOwner --jq
 Resolve the exact PR with the shared contract and pin route.json. All role
 placeholders below mean resolved roles. Never infer the engine from a bot name.
 On a host mismatch stop; no whole-loop delegation or fallback self-review.
+
+## Resource permits for wave execution
+
+`--review-slots N` bounds paid reviewer processes, not the whole review/fix/CI
+loop. Validate a positive integer and pass `--review-slots N` to **every**
+`bin/run-review` call, including later rounds. It acquires a host-local permit
+for the resolved engine/account, rechecks the head and existing review after
+waiting, then releases the permit when the reviewer exits. Fixes and CI hold no
+reviewer permit. Keep one controller, its existing round cap, exact-head markers
+and durable repeat-finding ledger; this option never restarts a terminal loop.
+
+`--test-slots N` bounds expensive local gates. For each lint/test/build command,
+run the configured command through `core/land/bin/with-slot --group local-tests
+--limit N -- <shell> -c <exact-command>` from the canonical physical stack root,
+with the verified worktree as cwd. Forward the same bound into review-comments
+and land instructions. It changes neither which tests are authorized nor CI
+requirements. Default state is outside the repository in KSTACK_STATE. Do not
+hold a local-test permit while waiting for paid review or CI.
 
 ## Preflight — run once, stop on any failure
 

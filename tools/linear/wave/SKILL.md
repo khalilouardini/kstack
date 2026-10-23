@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.10.0
+version: 0.11.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -98,6 +98,15 @@ Read every composed procedure by physical path, never copy its rules here.
 - `wave.selection_limit`: missing/null → 12; positive integer. Refuse requests
   above the configured bound, never clamp to a display ceiling. This is batch
   capacity, not a local-test concurrency budget.
+- `wave.execution_mode`: missing/null → `legacy`. `streaming` is an explicit
+  experimental opt-in; other values refuse. Read `references/execution.md`
+  for scheduling, enforcement limits and the pilot gates before enabling it.
+- `wave.worker_concurrency`: missing/null → 3; positive integer. Bounds A4
+  planners and, in streaming mode, ticket controllers through B1 and B3 together.
+- `wave.test_concurrency`: missing/null → 1; positive integer. Expensive local
+  gate commands use canonical `core/land/bin/with-slot`. This is a host-wide
+  cooperative process limit; project test scope and CI authority remain unchanged.
+  Announce the resolved mode and all worker/reviewer/test budgets.
 - `wave.contract_dir`: missing/null → permitted only when A2 is empty; otherwise
   refuse naming `wave.contract_dir`. No defensible project-neutral location exists.
   When set, require a relative directory contained in the repo; reject traversal,
@@ -197,8 +206,10 @@ selection and approval. Legacy Run A records retain their old membership.
    each selected/approved issue's ELIGIBLE build state and relevant closure;
    UPDATE_REQUIRED is a warning, never project-wide exclusion. Project-less tracks
    remain exempt. Require valid UTC checked_at on args.date. Carry main/graph SHA,
-   full admission evidence, exact local delta and digests into every node and the
-   existing record.evidence array; moved pins require fresh audits and changed
+   full admission evidence, exact local delta and digests into the existing
+   record.evidence array. Ticket nodes receive a clearly marked projection of
+   their candidate and closure, with source pins and fresh-read requirements;
+   the projection is not a complete helper report. Moved pins require fresh audits and changed
    relevant conditions stop only affected build tracks. Planning nodes stop the
    planning invocation when conditions change before contract publication.
    Build tracks in both runs match validated build-transition reports; the separate
@@ -244,6 +255,8 @@ procedure, including the Workflow invocation, is caller-only: a node never
 recursively invokes it. A2 reads issues/scopes and returns literals; A3 prepares
 only the contract and its test via land; B2 runs seam-check and verifies questions;
 B3 admission only observes. All are prompt-level.
+B4 reads this skill only for read-only final agreement verification described
+in `references/execution.md`; it never invokes a wave or fixes a ticket.
 
 Run A selects (A1), scans shared literals in issue descriptions and scopes (A2),
 then, only if necessary, prepares a contract PR (A3) before dispatch plans (A4).
@@ -257,13 +270,15 @@ A4 reads `tools/linear/dispatch-implementation/SKILL.md` top to bottom using its
 Run B pipelines approved tracks through B1 in the dispatch worktrees. Each node
 reads the dispatch lifecycle and land procedure by reference, verifies any
 contract PR actually reached the fetched default branch, rebases, then builds
-only the approved plan. After all B1s, B2 runs the deterministic
+only the approved plan. In legacy mode, after all B1s, B2 runs the deterministic
 `tools/linear/wave/bin/seam-check` against the built branches, contract and fetched
 base. It emits a literal × branch × file table; nonzero exit or absent evidence
 blocks affected tracks. No contract → B2 does not run and the report says so.
 B3 reads `tools/github/pr-loop/SKILL.md` top to bottom with the round cap and
-parses its existing verdict report; it has no new adaptation. Review concurrency
-limits only B3, so a later track's review can start long after B1 validated main.
+parses its existing verdict report. Legacy B3 uses a rolling queue bounded by
+review concurrency. Streaming starts each ticket's B3 as soon as its B1 opens
+a PR, forwarding separate paid-review and local-test permits. Final agreements
+are checked after reviews at exact reviewed heads; see `references/execution.md`.
 Before each project-linked track's pr-loop, a read-only B3 admission node returns
 READMISSION: the live main SHA and, when it differs from Run B's validated main,
 the exit codes of `git merge-base --is-ancestor <validated> <live>` and
@@ -308,8 +323,9 @@ Missing Workflow support → A1-only plan degradation, or build refusal. Missing
 approval/Run A record, invalid required config, missing project-filter support,
 unknown ids, non-empty A2 without `wave.contract_dir`, unmerged/missing contract,
 unreadable canonical procedures or dispatch refusal → report and stop with
-evidence. Headless land stops rather than waiting. Stopped or mismatched tracks
-never enter B3 (script check). No tracker authorship beyond dispatch's own
+evidence. Headless land stops rather than waiting. Stopped builds never enter B3;
+legacy seam mismatches also stop before review. Streaming final mismatches stop
+readiness after review (script checks). No tracker authorship beyond dispatch's own
 started/in-review ledger/write/read-back transitions (prompt-level).
 
 ## Output

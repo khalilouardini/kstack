@@ -45,7 +45,7 @@ async function run(stage, mutate=()=>{}, source=executable) {
     assert.ok(opts.schema);assert.ok(prompt.includes('D4 node rule:'));
     const isReview=opts.label.startsWith('B3');
     if (isReview) {runningReview++;maxReview=Math.max(maxReview,runningReview);}
-    await new Promise(r=>setTimeout(r,2));
+    await new Promise(r=>setTimeout(r,f.delays?.[opts.label] ?? 2));
     assert.ok(Object.hasOwn(f.responses,opts.label),'unexpected call '+opts.label);
     const value=clone(f.responses[opts.label]);
     if(opts.label.startsWith('B3 admission') && value?.state==='OBSERVED' &&
@@ -760,6 +760,17 @@ function seamIntegration(){
   assert.equal(check('good').status,0);const bad=check('good','bad');assert.equal(bad.status,1);assert.ok(JSON.parse(bad.stdout).some(r=>r.state==='MISMATCH'&&r.branch==='bad'));
   git('checkout','-b','renamed','main');git('mv','marker.txt','renamed.txt');git('commit','-m','rename');const rename=check('renamed');assert.equal(rename.status,1);assert.ok(JSON.parse(rename.stdout).some(r=>r.file==='marker.txt'&&r.state==='MISMATCH'));
   assert.equal(check('missing').status,1);assert.equal(check().status,1);assert.ok(JSON.parse(check().stdout).some(r=>r.state==='ERROR'));
+  const heads=join(temp,'heads.json'),participants=join(temp,'participants.json');
+  writeFileSync(heads,JSON.stringify({good:git('rev-parse','good'),bad:git('rev-parse','bad')}));
+  writeFileSync(participants,JSON.stringify({AGREED:['good']}));
+  const pinned=()=>spawnSync('python3',[resolve(dir,'../bin/seam-check'),'--repo',temp,'--base','main',
+    '--contract',contract,'--expected-heads',heads,'--participants',participants,'--branches','good','bad'],{encoding:'utf8'});
+  const pass=pinned();assert.equal(pass.status,0);assert.deepEqual(JSON.parse(pass.stdout).heads,JSON.parse(readFileSync(heads,'utf8')));
+  assert.ok(JSON.parse(pass.stdout).table.every(r=>r.branch==='good'));
+  writeFileSync(heads,JSON.stringify({good:git('rev-parse','main'),bad:git('rev-parse','bad')}));
+  assert.equal(pinned().status,1,'stale reviewed head cannot pass');
+  writeFileSync(heads,JSON.stringify({good:git('rev-parse','good')}));
+  assert.equal(pinned().status,1,'missing reviewed head cannot pass');
   writeFileSync(contract,'invalid');assert.equal(check('good').status,1);
  }finally{rmSync(temp,{recursive:true,force:true});}
 }
@@ -837,6 +848,94 @@ tests.push(async()=>{
     });
     assert.equal(r.result.state,'STOPPED',change);assert.ok(!r.calls.some(c=>/^A[234]/.test(c.label)),change);
   }
+});
+
+
+const streamingArgs=(f,a)=>{
+  a.wave.execution_mode='streaming';a.wave.worker_concurrency=3;
+  for(const t of f.tracks)f.responses['B3 review '+t.issue_id].reviewed_head='a'.repeat(40);
+};
+const finalFixture=(f,a)=>{
+  streamingArgs(f,a);a.plan_record.literals=clone(f.literals);a.plan_record.contract=clone(f.contract);
+  const ids=f.literals[0].tracks;
+  f.responses['B4 final evidence']={exit:0,base_sha:'b'.repeat(40),
+    heads:f.tracks.filter(t=>ids.includes(t.issue_id)).map(t=>({issue_id:t.issue_id,branch:t.branch,head_sha:'a'.repeat(40),pr_head_sha:'a'.repeat(40)})),
+    table:seamTable(f).filter(row=>ids.some(id=>f.tracks.find(t=>t.issue_id===id).branch===row.branch)),
+    open_questions:[],evidence:['verified current GitHub/local heads before and after helper']};
+};
+cases.push({number:43,name:'review begins before the last independent build finishes'});
+tests.push(async()=>{
+  const r=await run('build',(f,a)=>{
+    streamingArgs(f,a);f.delays={'B1 build T-1':1,'B1 build T-2':3,'B1 build T-3':90};
+  });
+  assert.equal(r.result.state,'COMPLETE');assert.ok(r.result.tracks.every(t=>t.state==='CLEAN'));
+  assert.ok(r.events.indexOf('start B3 review T-1')<r.events.indexOf('end B1 build T-3'));
+  assert.ok(r.calls.find(c=>c.label==='B3 review T-1').prompt.includes('--review-slots 1 --test-slots 1'));
+  assert.ok(r.logs.some(l=>l.includes('"event":"ticket_ready"')&&l.includes('T-1')));
+});
+cases.push({number:44,name:'rolling worker and review queues reuse capacity'});
+tests.push(async()=>{
+  const r=await run('build',(f,a)=>{
+    streamingArgs(f,a);a.wave.worker_concurrency=2;
+    f.delays={'B1 build T-1':2,'B1 build T-2':3,'B1 build T-3':25,'B3 review T-1':90,'B3 review T-2':1};
+  });
+  assert.ok(r.events.indexOf('start B3 review T-3')<r.events.indexOf('end B3 review T-1'));
+  let running=0,peak=0;
+  for(const event of r.events){if(event.startsWith('start B1'))peak=Math.max(peak,++running);if(event.startsWith('end B1'))running--;}
+  assert.equal(peak,2);
+  for(const key of ['worker_concurrency','test_concurrency']) {
+    const bad=await run('build',(_f,a)=>a.wave[key]=0);assert.equal(bad.result.state,'STOPPED');assert.equal(bad.calls.length,0);
+  }
+});
+cases.push({number:45,name:'final agreement uses reviewed heads after fixes'});
+tests.push(async()=>{
+  const r=await run('build',(f,a)=>{
+    finalFixture(f,a);f.responses['B3 review T-1'].reviewed_head='c'.repeat(40);
+    Object.assign(f.responses['B4 final evidence'].heads[0],{head_sha:'c'.repeat(40),pr_head_sha:'c'.repeat(40)});
+  });
+  assert.ok(r.result.tracks.every(t=>t.state==='CLEAN'));
+  assert.ok(!r.calls.some(c=>c.label==='B2 seam check'));
+  assert.ok(r.events.indexOf('start B4 final evidence')>r.events.indexOf('end B3 review T-2'));
+  for(const damage of ['old_head','pr_drift','missing_row','literal_changed','missing_observation','base_moved','branch_error']) {
+    const bad=await run('build',(f,a)=>{
+      finalFixture(f,a);const final=f.responses['B4 final evidence'];
+      if(damage==='old_head')f.responses['B3 review T-1'].reviewed_head='c'.repeat(40);
+      if(damage==='pr_drift')final.heads[0].pr_head_sha='d'.repeat(40);
+      if(damage==='missing_row')final.table.pop();
+      if(damage==='literal_changed'){final.exit=1;final.table[0].state='MISMATCH';}
+      if(damage==='missing_observation')f.responses['B4 final evidence']=null;
+      if(damage==='base_moved'||damage==='branch_error'){
+        final.exit=1;final.table.push({literal:'',file:'',branch:damage==='base_moved'?'origin/main':final.heads[0].branch,state:'ERROR',evidence:'Ref moved'});
+      }
+    });
+    assert.equal(bad.result.tracks[0].state,'SEAM_MISMATCH',damage);
+    assert.equal(bad.result.tracks[1].state,'SEAM_MISMATCH',damage);
+    assert.equal(bad.result.tracks[2].state,'CLEAN',damage);
+  }
+});
+cases.push({number:46,name:'missing agreement participants block only their group'});
+tests.push(async()=>{
+  for(const missing of ['unapproved','stopped']) {
+    const r=await run('build',(f,a)=>{
+      finalFixture(f,a);
+      if(missing==='unapproved')a.approve=['T-1','T-3'];
+      else{const result=f.responses['B1 build T-2'];result.state='STOPPED';result.pr=null;result.stop_reason='gate failed';result.evidence=['gate failed'];}
+    });
+    assert.equal(r.result.tracks[0].state,'SEAM_MISMATCH');assert.equal(r.result.tracks[2].state,'CLEAN');
+    assert.ok(!r.calls.some(c=>c.label==='B4 final evidence'));
+  }
+});
+cases.push({number:47,name:'narrow context excludes sibling plans and issue bodies'});
+tests.push(async()=>{
+  const r=await run('build',(f,a)=>{
+    streamingArgs(f,a);a.plan_record.plans[1].risks=['SIBLING-PLAN-PRIVATE'];
+    a.graph_admission[0].evidence.issues.unrelated='UNRELATED-ISSUE-BODY';
+    a.graph_admission[0].evidence.request.nodes=[{node_id:'outside-closure',description:'UNRELATED-NODE'}];
+    a.selection_snapshot={secret:'SELECTION-NOT-FOR-BUILDER'};
+  });
+  const prompt=r.calls.find(c=>c.label==='B1 build T-1').prompt;
+  for(const marker of ['SIBLING-PLAN-PRIVATE','UNRELATED-ISSUE-BODY','UNRELATED-NODE','SELECTION-NOT-FOR-BUILDER'])assert.ok(!prompt.includes(marker));
+  assert.ok(r.result.evidence.some(e=>e.includes('UNRELATED-ISSUE-BODY')),'full audit retained');
 });
 
 let failed=0;

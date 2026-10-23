@@ -1,6 +1,6 @@
 ---
 name: land
-version: 0.6.1
+version: 0.6.2
 description: Land an agent session's work safely — dedicated branch, concurrent-session guards re-run before every commit, the repo's own lint and test gates from .agents/stack.yml, atomic commits, then one PR. Stops at the PR; merging is a human decision. Use when asked to "land this", "commit and push", "open a PR", "ship it", or "/land". (kstack)
 ---
 
@@ -263,6 +263,14 @@ Different patch-id → it is real, unlanded work belonging to someone else. Leav
 it alone too, and report it.
 
 ## Step 7 — gates before push
+
+When a composing wave/pr-loop supplies a local-test budget, run configured gate
+commands through canonical `core/land/bin/with-slot --group local-tests --limit N
+-- <argv...>` from the verified worktree. Use the shell explicitly for configured
+shell commands. This host-local cooperative permit bounds command concurrency;
+it does not change required tests or override project/user test-scope rules.
+Do not hold it during review or CI waits. Without a supplied budget this procedure
+retains its normal gate invocation.
 
 ```bash
 <gates.lint>
