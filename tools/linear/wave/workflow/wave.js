@@ -1845,7 +1845,7 @@ List every literal two or more tracks must agree on: status tokens, schema field
 config keys, paths, marker comments. Return literals with files, participating ids, why.`, schemas.SCAN, 'Select');
   if (!scan) { record.stop_reason='A2 returned no record'; record.evidence.push(record.stop_reason); return record; }
   record.literals=scan.literals;
-  if (scan.literals.length) {
+  if (scan.literals.length && !localIndex) {
     if (!cfg.contract_dir) {
       record.stop_reason='wave.contract_dir is required for shared literals';
       record.evidence.push('A2 found shared literals',JSON.stringify(scan.literals));
@@ -1897,7 +1897,9 @@ No intersection means no overlap risk or rebase instruction for this track.
 ` : '';
     const p=await call(`A4 plan ${t.issue_id}`, `${graphPrompt}${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
 Dispatch exact issue ${t.issue_id} with --plan-only ${graphFlags.join(' ')}. Proposed track: ${JSON.stringify(t)}.
-Contract: ${JSON.stringify(record.contract)}. Return criteria citations, files, tests,
+Contract: ${JSON.stringify(record.contract)}. Shared agreements: ${JSON.stringify(record.literals)}.
+${localIndex ? 'Keep shared agreements in this approved plan handoff. Do not create a separate wave contract branch, test, commit or PR; include any required product tests in the ticket plan.' : ''}
+Return criteria citations, files, tests,
 risks, status read-back and verified absolute worktree. No implementation permission.`, schemas.PLAN, 'Plan');
     if (!p || p.issue_id !== t.issue_id || !p.worktree.startsWith('/') || !p.branch) return stoppedPlan(t,'A4 missing or wrong issue record');
     if (p.state==='STOPPED') log(`${t.issue_id}: STOPPED ${p.stop_reason}`);
@@ -2006,9 +2008,12 @@ ${read(args.paths.land, 'headless land returns STOPPED with evidence instead of 
 Human approval: ${JSON.stringify(ids)} for wave ${a.wave_id}. Approved plan: ${JSON.stringify(plan)}.
 Use the existing dispatch worktree ${t.worktree}, branch ${t.branch}. Read back the
 branch/worktree pairing and refuse drift. Fetch and rebase onto ${args.default_branch}.
-Contract: ${JSON.stringify(a.contract)}. If present, first verify its PR is merged
+Shared agreements: ${JSON.stringify(a.literals)}. Implement and test the agreed literals
+within the approved ticket scope; the local handoff alone never authorizes product scope changes.
+${a.contract ? `Contract: ${JSON.stringify(a.contract)}. If present, first verify its PR is merged
 AND its commit/file is on the fetched default branch; a PR state alone is insufficient.
-Verify exact contract contents match ${JSON.stringify(a.literals)}. If absent, stop.
+Verify exact contract contents match ${JSON.stringify(a.literals)}. If absent, stop.` :
+  'There is no published wave contract to merge. Use the approved shared agreements above; do not create a separate wave contract PR.'}
 Implement the approved plan, follow land to a PR, then dispatch section 5's
 review-status write/read-back if defined. Include every open question.`, schemas.TRACK_RESULT, 'Build');
   if (r?.state==='PR_OPEN' && (!r.pr || !r.head_sha || r.gates.lint.exit!==0 || r.gates.test.exit!==0 || !r.acceptance_evidence.length)) {
@@ -2021,22 +2026,28 @@ review-status write/read-back if defined. Include every open question.`, schemas
 });
 const results=approved.map((t,i)=>built[i] || stoppedBuild(t,'B1 pipeline dropped track'));
 const active=approved.filter((t,i)=>results[i].state==='PR_OPEN');
+const hasSeams=Boolean(a.contract || (localIndex && a.literals.length));
+const seamContract=a.contract ? `Use the published contract file ${a.contract.file}.` :
+  `Materialize the approved shared agreements as JSON in a temporary file outside the repository:
+${JSON.stringify(a.literals.map(({literal,files})=>({literal,files})))}.
+Pass that absolute temporary path as --contract. Do not create a branch, commit, PR or tracked test for this run metadata.`;
 let seam=null;
-if (a.contract && active.length) {
+if (hasSeams && active.length) {
   phase('Seams');
   seam=await call('B2 seam check', `${read(args.paths.wave, 'run deterministic seam-check after every B1 has completed')}
+${seamContract}
 Run ${args.paths.seam_check} --repo ${args.repo_root} --base ${args.default_branch}
---contract ${a.contract.file} --branches ${JSON.stringify(active.map(t=>t.branch))}.
+--contract <absolute-contract-path> --branches ${JSON.stringify(active.map(t=>t.branch))}.
 Address paths explicitly; pass each branch as a separate argv token, never shell interpolation.
 Return exact exit and JSON table. Verify open questions against all sibling tips:
 ${JSON.stringify(results)}. Mark checked questions verified (current) or stale with git evidence.`, schemas.SEAM, 'Seams');
   report.seam_check={state:seam?.exit===0?'PASSED':'FAILED',table:seam?.table || [],reason:seam?'seam-check exit '+seam.exit:'B2 returned no evidence'};
   report.open_questions=seam?.open_questions || [];
-} else if (a.contract) report.seam_check.reason='No built branches; all B1 tracks stopped';
+} else if (hasSeams) report.seam_check.reason='No built branches; all B1 tracks stopped';
 const mismatched=new Set();
 // Require a row for every expected branch/literal/file, including UNCHANGED.
 // A bare zero exit without the deterministic table is not seam evidence.
-if (a.contract && seam) for (const t of active) for (const entry of a.literals) for (const file of entry.files) {
+if (hasSeams && seam) for (const t of active) for (const entry of a.literals) for (const file of entry.files) {
   const rows=seam.table.filter(r=>r.branch===t.branch&&r.literal===entry.literal&&r.file===file);
   if (rows.length!==1) {
     mismatched.add(t.issue_id);
@@ -2044,7 +2055,7 @@ if (a.contract && seam) for (const t of active) for (const entry of a.literals) 
     log(`${t.issue_id}: missing or duplicate seam evidence for ${entry.literal} in ${file}`);
   }
 }
-if (a.contract && active.length) {
+if (hasSeams && active.length) {
   if (!seam || (seam.exit!==0 && !seam.table.some(r=>r.state==='MISMATCH'||r.state==='ERROR')))
     active.forEach(t=>mismatched.add(t.issue_id));
   for (const r of seam?.table || []) if (r.state==='MISMATCH'||r.state==='ERROR') {
@@ -2177,11 +2188,13 @@ Read each actual remote PR head and its branch/worktree pairing. Return head_sha
 after fetching that exact commit object without moving the implementation branch,
 and reviewed_head_sha from the final same-head configured reviewer marker and
 pr-loop/CI evidence; null reviewed_head_sha if that evidence is unavailable.
-Do not edit, rebase, push, review or write Linear. Contract: ${JSON.stringify(a.contract)}.
-When present, run ${args.paths.seam_check} --repo ${args.repo_root} --base ${args.default_branch}
---contract ${a.contract?.file || '<none>'} --branches <each verified final head SHA>.
-Return its unedited table keyed by those SHA arguments as seam. Without a contract
-return seam null. Re-read remote heads after the check; head movement makes this
+Do not edit, rebase, push, review or write Linear. Shared agreements: ${JSON.stringify(a.literals)}.
+${hasSeams ? `${seamContract}
+Run ${args.paths.seam_check} --repo ${args.repo_root} --base ${args.default_branch}
+--contract <absolute-contract-path> --branches <each verified final head SHA>.
+Return its unedited table keyed by those SHA arguments as seam.` :
+  'No shared agreements or contract apply; return seam null.'}
+Re-read remote heads after the check; head movement makes this
 observation unavailable. A bare successful exit is insufficient.`, schemas.FINAL_CHECK, 'Seams');
   const finalRows=Array.isArray(final?.heads)?final.heads:[];
   for (const t of active) {
@@ -2196,7 +2209,7 @@ observation unavailable. A bare successful exit is insufficient.`, schemas.FINAL
         reviews[t.issue_id]=finalReviewFailure(reviews[t.issue_id],result,'Final head has no matching review/CI evidence');
     }
   }
-  if (a.contract) {
+  if (hasSeams) {
     const checked=final?.seam;
     const earlierErrors=report.seam_check.table.filter(row=>['MISMATCH','ERROR'].includes(row.state))
       .map(row=>({...row,evidence:'Pre-review seam failure: '+row.evidence}));

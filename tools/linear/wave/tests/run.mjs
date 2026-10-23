@@ -68,7 +68,7 @@ async function run(stage, mutate=()=>{}, source=executable) {
       value.heads=tracks.map(t=>({issue_id:t.issue_id,pr:t.pr,branch:t.branch,
         head_sha:f.responses['B1 build '+t.issue_id]?.head_sha || '1'.repeat(40),
         reviewed_head_sha:f.responses['B1 build '+t.issue_id]?.head_sha || '1'.repeat(40)}));
-      if(args.plan_record.contract)value.seam={exit:0,table:tracks.flatMap(t=>args.plan_record.literals.flatMap(e=>e.files.map(file=>({literal:e.literal,branch:value.heads.find(h=>h.issue_id===t.issue_id).head_sha,file,state:'UNCHANGED',evidence:'Final head checked'})))),open_questions:[]};
+      if(args.plan_record.contract || ((args.graph_update_flags || []).includes('--local-graph') && args.plan_record.literals.length))value.seam={exit:0,table:tracks.flatMap(t=>args.plan_record.literals.flatMap(e=>e.files.map(file=>({literal:e.literal,branch:value.heads.find(h=>h.issue_id===t.issue_id).head_sha,file,state:'UNCHANGED',evidence:'Final head checked'})))),open_questions:[]};
     }
     if(value!==null) validate(value,opts.schema,opts.label);
     if(isReview) runningReview--;events.push('end '+opts.label);return value;
@@ -823,6 +823,49 @@ tests.push(
    const warnings=await run('plan',(f,a)=>{localArgs(f,a);a.approved_local_graph.coverage_exit=1;
      a.approved_local_graph.coverage_state='UPDATE_REQUIRED';});
    assert.equal(warnings.result.state,'AWAITING_APPROVAL','unrelated missing tickets remain warnings');
+   const contract=await run('plan',(f,a)=>{localArgs(f,a);f.responses['A2 shared-literal scan'].literals=f.literals;a.wave.contract_dir=null;});
+   assert.equal(contract.result.state,'AWAITING_APPROVAL');
+   assert.equal(contract.result.contract,null);
+   assert.deepEqual(contract.result.literals,fixture.literals);
+   assert.ok(!contract.calls.some(c=>c.label==='A3 contract'));
+   for(const c of contract.calls.filter(c=>c.label.startsWith('A4')))
+     assert.ok(c.prompt.includes(JSON.stringify(fixture.literals)),c.label);
+   const finalMismatch=await run('build',(f,a)=>{
+     localArgs(f,a);a.plan_record=contract.result;a.wave.contract_dir=null;
+     f.responses['B2 seam check']={exit:0,table:seamTable(f),open_questions:[]};
+     const heads=f.tracks.map(t=>({issue_id:t.issue_id,pr:f.responses['B1 build '+t.issue_id].pr,
+       branch:t.branch,head_sha:f.responses['B1 build '+t.issue_id].head_sha,
+       reviewed_head_sha:f.responses['B1 build '+t.issue_id].head_sha}));
+     f.responses['B4 final verification']={heads,seam:{exit:1,open_questions:[],
+       table:seamTable(f).map(row=>({...row,branch:heads.find(h=>h.branch===row.branch).head_sha,
+         state:row.branch==='codex/t-2'?'MISMATCH':row.state,evidence:'Final local agreement checked'}))}};
+   });
+   assert.equal(finalMismatch.result.tracks[1].state,'SEAM_MISMATCH');
+   assert.equal(finalMismatch.result.tracks[0].state,'CLEAN');
+   assert.equal(finalMismatch.result.seam_check.state,'FAILED');
+   assert.ok(finalMismatch.calls.find(c=>c.label==='B4 final verification').prompt.includes('temporary file outside the repository'));
+   for(const outcome of ['pass','mismatch','absent','incomplete']) {
+     const checked=await run('build',(f,a)=>{
+       localArgs(f,a);a.plan_record=contract.result;a.wave.contract_dir=null;
+       f.responses['B2 seam check']=outcome==='absent'?null:{exit:outcome==='mismatch'?1:0,
+         table:outcome==='incomplete'?[]:seamTable(f).map(row=>outcome==='mismatch'&&row.branch==='codex/t-2'&&row.file==='file2.txt'
+           ?{...row,state:'MISMATCH',evidence:'absent'}:row),open_questions:[]};
+     });
+     const seam=checked.calls.find(c=>c.label==='B2 seam check');
+     assert.ok(seam,'local agreements must still be checked');
+     assert.ok(seam.prompt.includes('temporary file outside the repository'));
+     assert.ok(seam.prompt.includes(JSON.stringify(fixture.literals.map(({literal,files})=>({literal,files})))));
+     for(const c of checked.calls.filter(c=>c.label.startsWith('B1'))) {
+       assert.ok(c.prompt.includes(JSON.stringify(fixture.literals)),c.label);
+       assert.ok(!c.prompt.includes('first verify its PR is merged'),c.label);
+     }
+     if(outcome==='pass') assert.equal(checked.result.seam_check.state,'PASSED');
+     else {
+       assert.equal(checked.result.seam_check.state,'FAILED');
+       assert.ok(!checked.calls.some(c=>c.label==='B3 review T-2'));
+       assert.equal(checked.result.tracks[1].state,'SEAM_MISMATCH');
+     }
+   }
  },
  async()=>{
    for(const mutate of [a=>a.selection.push(...localFlags),
