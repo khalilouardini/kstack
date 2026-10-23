@@ -1,5 +1,9 @@
+import json
+import os
+import subprocess
 import sys
 from pathlib import Path
+import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
@@ -120,11 +124,38 @@ class RoutingTests(unittest.TestCase):
     def test_one_controller_no_delegation(self):
         for engine in ['Codex', 'Claude']:
             value = route(engine)
-            rt.controller(value, engine.lower())
+            correct = ({'CODEX_SESSION_ID': 'session-1'} if engine == 'Codex'
+                       else {'CLAUDE_CODE_CHILD_SESSION': '1'})
+            wrong = ({'CLAUDE_CODE_CHILD_SESSION': '1'} if engine == 'Codex'
+                     else {'CODEX_SESSION_ID': 'session-1'})
+            self.assertEqual(rt.controller(value, environ=correct), engine.lower())
             with self.assertRaises(rt.Blocked):
-                rt.controller(value, value['reviewer_engine'])
+                rt.controller(value, environ=wrong)
             with self.assertRaises(rt.Blocked):
-                rt.controller(value, engine.lower(), delegated=True)
+                rt.controller(value, delegated=True, environ=correct)
+            for ambiguous in ({}, {'CODEX_THREAD_ID': 'thread-1',
+                                   'CLAUDE_CODE_CHILD_SESSION': '1'}):
+                with self.assertRaises(rt.Blocked):
+                    rt.controller(value, environ=ambiguous)
+
+    def test_controller_preflight_checks_shell_marker(self):
+        script = Path(__file__).resolve().parents[1] / 'bin' / 'require-controller-host'
+        with tempfile.TemporaryDirectory() as directory:
+            route_file = Path(directory) / 'route.json'
+            route_file.write_text(json.dumps(route('Codex')))
+            env = os.environ.copy()
+            for marker in ('CODEX_SESSION_ID', 'CODEX_THREAD_ID', 'CLAUDE_CODE_CHILD_SESSION'):
+                env.pop(marker, None)
+            env['CODEX_SESSION_ID'] = 'session-1'
+            result = subprocess.run([sys.executable, str(script), '--route', str(route_file)],
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stdout.strip()), (0, 'codex'))
+            env.pop('CODEX_SESSION_ID')
+            env['CLAUDE_CODE_CHILD_SESSION'] = '1'
+            result = subprocess.run([sys.executable, str(script), '--route', str(route_file)],
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn('run pr-loop in the codex implementation session', result.stderr)
 
 
 class EvidenceTests(unittest.TestCase):

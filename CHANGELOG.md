@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+`/pr-loop` 0.9.1: identify the invoking Codex or Claude Code session from
+host-provided subprocess markers before creating a ledger and again before a
+review. Missing, simultaneous, or mismatched markers block; the route can no
+longer certify its own `--host` claim.
+
 `/pr-loop` 0.9.0, `/review-claude-pr` 0.4.0 and `/review-comments` 0.6.0:
 bidirectional independent review with commit-based engine provenance, explicit
 mixed-authorship selection, and one implementation controller. Add a tested
