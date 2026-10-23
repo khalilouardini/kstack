@@ -10,7 +10,7 @@ description: Find unanswered PR feedback, make the warranted code fixes, and rep
 
 An open PR carries review feedback — inline threads, review summaries, or
 conversation comments — that needs answering, and the fix-plus-reply should land
-under the project's implementer identity. Invoke as `/review-comments [PR#] [--implementation-engine codex|claude] [--any-author] [--accept-graph-update <PR#>]... [--local-graph]` (defaults
+under the project's implementer identity. Invoke as `/review-comments [PR#] [--implementation-engine codex|claude] [--any-author] [--test-slots N] [--accept-graph-update <PR#>]... [--local-graph]` (defaults
 to the current branch's PR). Not for initiating reviews, resolving threads, or
 changing PR state — see "What this skill is NOT for".
 
@@ -217,6 +217,14 @@ Apply the approved code edits first, then run the consuming repo's pre-push gate
 ```bash
 <gates.lint> && <gates.test>
 ```
+When a parent pr-loop supplies `--test-slots N`, validate a positive integer
+and run **each** configured lint and test command through the canonical physical
+stack root's `core/land/bin/with-slot --group local-tests --limit N --
+<shell> -c <exact-command>` from the verified PR worktree. Release the permit
+between commands and before review or CI waits. Do not silently fall back to
+bare gate commands. Exit 75 means the permit wait expired before that gate ran:
+report a retryable queue delay, push and reply nothing, then recheck branch and
+head before any later retry. Without `--test-slots`, use the normal gate above.
 Commit/push under the user's normal branch discipline. **Commits use the repository's git author configuration (transport credentials are separate) — only the PR comments go out as the bot.** Keep truthful engine attribution in commit trailers; never change global author settings. This split is intentional: the fix is attributed to the implementation session, the conversation reply is authored by the bot.
 
 **Re-fetch the comment `databaseId`s immediately before posting.** Reviews can be re-attributed or re-submitted mid-session, which invalidates ids captured earlier — a reply against a dead id fails or lands on the wrong thread.

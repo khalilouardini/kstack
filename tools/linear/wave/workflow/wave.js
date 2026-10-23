@@ -352,6 +352,10 @@ const schemas = {
       },
       "reviewed_head": {
         "type": "string"
+      },
+      "block_reason_code": {
+        "type": "string",
+        "enum": ["SLOT_WAIT_TIMEOUT"]
       }
     },
     "required": [
@@ -1424,6 +1428,10 @@ const schemas = {
                     },
                     "reviewed_head": {
                       "type": "string"
+                    },
+                    "block_reason_code": {
+                      "type": "string",
+                      "enum": ["SLOT_WAIT_TIMEOUT"]
                     }
                   },
                   "required": [
@@ -2531,7 +2539,9 @@ const reviewOne=async t=>{
     const reviewed=admitted.review ? null : await call(`B3 review ${t.issue_id}`, `${graphContext(t)}${approvedGraphPrompt(t)}${admitted.prompt}${read(args.paths.pr_loop, 'no adaptation: parse existing final verdict report; BLOCKED asks nothing')}
 Run /pr-loop ${r.pr} --max-rounds ${rounds}${streaming ? ' --review-slots '+concurrency+' --test-slots '+testSlots : ''} ${graphFlags.join(' ')} in ${t.worktree}.
 Never exceed the round cap or retry a terminal verdict. Parse the existing verdict
-report into REVIEW_RESULT, including routing evidence. Verify this track's questions
+report into REVIEW_RESULT, including routing evidence. A reviewer permit expiry
+is verdict BLOCKED with block_reason_code SLOT_WAIT_TIMEOUT and no paid review;
+preserve that code in the track review record. Verify this track's questions
 ${streaming ? 'against current evidence for this ticket only. Sibling work may still be running; leave cross-ticket questions for final verification.' : 'against every sibling branch tip: '+JSON.stringify(a.tracks)+'; results: '+JSON.stringify(results)+'.'}
 Return only checked questions with verified/stale labels and evidence.
 ${streaming ? 'For CLEAN, return reviewed_head as the exact final SHA covered by the submitted review and CI. A missing or moved head is BLOCKED.' : ''}`, schemas.REVIEW_RESULT, 'Review');

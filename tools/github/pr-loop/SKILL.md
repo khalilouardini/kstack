@@ -158,14 +158,17 @@ and durable repeat-finding ledger; this option never restarts a terminal loop.
 `--slot-wait SEC` sets a separate reviewer-permit wait (default 7200 seconds);
 it never reduces the reviewer's 1800-second process timeout. If the helper
 returns `SLOT_WAIT_TIMEOUT` with exit 75, no paid review started: stop with a
-retryable queue-wait report, not a review or gate failure. A later invocation
+retryable queue-wait report: `verdict: BLOCKED`,
+`block_reason_code: SLOT_WAIT_TIMEOUT`, and the paid round count unchanged.
+This code is distinct from review findings and gate failures in wave's
+`REVIEW_RESULT` and final track review record. A later invocation
 rechecks the current head and route before attempting the round again.
 
 `--test-slots N` bounds expensive local gates. For each lint/test/build command,
 run the configured command through `core/land/bin/with-slot --group local-tests
 --limit N -- <shell> -c <exact-command>` from the canonical physical stack root,
 with the verified worktree as cwd. Forward the same bound into review-comments
-and land instructions. It changes neither which tests are authorized nor CI
+as `--test-slots N` and into land instructions. It changes neither which tests are authorized nor CI
 requirements. Default state is outside the repository in KSTACK_STATE. Do not
 hold a local-test permit while waiting for paid review or CI.
 
@@ -498,6 +501,8 @@ holds — its thread-selection rules, its fix-don't-just-reply rule, its
 per-command implementer token, its `<gates.lint> && <gates.test>` gate, never
 switching global `gh` identity, never resolving threads, and posting
 the conversation-level summary comment **last**.
+Forward `--test-slots N` into that invocation when supplied, so both
+review-comments gates acquire the `local-tests` permit.
 
 If `<gates.lint>` or `<gates.test>` fails after your fixes, you get **one**
 repair attempt. Still failing → push nothing further, exit `BLOCKED`.

@@ -404,6 +404,10 @@ admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
       },
       "reviewed_head": {
         "type": "string"
+      },
+      "block_reason_code": {
+        "type": "string",
+        "enum": ["SLOT_WAIT_TIMEOUT"]
       }
     },
     "required": [
@@ -1476,6 +1480,10 @@ admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
                     },
                     "reviewed_head": {
                       "type": "string"
+                    },
+                    "block_reason_code": {
+                      "type": "string",
+                      "enum": ["SLOT_WAIT_TIMEOUT"]
                     }
                   },
                   "required": [

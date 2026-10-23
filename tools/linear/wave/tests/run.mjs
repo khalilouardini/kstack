@@ -945,6 +945,19 @@ tests.push(async()=>{
   assert.ok(seamEnd>=0);
   assert.ok(reviewPhase>seamEnd);
 });
+cases.push({number:49,name:'review permit expiry stays distinct in the wave result'});
+tests.push(async()=>{
+  const r=await run('build',f=>{
+    const review=f.responses['B3 review T-1'];
+    review.verdict='BLOCKED';
+    review.rounds=0;
+    review.block_reason_code='SLOT_WAIT_TIMEOUT';
+    review.open_findings=['Reviewer permit queue wait expired before a paid review'];
+  });
+  assert.equal(r.result.tracks[0].state,'BLOCKED');
+  assert.equal(r.result.tracks[0].review.block_reason_code,'SLOT_WAIT_TIMEOUT');
+  assert.equal(r.result.tracks[0].review.rounds,0);
+});
 
 let failed=0;
 for(let i=0;i<tests.length;i++)try{await tests[i]();console.log(`PASS ${cases[i].number} ${cases[i].name}`);}catch(e){failed++;console.error(`FAIL ${cases[i].number} ${cases[i].name}: ${e.stack}`);}
