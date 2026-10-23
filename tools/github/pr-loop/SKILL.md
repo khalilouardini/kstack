@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.9.0
+version: 0.9.1
 description: Drive an independent Codex↔Claude review/fix loop on one PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. The implementation session keeps fixes; the other engine reviews with verified GitHub identity and head evidence. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#>". (kstack)
 ---
 
@@ -144,7 +144,16 @@ OWNER_REPO=$(GH_TOKEN="$MAINTAINER_TOKEN" gh repo view --json nameWithOwner --jq
 
 Resolve the exact PR with the shared contract and pin route.json. All role
 placeholders below mean resolved roles. Never infer the engine from a bot name.
-On a host mismatch stop; no whole-loop delegation or fallback self-review.
+Before creating a ledger or starting a paid review, verify the invoking host
+independently of the route:
+
+```bash
+python3 "$STACK_ROOT/tools/github/pr-loop/bin/require-controller-host" \
+  --route "$SCRATCH/route.json" || exit 2
+```
+
+An unknown, ambiguous, or mismatched host blocks. Do not use a route field as
+the host claim; no whole-loop delegation or fallback self-review.
 
 ## Preflight — run once, stop on any failure
 

@@ -60,9 +60,11 @@ or activate an update schedule. Use the normal installer for all adapter writes.
 
 pr-loop runs in the implementation engine's session. Codex implementations call
 Claude Code CLI for review, then Codex fixes; Claude implementations call Codex
-CLI for review, then Claude fixes. A host mismatch blocks before paid work;
-there is no recursive whole-loop handoff. Posting accounts are verified per
-command and do not establish which engine performed the work.
+CLI for review, then Claude fixes. The controller reads Codex's session ID or
+Claude Code's child-session marker from its shell; missing, simultaneous, or
+mismatched markers block before paid work. There is no recursive whole-loop
+handoff. Posting accounts are verified per command and do not establish which
+engine performed the work.
 
 The shared contract is `tools/github/pr-loop/references/routing.md`. Its runner
 uses a canonical absolute review skill path, exact PR/head, closed stdin, pinned

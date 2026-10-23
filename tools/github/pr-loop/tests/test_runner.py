@@ -29,7 +29,7 @@ class RunnerTests(unittest.TestCase):
         self.env = dict(os.environ, PATH=str(self.fake), REVIEW_FAKE_STATE=str(self.root / 'state.json'),
                         GITHUB_TOKEN='ambient-wrong-token', GH_TOKEN='ambient-wrong-token')
 
-    def invoke(self, engine='Codex', mode='', reuse=False, extra=None, modify=None):
+    def invoke(self, engine='Codex', mode='', reuse=False, extra=None, modify=None, host=None):
         value = route(engine)
         reviewer_engine = value['reviewer_engine']
         state = dict(route=value, commits=[commit(engine)], pr=pr(),
@@ -41,10 +41,21 @@ class RunnerTests(unittest.TestCase):
         route_file = self.root / 'route.json'; route_file.write_text(json.dumps(value))
         args = [sys.executable, str(BIN / 'run-review'), '--repo-root', str(self.repo),
                 '--owner-repo', 'example/repo', '--pr', '16', '--head', HEAD,
-                '--route', str(route_file), '--host', engine.lower(), '--skill', str(self.skill),
+                '--route', str(route_file), '--skill', str(self.skill),
                 '--model', 'sonnet' if reviewer_engine == 'claude' else 'gpt-6.1-sol',
                 '--effort', 'high', '--report-dir', str(self.root / 'reports')]
-        result = subprocess.run(args + (extra or []), env=self.env, capture_output=True, text=True,
+        env = self.env.copy()
+        for marker in ('CODEX_SESSION_ID', 'CODEX_THREAD_ID', 'CLAUDE_CODE_CHILD_SESSION'):
+            env.pop(marker, None)
+        host = engine.lower() if host is None else host
+        if host == 'codex':
+            env['CODEX_SESSION_ID'] = 'fake-session'
+        elif host == 'claude':
+            env['CLAUDE_CODE_CHILD_SESSION'] = '1'
+        elif host == 'ambiguous':
+            env['CODEX_SESSION_ID'] = 'fake-session'
+            env['CLAUDE_CODE_CHILD_SESSION'] = '1'
+        result = subprocess.run(args + (extra or []), env=env, capture_output=True, text=True,
                                 stdin=subprocess.DEVNULL, timeout=15)
         state = json.loads((self.root / 'state.json').read_text())
         self.assertNotIn('fixture-secret', result.stdout + result.stderr)
@@ -82,9 +93,15 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(any(c['name'] == 'claude' for c in state['calls']))
 
     def test_wrong_host_blocks_before_commands(self):
-        result, report, state = self.invoke(extra=['--host', 'claude'])
+        result, report, state = self.invoke(host='claude')
         self.assert_blocked(result, report)
         self.assertEqual(state['calls'], [])
+
+    def test_missing_or_ambiguous_host_blocks_before_commands(self):
+        for host in ('none', 'ambiguous'):
+            result, report, state = self.invoke(host=host)
+            self.assert_blocked(result, report)
+            self.assertEqual(state['calls'], [])
 
     def test_missing_cli(self):
         (self.fake / 'claude').unlink()
