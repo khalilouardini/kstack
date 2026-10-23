@@ -88,13 +88,18 @@ roles blocks and names the missing key; an author exception does not invent acco
 
 ## One implementation controller
 
-The host running pr-loop must be the resolved implementation engine. A Codex
-implementation stays in Codex and launches Claude only for review. A Claude
-implementation stays in Claude and launches Codex only for review. On host
-mismatch return BLOCKED naming the required host before ledger creation or paid
-work. **Do not automatically delegate the whole loop.** The user can invoke it
-in the correct existing session. Child reviewers may not invoke pr-loop or
-review-comments. This bounds handoffs to zero and prevents recursive controllers.
+The host running pr-loop must be the resolved implementation engine. The
+controller detects Codex from `CODEX_SESSION_ID` or `CODEX_THREAD_ID`, and
+Claude Code from `CLAUDE_CODE_CHILD_SESSION=1` in the shell launched by that
+host. Missing or simultaneous markers block. A Codex implementation stays in
+Codex and launches Claude only for review. A Claude implementation stays in
+Claude and launches Codex only for review. Run `bin/require-controller-host`
+against the pinned route before ledger creation, and recheck inside
+`bin/run-review` before any GitHub or model call. **Do not automatically
+delegate the whole loop.** The user can invoke it in the correct existing
+session. Child reviewers may not invoke pr-loop or review-comments. This bounds
+handoffs to zero and prevents recursive controllers. Environment markers guard
+accidental host confusion; they are not cryptographic identity proof.
 The standalone reviewer requires the actual host to equal reviewer_engine;
 review-comments requires implementer_engine before edits/replies.
 
@@ -111,7 +116,7 @@ Use `tools/github/pr-loop/bin/run-review` for a loop's review/reuse step:
 ```bash
 python3 "$STACK_ROOT/tools/github/pr-loop/bin/run-review" \
   --repo-root "$REPO_ROOT" --owner-repo "$OWNER_REPO" --pr "$PR" --head "$HEAD" \
-  --route "$SCRATCH/route.json" --host "$IMPLEMENTER_ENGINE" \
+  --route "$SCRATCH/route.json" \
   --skill "$REVIEW_SKILL" --model "$MODEL" --effort "$EFFORT" \
   --report-dir "$SCRATCH/round-$N" "${REVIEW_ARGS[@]}" \
   > "$SCRATCH/round-$N.json"

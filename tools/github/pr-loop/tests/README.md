@@ -5,7 +5,8 @@ Run `python3 -m unittest discover -s tools/github/pr-loop/tests`, or the configu
 
 The executable fake CLIs record argv/cwd/token binding and simulate GitHub's
 paginated REST responses. Tests cover both directions, provenance and explicit
-author exceptions, controller host mismatch/no delegation, per-engine flags,
+author exceptions, host-marker mismatch/absence/ambiguity and no delegation,
+per-engine flags,
 closed stdin, matching submitted review and inline evidence, reuse, missing
 CLI/auth, bad credentials, unsupported flags, nonzero/denied/malformed outputs,
 remote head movement, and reviewer edits. No test calls a model or GitHub.
