@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+`next` / `wave` 0.10.0 and dispatch 0.6.0: share cited stage assessments,
+deterministic bounded maximum selection, overlap warnings and explicit capacity.
+New wave plans preserve a separate planning queue that cannot enter build approval.
+Replace the five-track clamp with configurable `wave.selection_limit` (default 12).
+Legacy wave records keep their original membership and approval boundary.
+
 `/pr-loop` 0.9.0, `/review-claude-pr` 0.4.0 and `/review-comments` 0.6.0:
 bidirectional independent review with commit-based engine provenance, explicit
 mixed-authorship selection, and one implementation controller. Add a tested

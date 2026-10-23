@@ -132,6 +132,10 @@ invents an identity, CI mode, successful gate or merge permission. This exceptio
 does not apply to review, implementation, publication or merge procedures,
 which continue to refuse their required missing identities/gates/CI mode.
 
+`wave.selection_limit` defaults to 12 and must be a positive integer. It bounds
+batch size without silently clamping requests to five. Shared selection assesses
+plan and build separately; this limit does not authorize concurrent full tests.
+
 `wave.max_review_rounds` missing/null defaults to 3, announced: observed later
 rounds addressed interactions among earlier fixes, so a bounded three-round run
 leaves further decisions human. `wave.review_concurrency` defaults to 1,

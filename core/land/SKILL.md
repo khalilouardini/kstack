@@ -1,6 +1,6 @@
 ---
 name: land
-version: 0.6.0
+version: 0.6.1
 description: Land an agent session's work safely — dedicated branch, concurrent-session guards re-run before every commit, the repo's own lint and test gates from .agents/stack.yml, atomic commits, then one PR. Stops at the PR; merging is a human decision. Use when asked to "land this", "commit and push", "open a PR", "ship it", or "/land". (kstack)
 ---
 
@@ -297,6 +297,13 @@ MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
 test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
 GH_TOKEN="$MAINTAINER_TOKEN" gh pr create --base <default-branch> --title "<type>: <what changed>" --body "<body>"
 ```
+
+Carry known file overlaps from the approved plan into a **Pending overlap** PR
+section with exact PRs/paths and integration obligations. Overlap alone does not
+block opening a PR. Before merge, the owner fetches current default main, rebases
+if behind, resolves conflicts, reruns gates and obtains review of any changed
+head. This includes overlaps between tickets selected in the same wave. It grants
+no permission to merge or depend on an unrelated unmerged foundation.
 
 Body: what changed and why, the gate results as evidence (`<gates.lint>` clean,
 `<gates.test>` N passed), and anything a reviewer should look at first. A merged

@@ -1,7 +1,7 @@
 ---
 name: next
-version: 0.9.0
-description: Read Linear and recommend one scoped issue, or up to five independent tracks with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. Explicit flags accept a reviewed pending PR or a local graph. --accept-overlap accepts named PR file overlap. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
+version: 0.10.0
+description: Read Linear and recommend one scoped issue, or a bounded parallel batch with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. Explicit flags accept a reviewed pending PR or a local graph. Shared files warn; real dependencies constrain selection. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
 # next — what to pick up now
@@ -28,9 +28,9 @@ choice back.
 That is **default mode**, and it is the right shape when one person picks up one
 ticket. When several agent sessions can run at once, `--parallel [N]` answers a
 different question — not "what is the one thing to start" but "what is the largest
-set of things that can start *at once* without colliding." Same configuration,
+set of things that can start *at once* with explicit integration obligations." Same configuration,
 same contract gate, same blocker analysis; the output is a batch of up to N issues
-proven independent of each other instead of a single decision. Default N = 3. See
+assessed for technical compatibility instead of a single decision. Default N = 3. See
 **Parallel mode** below.
 
 ## Project filters — `--project "<name-or-id>"` (repeatable)
@@ -70,68 +70,24 @@ Examples:
 
 For focused offline validation, use [references/validation.md](references/validation.md).
 
-## Accepted file overlaps — `--accept-overlap <PR#>` (repeatable)
+## Shared eligibility and overlap policy
 
-The human may explicitly accept file overlap with named active PRs, expecting
-the implementer to resolve it by rebasing. This flag composes with default mode,
-`--parallel` (including 1), the milestone argument and repeated `--project` filters.
+Read [references/selection.md](references/selection.md) before assessing candidates.
+It is the common stage contract for next, wave and dispatch. Collect the complete
+filtered pool, run its deterministic selector, and retain all exclusion reasons.
+Use the returned IDs; priority is a tie-break after feasible cardinality.
 
-**Validate every occurrence before any selection**, as with `--parallel N`.
-Each value must match `^[1-9][0-9]*$`, a positive decimal integer naming a PR
-in the consuming repository
-whose state is **OPEN at run time**. Missing, non-integer, zero, negative,
-nonexistent, closed or merged values → **refuse**, quoting the supplied value
-(or `<missing>`). Use `--accept-overlap 479`, without a leading `#`.
-Deduplicate PR numbers after validation. Read
-`tools/linear/next/references/pr-file-snapshot.md` from the physical stack root
-and follow it top to bottom with allowed state OPEN and refusal on unavailable,
-incomplete or unstable evidence. If unreadable, stop. Never infer acceptance
-from the file snapshot itself.
-Never infer acceptance from a prior run,
-tracker comment, PR title or graph decision.
-
-Its only effect is the active-work file comparison under **Selecting the
-tracks**: retain each candidate's exact overlapping files, but allow those
-overlaps with the named PR. It never waives blocking relations or dependency
-paths (criteria 1–2), an unmerged foundation (criterion 3), files shared by two
-candidates in the same batch (criterion 4), the scope gate or graph conditions.
-A candidate needing code from an accepted PR is still sequenced. A candidate
-whose own issue already has a live branch or PR is still `already active`.
-
-Default mode (including `--parallel 1`) keeps its existing ranking and blocker
-checks: the flag computes and reports intersections without adding an active-work
-file-collision test for #1. The existing concurrency checks still govern any
-parallel kickoff. An unrelated accepted PR cannot make #1 less eligible.
-
-For overlap reporting, **candidates means the scope-gated pool**, including
-sequenced and already-active issues, not OUT issues. Establish their file scopes
-for reporting; an unknown scope is `unverified`, not proof of no intersection,
-and does not add a new default-mode blocking check. Record each known overlap
-even when another check excludes that candidate. Report a named PR as **unused**
-only when every gated candidate has a concrete scope and none intersects its
-complete diff; otherwise report its unused status as **unverified**, naming the
-unknown scopes. Keep this report even when the selection is empty. Give each PR
-a line for its overlaps with sequenced/already-active candidates, including PRs
-also overlapping selected tracks. The full evidence list may exceed one screen;
-never truncate it to meet the output's usual size target.
-
-Direct `/next` and Codex's A1-only `/wave plan` render this report. The Workflow
-path preserves per-track overlaps in `PLAN.risks`; its unchanged SELECT/RUN_A
-schemas do not retain unused-PR or excluded-candidate overlap reports, including
-EMPTY runs. State that limitation in the checkpoint handoff. These rules are
-prompt-level selection rules, not tool restrictions.
-
-### Rebase policy for accepted overlaps
-
-Engineering implementation starts from the default branch. Never base on an
-accepted PR's branch or rebase onto its head. Before `land` Step 7 (gates before
-push), fetch: if the accepted PR has merged, rebase onto the fetched default
-branch and resolve the listed files. If it is still OPEN, keep the PR based on
-the default branch and list its number and overlapping files under **Pending
-overlap** in the PR body. Whichever PR merges second rebases onto the default
-branch and re-runs the gates before its merge. If it closes unmerged, the active overlap is gone.
-PLAN_ONLY records overlap as a plan risk and stops without a rebase; human
-actions touch no files and receive no rebase instruction.
+Shared file paths warn equally for candidates selected together and already-active
+work. Real dependencies, required unmerged foundations and incompatible changes
+remain constraints. Preserve exact overlap paths in plan risks and Pending overlap
+PR sections, with fresh-main rebase, gates and changed-head review before merge.
+`--accept-overlap <PR#>` is an optional compatibility annotation, not permission
+needed for ordinary overlaps. Each explicit value must be a positive decimal PR
+number, OPEN at observation; missing/invalid/closed/nonexistent values refuse.
+Deduplicate reads without discarding original command tokens. Read
+`tools/linear/next/references/pr-file-snapshot.md` from the physical stack root for complete diffs;
+unknown external diff evidence is an unverified warning, not a fabricated dependency.
+Ownership and technical dependency evidence still must be established.
 
 
 Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
@@ -330,17 +286,13 @@ permit PLAN_ONLY in default mode. Its kickoff calls
 `/dispatch-implementation <id> --plan-only` only after the dispatcher's unchanged
 scope/lifecycle guards pass; it ends at a plan, with no code edits or PR. Name the
 unmet build event and source, and re-check it before any later implementation.
-READY_TO_BUILD gets the existing implementation kickoff, as does engineering
-work without an adopted graph. Later merge/release
-conditions never waive the scope or parallel-independence bar. The sole file
-exception is overlap with active work that the human named on the command line
-with `--accept-overlap`; the scope gate, graph conditions and independence
-between selected candidates still hold.
-
-PLAN_ONLY does not count toward N in `--parallel`. List it under Planning only,
-outside the selected implementation batch. For `/wave` selection, put these
-candidates in `sequenced` with the unmet condition/source, never SELECT.tracks;
-`--approve all` can therefore approve only the implementation-eligible batch.
+READY_TO_BUILD gets the implementation kickoff after human plan approval.
+A graph result alone is not plan approval or semantic scope authorization.
+PLAN_ONLY and unknown-file-scope candidates with authorized planning go in the
+separate planning queue. They do not count as implementation-ready tracks.
+Wave version 2 preserves them in planning_tracks/planning_plans, never in its
+build approval set. Later merge conditions do not block planning or build unless
+a cited prerequisite actually targets those stages.
 Use unresolved downstream conditions within the existing release/scope ranking;
 do not invent durations or a computed critical path. These rules are prompt-level.
 
@@ -448,9 +400,9 @@ invocation: **refuse**, quoting the value given. Do not accept it and select
 nothing — an empty batch is indistinguishable in the output from "every
 candidate is blocked", which is a real and very different finding. `--parallel 1`
 is default mode; say so and run default mode rather than emitting a one-row
-batch. Above **5**, clamp to 5 and say the clamp applied: more concurrent
-worktrees than that cannot be supervised by one person, and the batch stops
-fitting the one-screen ceiling the output section is built around.
+batch. Use `wave.selection_limit` (default 12) as the explicit upper bound;
+above it refuse and name the key rather than silently clamping. The count controls
+selection, not concurrent local test processes or the size of the output.
 
 ### Resolving `any` for a batch without project filters
 
@@ -483,31 +435,15 @@ the gating itself, and the hard read-only rule above covers it unchanged.
 
 ### Selecting the tracks
 
-Before selection, read active work across the repository, including open PRs and
-linked branches, local worktrees, and available session/ownership evidence, even
-when their issues lie outside the requested projects. Remove already active issues
-from the fresh-track pool; report resume/review instructions separately. Treat
-active work as a fixed concurrency constraint: a new track must also have no
-blocking dependency, unaccepted shared file, or unmerged foundation with it.
-Fetch real diffs
-and establish concrete scopes; if relevant active scope or ownership cannot be
-verified, sequence the affected candidate instead of declaring it independent.
-Do not use assignee or In Progress alone as proof of a live session.
+Read active work across the repository and record ownership, dependencies and
+external overlaps using references/selection.md. A live issue gets a resume
+instruction; assignee or In Progress alone is not proof of an active session.
+Collect complete candidate and pair assessments, including semantic conflicts;
+run `node <stack-root>/tools/linear/next/bin/select-candidates <input.json>`.
+Unknown candidate scope permits authorized read-only planning but not an
+implementation independence claim. Shared filenames alone are warnings.
 
-For each candidate and each accepted PR, intersect the candidate's concrete
-file scope with that PR's live diff and record the exact overlapping paths.
-Exclude only that candidate/accepted-PR intersection from the active-work file
-collision test. Do not remove accepted paths from candidate scopes or globally
-subtract them from active work: the same file in an unaccepted PR or other
-active work still sequences the candidate. Linked branch/worktree scope is
-covered only where verified as belonging to the accepted PR's live diff;
-additional or unverified active scope keeps the existing fail-closed rule.
-Default mode uses these intersections for reporting and for its existing
-parallel-kickoff checks; it adds no active-work file bar for #1. Criteria 1–3
-remain unchanged against accepted PRs, and criterion 4
-still forbids all file overlap between candidates selected in the same batch.
-
-From the gated, unblocked, inactive candidates, select the **largest mutually-independent
+From the gated, unblocked, inactive candidates, compute the **largest mutually-compatible
 set of size ≤ N** — maximum cardinality, not merely a set nothing can be added
 to. Step 5's preference (work that unblocks other work first, then the critical
 path, then the rest) breaks ties **among the batches that are already largest**;
@@ -552,23 +488,11 @@ A pair is independent only when all four hold:
    code off it. Verify required foundation code is reachable from the current
    default branch; an open/unmerged foundation blocks starting even one dependent
    track. Do not substitute a stacked PR's merged label for reachability.
-4. **Scopes isolatable in separate worktrees**, with no overlap in the files each
-   will touch — and **this one has to be proven from evidence you actually
-   fetched**, which the base query does not provide. An unstarted issue has no
-   diff to inspect, so the field set in step 2 must be extended before a batch can
-   be computed:
-
-   - **`description`** — the acceptance criteria naming the area of the codebase.
-   - **`parent { identifier }` and `children { nodes { identifier } }`** — see the
-     container rule below.
-   - **`branchName`, and any attached branch or PR** — for an issue already in
-     flight, the real diff is the best scope evidence available.
-
-   **Fail closed.** If the file scope of either track is not concrete after that,
-   the pair is *not proven independent* — send it to `Sequenced instead` naming
-   "scope not established", and never assume isolation from silence. Assuming
-   independence is the direction that produces the merge collision; assuming
-   dependence only costs a track.
+4. **Scopes executable in isolated worktrees.** Establish concrete file scopes
+   from issue descriptions, parent/child structure, repository mapping and existing
+   diffs. Assess actual incompatible changes as pair constraints. Sharing a file
+   alone is an integration warning. If candidate scope is unknown, use the
+   authorized planning queue to map it; do not invent a disjoint file list.
 
    **A container issue is not an executable track.** A parent carrying open
    children (workstream containers are exactly this shape) is a grouping, not a unit of work, and it
@@ -746,7 +670,7 @@ three deserve mention, the board needs grooming and that is itself the finding.
 ### Parallel mode output
 
 Used only under `--parallel`, and only when at least two tracks passed the bar.
-Same one-screen ceiling; every milestone-derived field works identically. With
+Keep the summary concise; retain the full candidate report even when it exceeds one screen. Every milestone-derived field works identically. With
 project filters, replace the shared Gate/Contract line with a Projects line listing
 the resolved name/ID pairs, and render **Project, Milestone, Gate, and Contract
 separately on every track**, including human actions. Never label a mixed batch
@@ -813,17 +737,13 @@ order instead produces exactly the branch this mode exists to prevent: one that
 fails on its own, or has to stack on the other's PR after the fact.
 
 Reserve `Integration order` for preferences that create **no implementation
-dependency and no shared file** — one track is time-boxed to a date and should
+dependency** — one track is time-boxed to a date and should
 merge first, or the reviewer wants the smaller diff landed first to keep review
-bandwidth for the larger one. Both tracks still touch disjoint files; the
-preference is about merge sequence, not about code.
+bandwidth for the larger one. Shared-file warnings retain the rebase and changed-head review obligations.
 
-A shared file is not a preference either. Criterion 4 already sends any pair with
-overlapping file scopes to `Sequenced instead`, so an `Integration order` entry
-naming two tracks that touch the same file contradicts the bar directly above it
-and admits precisely the pair the bar rejected. If either track would fail its own
-gates without the other merged, or the two touch the same file, it is not an
-integration-order preference.
+Shared files may need an integration order and a rebase. If either track needs
+unmerged code from the other to satisfy its own gates, that is a dependency and
+must constrain selection. Explain the difference with cited evidence.
 
 ## Rules
 
@@ -831,7 +751,7 @@ integration-order preference.
   decision; 2 and 3 exist so the reader can see what it beat. Never present three
   as a menu. If two are genuinely tied, pick the smaller one and say it was a coin
   flip.
-- **Parallel mode: up to N tracks, every pair proven independent, and the
+- **Parallel mode: up to N tracks, every pair assessed for real dependencies and incompatibility, and the
   *largest* such set — not the first one a priority-ordered pass happens to
   find.** Fewer than N is a result, not a failure — never pad the batch to reach
   the number asked for.

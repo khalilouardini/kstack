@@ -562,6 +562,62 @@ const schemas = {
         "items": {
           "type": "string"
         }
+      },
+      "planning_tracks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "project": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "milestone": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "contract_citation": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "worktree": {
+              "type": "string"
+            },
+            "file_scope": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "integration_order": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "issue_id",
+            "title",
+            "project",
+            "milestone",
+            "contract_citation",
+            "branch",
+            "worktree",
+            "file_scope",
+            "integration_order"
+          ],
+          "additionalProperties": false
+        }
       }
     },
     "required": [
@@ -703,7 +759,8 @@ const schemas = {
         "enum": [
           "AWAITING_APPROVAL",
           "EMPTY",
-          "STOPPED"
+          "STOPPED",
+          "PLANNING_ONLY"
         ]
       },
       "run_id": {
@@ -964,6 +1021,148 @@ const schemas = {
         "type": "array",
         "items": {
           "type": "string"
+        }
+      },
+      "schema_version": {
+        "type": "integer",
+        "enum": [
+          2
+        ]
+      },
+      "selection_report": {
+        "type": "string"
+      },
+      "planning_tracks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "project": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "milestone": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "contract_citation": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "worktree": {
+              "type": "string"
+            },
+            "file_scope": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "integration_order": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "issue_id",
+            "title",
+            "project",
+            "milestone",
+            "contract_citation",
+            "branch",
+            "worktree",
+            "file_scope",
+            "integration_order"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "planning_plans": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "worktree": {
+              "type": "string"
+            },
+            "linear_status_readback": {
+              "type": "string"
+            },
+            "acceptance_criteria_cited": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tests": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "risks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "PLANNED",
+                "STOPPED"
+              ]
+            },
+            "stop_reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "branch": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "issue_id",
+            "worktree",
+            "linear_status_readback",
+            "acceptance_criteria_cited",
+            "files",
+            "tests",
+            "risks",
+            "state",
+            "stop_reason",
+            "evidence",
+            "branch"
+          ],
+          "additionalProperties": false
         }
       }
     },
@@ -1436,6 +1635,130 @@ const refuse = (reason, evidence=[]) => {
     contract:null,literals:[],sequenced:[],already_active:[],build_command:null,
     stop_reason:reason,evidence:[reason]};
 };
+// BEGIN SHARED SELECTION
+// Pure, bounded selection. The Workflow sandbox embeds this function verbatim.
+function selectCandidates(input) {
+  const fail = message => { throw new Error('selection: ' + message); };
+  const text = x => typeof x === 'string' && x.trim().length > 0;
+  const positive = x => Number.isSafeInteger(x) && x > 0;
+  const compare = (a,b) => a < b ? -1 : a > b ? 1 : 0;
+  const states = ['SATISFIED','UNSATISFIED','UNKNOWN'];
+  const checks = ['scope_plan','scope_build','native','plan_graph','build_graph','foundation'];
+  const planChecks = ['scope_plan','native','plan_graph'];
+  if (!input || input.schema_version !== 2 || input.complete !== true)
+    fail('version 2 and a complete considered pool are required');
+  if (!text(input.snapshot_id) || !/^[0-9a-f]{40}$/.test(input.source_revision || '') ||
+      !Array.isArray(input.command) || input.command.some(x => !text(x)))
+    fail('snapshot, skill revision and exact command tokens are required');
+  const limit = input.limit ?? 12, budget = input.search_budget ?? 100000;
+  if (!positive(input.requested) || !positive(limit) || input.requested > limit)
+    fail('requested must be positive and no greater than the explicit selection limit ' + limit);
+  if (!positive(budget) || budget > 1000000) fail('search_budget must be 1..1000000');
+  if (!Array.isArray(input.candidates) || input.candidates.length > 1000 || !Array.isArray(input.pairs))
+    fail('candidates (at most 1000) and pairs are required; never truncate the pool');
+  const seen = new Set();
+  const candidates = input.candidates.map(c => {
+    if (!c || !text(c.issue_id) || seen.has(c.issue_id)) fail('unique issue ids required');
+    seen.add(c.issue_id);
+    if (![null,'string'].includes(c.project === null ? null : typeof c.project) ||
+        !text(c.milestone) || !Number.isSafeInteger(c.priority) || c.priority < 0 ||
+        typeof c.active_release !== 'boolean') fail(c.issue_id + ': project, milestone and rank required');
+    if (!c.ownership || !['ACTIVE','INACTIVE','UNKNOWN'].includes(c.ownership.state) ||
+        !text(c.ownership.source)) fail(c.issue_id + ': cited ownership required');
+    for (const key of checks) {
+      const check = c.checks?.[key];
+      if (!check || !states.includes(check.state) || !text(check.source) || !text(check.detail))
+        fail(c.issue_id + ': cited check required: ' + key);
+    }
+    if (c.file_scope !== null && (!Array.isArray(c.file_scope) || c.file_scope.some(f => !text(f))))
+      fail(c.issue_id + ': file_scope must be paths or null');
+    if (!Array.isArray(c.external_overlaps) || c.external_overlaps.some(o =>
+      !text(o.source) || !text(o.work) || !Array.isArray(o.files) || o.files.some(f => !text(f))))
+      fail(c.issue_id + ': cited external overlaps required (empty when verified absent)');
+    const reasons = keys => keys.filter(k => c.checks[k].state !== 'SATISFIED').map(k =>
+      ({code:k.toUpperCase(), ...c.checks[k]}));
+    const planReasons = reasons(planChecks), buildReasons = reasons(checks);
+    if (c.ownership.state !== 'INACTIVE') {
+      const r = {code:'OWNERSHIP',state:c.ownership.state === 'ACTIVE' ? 'UNSATISFIED' : 'UNKNOWN',
+        source:c.ownership.source,detail:c.ownership.state === 'ACTIVE' ? 'Resume existing work' : 'Verify writer ownership'};
+      planReasons.push(r); buildReasons.push(r);
+    }
+    if (!c.file_scope?.length) buildReasons.push({code:'FILE_SCOPE',state:'UNKNOWN',
+      source:input.snapshot_id,detail:'Read-only scope mapping required before implementation selection'});
+    const state = rs => rs.some(r => r.state === 'UNSATISFIED') ? 'BLOCKED' : rs.length ? 'UNKNOWN' : 'ELIGIBLE';
+    return {...c,plan:{state:state(planReasons),reasons:planReasons},
+      build:{state:state(buildReasons),reasons:buildReasons},warnings:[...c.external_overlaps]};
+  }).sort((a,b) => Number(b.active_release)-Number(a.active_release) || a.priority-b.priority || compare(a.issue_id,b.issue_id));
+  const pairs = new Map(), key = (a,b) => JSON.stringify([a,b].sort(compare));
+  for (const p of input.pairs) {
+    if (!seen.has(p.a) || !seen.has(p.b) || p.a === p.b || pairs.has(key(p.a,p.b)) ||
+        !['INDEPENDENT','DEPENDENCY','INCOMPATIBLE','UNKNOWN'].includes(p.relation) || !text(p.source) || !text(p.detail))
+      fail('unique, cited candidate pair assessments required');
+    pairs.set(key(p.a,p.b),p);
+  }
+  for (let i=0;i<candidates.length;i++) for (let j=i+1;j<candidates.length;j++) {
+    const a=candidates[i],b=candidates[j];
+    const files=(a.file_scope || []).filter(f => b.file_scope?.includes(f));
+    if (files.length) {
+      a.warnings.push({work:b.issue_id,files,source:input.snapshot_id});
+      b.warnings.push({work:a.issue_id,files,source:input.snapshot_id});
+    }
+  }
+  const pool=candidates.filter(c => c.build.state === 'ELIGIBLE');
+  const conflicts=pool.map(() => new Set());
+  for (let i=0;i<pool.length;i++) for (let j=i+1;j<pool.length;j++) {
+    const p=pairs.get(key(pool[i].issue_id,pool[j].issue_id));
+    if (!p) fail('missing pair assessment: '+pool[i].issue_id+' / '+pool[j].issue_id);
+    if (p.relation !== 'INDEPENDENT') { conflicts[i].add(j); conflicts[j].add(i); }
+  }
+  const activeCount = indices => indices.filter(i => pool[i].active_release).length;
+  const better = (a,b) => {
+    if (a.length !== b.length) return a.length > b.length;
+    if (activeCount(a) !== activeCount(b)) return activeCount(a) > activeCount(b);
+    for (let i=0;i<a.length;i++) if (a[i] !== b[i]) return a[i] < b[i];
+    return false;
+  };
+  const target=Math.min(input.requested,pool.length);
+  let best=[],visited=0;
+  for (let i=0;i<pool.length && best.length<target;i++)
+    if (best.every(j => !conflicts[i].has(j))) best.push(i);
+  // The first N ranked candidates, when compatible, are the exact best tie too.
+  const triviallyOptimal=best.length===target && best.every((n,i) => n===i);
+  const pending=triviallyOptimal ? [] : [{chosen:[],remaining:pool.map((_c,i) => i)}];
+  while (pending.length && visited<budget) {
+    const {chosen,remaining}=pending.pop(); visited++;
+    if (better(chosen,best)) best=chosen;
+    if (chosen.length===target || chosen.length+remaining.length<best.length || !remaining.length) continue;
+    const [next,...rest]=remaining;
+    // LIFO explores the preferred include branch first. No clock-dependent result.
+    pending.push({chosen,remaining:rest});
+    pending.push({chosen:[...chosen,next],remaining:rest.filter(i => !conflicts[next].has(i))});
+  }
+  const selected=best.map(i => pool[i].issue_id), optimal=pending.length===0;
+  const upper=optimal ? best.length : Math.max(best.length,...pending.map(n => Math.min(target,n.chosen.length+n.remaining.length)));
+  const planning=candidates.filter(c => c.plan.state==='ELIGIBLE' && c.build.state!=='ELIGIBLE');
+  const planningIds=planning.slice(0,input.requested).map(c => c.issue_id);
+  const outcomes=candidates.map(c => {
+    let disposition=selected.includes(c.issue_id) ? 'SELECTED' :
+      c.ownership.state==='ACTIVE' ? 'ACTIVE' : planningIds.includes(c.issue_id) ? 'PLANNING' :
+      planning.includes(c) ? 'PLANNING_QUEUED' : c.build.state==='ELIGIBLE' ? 'SEQUENCED' :
+      c.plan.state==='BLOCKED' ? 'BLOCKED' : 'UNKNOWN';
+    const constraints=selected.filter(id => id!==c.issue_id).map(id => pairs.get(key(id,c.issue_id)))
+      .filter(p => p && p.relation!=='INDEPENDENT');
+    const reason=disposition==='SEQUENCED' ? (constraints.length ? 'PAIR_CONSTRAINT' :
+      selected.length===input.requested ? 'CAPACITY_OR_PRIORITY' : 'SEARCH_BUDGET') : disposition;
+    return {issue_id:c.issue_id,project:c.project,milestone:c.milestone,disposition,reason,
+      plan:c.plan,build:c.build,constraints,warnings:c.warnings};
+  });
+  return {schema_version:2,snapshot_id:input.snapshot_id,command:input.command,source_revision:input.source_revision,
+    selected_ids:selected,planning_ids:planningIds,outcomes,
+    capacity:{requested:input.requested,limit,selected:selected.length,planning:planningIds.length,
+      unfilled:input.requested-selected.length,eligible:pool.length,considered:candidates.length,
+      optimal,upper_bound:upper,search_visits:visited,
+      reason:selected.length===input.requested ? 'FILLED' : !optimal ? 'SEARCH_BUDGET' :
+        pool.length<input.requested ? 'INSUFFICIENT_BUILD_CANDIDATES' : 'PAIR_CONSTRAINTS'}};
+}
+// END SHARED SELECTION
 const cfg = args.wave || {};
 const rounds = cfg.max_review_rounds ?? 3;
 const concurrency = cfg.review_concurrency ?? 1;
@@ -1552,18 +1875,18 @@ const shaDigest=value=>/^sha256:[0-9a-f]{64}$/.test(value || '');
 if (!Array.isArray(admissions)) return refuse('graph admission: audit reports must be an array');
 // Apply the same build-report validation to live input and Run A's stored input.
 // Prior reports use their original invocation date, even when Run B is later.
-const validAdmissionReports=(reports,pins,date) => Array.isArray(reports) ? reports.filter(r=>
+const validAdmissionReports=(reports,pins,date,transition="build") => Array.isArray(reports) ? reports.filter(r=>
   r && r.schema_version===1 && r.main_sha===pins?.main_sha &&
   validUTC(r.checked_at) && r.checked_at.slice(0,10)===date &&
   shaDigest(r.graph_digest) && shaDigest(r.base_digest) && shaDigest(r.issue_evidence_digest) &&
-  r.transition==='build' && Array.isArray(r.candidates) &&
+  r.transition===transition && Array.isArray(r.candidates) &&
   r.evidence?.issues?.complete===true && r.evidence?.request && r.delta &&
   Array.isArray(r.delta.added_nodes) && r.delta.added_nodes.length<=3 &&
   Array.isArray(r.delta.changed_edges) && !r.delta.changed_edges.length
 ) : [];
 // Incomplete unrelated reports and plan-only reports cannot shadow eligible builds.
 const validAdmissions=validAdmissionReports(admissions,publication,args.date);
-const candidateAdmission=(track,reports=validAdmissions,pins=publication,current=true) => {
+const candidateAdmission=(track,reports=validAdmissions,pins=publication,current=true,transition="build") => {
   if (track.project===null) return {exempt:true};
   if (!/^[0-9a-f]{40}$/.test(pins?.main_sha || '')) return null;
   const projects=Array.isArray(pins?.projects) ? pins.projects.filter(p=>
@@ -1584,7 +1907,7 @@ const candidateAdmission=(track,reports=validAdmissions,pins=publication,current
       (current && !sameLocalPins(report.local_graph,localPins)) ||
       !report.evidence?.local_scope_sources || report.delta.added_nodes.length)) return null;
   if (report.graph_sha!==(localProject ? null : projects[0].state==='ACCEPTED_UPDATE' ? projects[0].head_sha : pins.main_sha) ||
-      report.transition!=='build' || c.state!=='ELIGIBLE' ||
+      report.transition!==transition || c.state!=='ELIGIBLE' ||
       typeof c.issue_id!=='string' || !c.issue_id || typeof c.node_id!=='string' || !c.node_id ||
       !['PUBLISHED','LOCAL_RECONCILIATION','APPROVED_LOCAL'].includes(c.mode) ||
       (c.mode==='APPROVED_LOCAL')!==localProject ||
@@ -1647,6 +1970,22 @@ other scope, dependency and approval gates still apply. Record these SHA pins in
 plan risks and execution evidence. Project-less tracks are exempt.\n`;
 
 if (args.stage === 'plan') {
+  const v2=args.selection_version!==1;
+  let assessment=null;
+  if (v2) {
+    try {
+      const snapshot=args.selection_snapshot;
+      const tokens=args.selection || [], position=tokens.indexOf('--parallel');
+      const raw=position<0 || tokens[position+1]===undefined || tokens[position+1].startsWith('--') ? '3' : tokens[position+1];
+      if (!/^[1-9][0-9]*$/.test(raw)) throw new Error('invalid --parallel value');
+      if (snapshot?.requested!==Number(raw) || snapshot.limit!==(cfg.selection_limit ?? 12) ||
+          JSON.stringify(snapshot.command)!==JSON.stringify(tokens) ||
+          snapshot.main_sha!==publication.main_sha || snapshot.checked_at!==publication.checked_at)
+        throw new Error('assessment must match invocation count, limit, tokens and fresh publication pins');
+      assessment=selectCandidates(snapshot);
+    } catch(error) { return refuse(String(error.message)); }
+  }
+
   const accepted = new Map();
   const parsedOverlap=parsePrFlags(args.selection || [],'--accept-overlap');
   if (parsedOverlap.error) return refuse(parsedOverlap.error);
@@ -1670,8 +2009,12 @@ Run /next with argument tokens ${JSON.stringify(args.selection)} in parallel mod
 Pass every token unchanged, including repeated --accept-overlap flags and values;
 /next owns their validation and deduplication.
 Also preserve every graph source flag occurrence and apply its admission procedure.
-PLAN_ONLY candidates must go in sequenced with the unmet build condition and source,
-never tracks. They do not count toward N and must not reach --approve all.
+${v2 ? `Version 2 deterministic assessment: ${JSON.stringify(assessment)}.
+Return exactly selected_ids in tracks and exactly planning_ids in planning_tracks.
+Keep every exclusion and warning in the checkpoint. Planning tracks have no build permission.
+Shared file paths are integration warnings, not hard dependencies. Never reinterpret
+an ELIGIBLE graph result as plan approval or semantic scope authorization.` :
+'PLAN_ONLY candidates must go in sequenced with the unmet build condition and source, never tracks. They do not count toward N and must not reach --approve all.'}
 Return all implementation-eligible tracks, sequenced and already_active entries. TRACK branch/worktree are
 proposals only. Select no more than requested; explicitly report every excluded issue.
 Set each TRACK.project to the issue's Linear project_id copied verbatim from
@@ -1683,8 +2026,27 @@ the script compares the string exactly and stops the run on any other value.`, s
     sequenced:selected?.sequenced || [], already_active:selected?.already_active || [],
     build_command:null, stop_reason:null, evidence:[graphEvidence,admissionEvidence]};
   if (!selected) { record.stop_reason='A1 returned no record'; record.evidence.push(record.stop_reason); return record; }
+  const planning=v2 ? selected.planning_tracks : [];
+  if (v2) {
+    const same=(tracks,ids)=>Array.isArray(tracks) && tracks.length===ids.length &&
+      new Set(tracks.map(t=>t.issue_id)).size===ids.length && ids.every(id=>tracks.some(t=>t.issue_id===id));
+    if (!same(selected.tracks,assessment.selected_ids) || !same(planning,assessment.planning_ids))
+      return refuse('A1 membership differs from deterministic assessment');
+    for (const t of [...selected.tracks,...planning]) {
+      const c=args.selection_snapshot.candidates.find(c=>c.issue_id===t.issue_id);
+      if (c.project!==t.project || c.milestone!==t.milestone ||
+          JSON.stringify([...(c.file_scope || [])].sort())!==JSON.stringify([...t.file_scope].sort()))
+        return refuse('A1 changed assessed scope or project for '+t.issue_id);
+    }
+    Object.assign(record,{schema_version:2,selection_report:JSON.stringify(assessment),planning_tracks:planning,planning_plans:[]});
+    record.evidence.push('Selection snapshot: '+JSON.stringify(args.selection_snapshot));
+    const planReports=validAdmissionReports(admissions,publication,args.date,'plan');
+    if (planning.some(t=>!candidateAdmission(t,planReports,publication,true,'plan')))
+      return refuse('planning-only candidate lacks eligible plan admission');
+  }
+
   for (const id of [...selected.sequenced, ...selected.already_active]) log(`A1 skipped: ${id}`);
-  if (!selected.tracks.length) { record.state='EMPTY'; return record; }
+  if (!selected.tracks.length && !planning.length) { record.state='EMPTY'; return record; }
   if (selected.tracks.some(t=>!candidateEligible(t))) {
     record.stop_reason='graph publication: a selected track has no unambiguous eligible candidate audit';
     record.evidence.push(record.stop_reason);
@@ -1698,10 +2060,10 @@ the script compares the string exactly and stops the run on any other value.`, s
   if (new Set(selected.tracks.map(t=>t.issue_id)).size !== selected.tracks.length) {
     record.stop_reason='A1 returned duplicate issue ids'; record.evidence.push(record.stop_reason); return record;
   }
-  const scan = await call('A2 shared-literal scan', `${read(args.paths.wave, 'scan only; do not dispatch or implement')}
+  const scan = selected.tracks.length ? await call('A2 shared-literal scan', `${read(args.paths.wave, 'scan only; do not dispatch or implement')}
 Read every issue description and file scope in ${JSON.stringify(selected.tracks)}.
 List every literal two or more tracks must agree on: status tokens, schema fields,
-config keys, paths, marker comments. Return literals with files, participating ids, why.`, schemas.SCAN, 'Select');
+config keys, paths, marker comments. Return literals with files, participating ids, why.`, schemas.SCAN, 'Select') : {literals:[]};
   if (!scan) { record.stop_reason='A2 returned no record'; record.evidence.push(record.stop_reason); return record; }
   record.literals=scan.literals;
   if (scan.literals.length) {
@@ -1725,12 +2087,13 @@ Return its absolute file path, branch and PR. Do not implement any selected issu
     }
   }
   phase('Plan');
-  const plans=await pipeline(selected.tracks, async (_prev,t) => {
+  const planTracks=[...selected.tracks,...planning];
+  const plans=await pipeline(planTracks, async (_prev,t) => {
     const overlaps=[...accepted.values()].map(pr=>({number:pr.number,title:pr.title,
       author:pr.author,head_sha:pr.head_sha,
       files:[...new Set(pr.files.flatMap(f=>[f.filename,f.previous_filename].filter(Boolean)))]
         .filter(file=>t.file_scope.includes(file))})).filter(pr=>pr.files.length);
-    const overlapPrompt=accepted.size ? `Before dispatch §1 or any workspace/tracker write,
+    const overlapPrompt=!v2 && accepted.size ? `Before dispatch §1 or any workspace/tracker write,
 perform a read-only overlap preflight for this track's verified file scope.
 Relevant accepted overlaps from caller preflight: ${JSON.stringify(overlaps)}.
 The selection-time OPEN gate has passed; do not reapply it to later state changes.
@@ -1754,7 +2117,16 @@ rebases onto the default branch and re-runs the gates before its merge. This is 
 record these future build actions as risks; do not rebase during A4.
 No intersection means no overlap risk or rebase instruction for this track.
 ` : '';
-    const p=await call(`A4 plan ${t.issue_id}`, `${graphPrompt}${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
+    const planningOnly=planning.some(x=>x.issue_id===t.issue_id);
+    const stagePrompt=planningOnly ? `Planning-only lane: use PLAN transition admission, not build admission.
+Full plan admission observations: ${JSON.stringify(validAdmissionReports(admissions,publication,args.date,'plan'))}.
+Produce a read-only plan or decision brief; retain every unmet build condition.
+This track cannot enter this wave's build approval; a fresh selection is required.\n` : '';
+    const integrationPrompt=v2 ? `Selection warnings and constraints for this track:
+${JSON.stringify(assessment.outcomes.find(c=>c.issue_id===t.issue_id))}.
+Record overlaps as plan risks. Real dependencies still block. Before merge, rebase
+onto current default main, rerun relevant gates and review any changed head.\n` : '';
+    const p=await call(`A4 plan ${t.issue_id}`, `${graphPrompt}${stagePrompt}${integrationPrompt}${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
 Dispatch exact issue ${t.issue_id} with --plan-only ${graphFlags.join(' ')}. Proposed track: ${JSON.stringify(t)}.
 Contract: ${JSON.stringify(record.contract)}. Return criteria citations, files, tests,
 risks, status read-back and verified absolute worktree. No implementation permission.`, schemas.PLAN, 'Plan');
@@ -1763,6 +2135,13 @@ risks, status read-back and verified absolute worktree. No implementation permis
     return p;
   });
   record.plans=selected.tracks.map((t,i)=>plans[i] || stoppedPlan(t,'A4 pipeline dropped track'));
+  if (v2) {
+    record.planning_plans=planning.map((t,i)=>plans[selected.tracks.length+i] || stoppedPlan(t,'A4 planning lane dropped track'));
+    record.planning_tracks=planning.map((t,i)=>({...t,worktree:record.planning_plans[i].worktree,branch:record.planning_plans[i].branch}));
+    if (!record.plans.some(p=>p.state==='PLANNED') && record.planning_plans.some(p=>p.state==='PLANNED')) {
+      record.state='PLANNING_ONLY';return record;
+    }
+  }
   record.tracks=selected.tracks.map((t,i)=>({...t,worktree:record.plans[i].worktree,branch:record.plans[i].branch}));
   if (!record.plans.some(p=>p.state==='PLANNED')) {
     record.stop_reason='no PLANNED track; every A4 plan stopped';
@@ -1776,6 +2155,18 @@ risks, status read-back and verified absolute worktree. No implementation permis
 if (args.stage !== 'build') throw new Error('args.stage must be plan or build');
 const a=args.plan_record;
 if (!a || a.state !== 'AWAITING_APPROVAL') return refuse('Run B requires Run A AWAITING_APPROVAL record');
+if (a.schema_version===2) {
+  try {
+    const snapshot=JSON.parse(a.evidence.find(e=>e.startsWith('Selection snapshot: ')).slice('Selection snapshot: '.length));
+    const assessment=selectCandidates(snapshot);
+    if (JSON.stringify(assessment)!==a.selection_report || a.tracks.length!==assessment.selected_ids.length ||
+        new Set(a.tracks.map(t=>t.issue_id)).size!==a.tracks.length ||
+        a.tracks.some(t=>!assessment.selected_ids.includes(t.issue_id)) ||
+        a.plans.some(p=>!assessment.selected_ids.includes(p.issue_id)))
+      throw new Error('build membership must remain in the assessed implementation set');
+  } catch(error) { return refuse('version 2 selection record invalid: '+error.message); }
+}
+
 const ids=args.approve === 'all' ? a.plans.filter(p=>p.state==='PLANNED').map(p=>p.issue_id) : args.approve;
 if (!Array.isArray(ids) || !ids.length || ids.some(id=>!a.plans.some(p=>p.issue_id===id && p.state==='PLANNED')))
   return refuse('approve must name existing PLANNED issues, or all');

@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.9.0
+version: 0.10.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -8,7 +8,9 @@ description: Run one independent Linear batch through a Claude Code Workflow gra
 
 ## When to invoke
 
-A wave is the set of mutually independent issues selected by `/next --parallel`.
+A wave is one fixed implementation batch plus a separate planning queue selected
+by `/next --parallel`. Shared files require integration checks; real dependencies
+and incompatible changes constrain concurrent implementation.
 Build and human-merge this wave before selecting the next one. Invoke:
 
 ```text
@@ -23,7 +25,8 @@ in an ordinary `/next` invocation. Project filters depend on the canonical
 and name the dependency. Do not approximate selection rules.
 
 Plan accepts repeatable `--accept-overlap <PR#>` and delegates its validation
-and narrow file-overlap exception to canonical `next`. Plan and build accept
+to canonical `next`. Shared-file overlap is warning-only, including within the
+selected batch; technical dependencies remain constraints. Plan and build accept
 repeatable --accept-graph-update or one --local-graph under
 the shared contract below. Build accepts `--approve` and graph source flags; `--accept-overlap` on build is an unknown flag and must be rejected.
 
@@ -92,6 +95,9 @@ Read every composed procedure by physical path, never copy its rules here.
 - `wave.review_concurrency`: missing/null → default 1, announce it. Concurrent
   reviewer processes share an account's quota window. Both keys must be positive
   integers; malformed values refuse with the exact key.
+- `wave.selection_limit`: missing/null → 12; positive integer. Refuse requests
+  above the configured bound, never clamp to a display ceiling. This is batch
+  capacity, not a local-test concurrency budget.
 - `wave.contract_dir`: missing/null → permitted only when A2 is empty; otherwise
   refuse naming `wave.contract_dir`. No defensible project-neutral location exists.
   When set, require a relative directory contained in the repo; reject traversal,
@@ -108,14 +114,28 @@ Read `hosts/HOSTS.md`. Claude Code supplies the Workflow tool. On Codex, run
 A1 only: read `tools/linear/next/SKILL.md` and follow it top to bottom in parallel
 mode with the supplied milestone/project/count tokens and every
 `--accept-overlap <PR#>` and --accept-graph-update / --local-graph occurrences unchanged. PLAN_ONLY candidates
-must go into SELECT.sequenced with their unmet condition/source, never TRACK.
-They do not count toward N and cannot reach `--approve all`. Render that selection
-and say **the graph did not run**; no dispatch, tracker write, contract or build.
-A Codex build invocation refuses because approval cannot restore a missing tool.
+appear in the separate planning queue. Render both queues, all exclusions and
+capacity counts, then say **the graph did not run**; no dispatch, tracker write,
+contract or build. A Codex build invocation refuses because approval cannot
+restore a missing tool.
 The graph's policies remain prompt-level; absence of Workflow on Codex is
 **tool-list-enforced**. The offline harness checks control flow, not live tools.
 
 ## Procedure
+
+New plans use version 2 selection. Read next's `references/selection.md`, collect
+its complete normalized candidate/pair snapshot and run the shared helper first.
+Pass `selection_version: 2` and `selection_snapshot` to Workflow. Match requested
+N, command tokens, `wave.selection_limit` (default 12), main SHA and observation
+time to this invocation. A1 must return the helper's exact build and planning
+membership. Retain every outcome, warning and unfilled-slot explanation.
+
+Planning-only candidates require plan-transition graph reports and live plan
+admission; build tracks still require build reports. Dispatch planning-only work
+in a separate lane, with no code edits or build command. Version 2 Run A records
+keep these plans outside `--approve all`; later build eligibility requires fresh
+selection and approval. Legacy Run A records retain their old membership.
+
 
 1. Parse the stage and flags. For plan, accept the milestone, repeated `--project`,
    `--parallel`, repeated `--accept-overlap <PR#>`, --accept-graph-update pairs
@@ -181,7 +201,8 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
    existing record.evidence array; moved pins require fresh audits and changed
    relevant conditions stop only affected build tracks. Planning nodes stop the
    planning invocation when conditions change before contract publication.
-   Both runs match candidates only in validated build-transition reports. Run B
+   Build tracks in both runs match validated build-transition reports; the separate
+   planning lane matches plan-transition reports. Run B
    validates stored reports using Run A's publication SHA/date, then compares
    each candidate's graph and factual closure digests before implementation.
    When a local repair becomes published, compare its saved

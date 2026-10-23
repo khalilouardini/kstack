@@ -3,12 +3,18 @@
 This is the canonical record contract. The JSON Schema block below is mirrored
 in the Workflow script because that sandbox cannot read files. Harness case 10
 compares every field and type, including nested records, to this block.
-All fields are required; nullable values explicitly represent absent evidence.
+Legacy fields remain required; version 2 selection fields are required by the
+runtime for new records and optional in the schema for old-record compatibility.
+Nullable values explicitly represent absent evidence.
 A STOPPED record always has a non-empty stop_reason and evidence. Branch and
 worktree in selection are proposed names/absolute paths; only dispatch read-back
-proves their existence. A1 excludes PLAN_ONLY from TRACK/SELECT.tracks and lists
-it in sequenced with the unmet condition/source. It does not count toward N;
-the two-stage wave's approval path receives implementation-eligible work only. PLAN.worktree must match the recovered TRACK.worktree.
+proves their existence. New Run A records have schema_version 2 and preserve selection_report plus the
+full input in evidence (`Selection snapshot: ...`). Build tracks/plans and
+planning_tracks/planning_plans are disjoint. A1 must match the deterministic
+helper's membership and scope. Planning-only plans cannot enter approval, even
+by explicit issue ID. PLANNING_ONLY has no build command. Legacy records without
+schema_version keep their original strict membership. PLAN.worktree must match
+the recovered TRACK.worktree in either lane.
 TRACK.project (and each SELECT.tracks[].project) is the issue's Linear project
 UUID, copied verbatim from one `graph_publication.projects[].project_id`, or
 null when the issue has no Linear project. It is never a project name and never
@@ -30,12 +36,10 @@ A changed or unauditable track produces a STOPPED TRACK_RESULT while independent
 siblings continue. If all approved tracks fail admission, return a STOPPED report.
 Older records without candidate graph digests require a new plan audit.
 
-Accepted-overlap flags use transient caller `args.accepted_prs` snapshots, not
-new record fields. A4 carries relevant overlaps and current PR states in the
-existing PLAN.risks strings; Run B receives them in the approved plan. SELECT
-and RUN_A do not retain `/next`'s unused-PR or excluded-candidate overlap report,
-including EMPTY runs. The Workflow checkpoint must state this limitation;
-direct `/next` and Codex's A1-only output retain the full report.
+Version 2 selection_report retains every assessed outcome, overlap and capacity
+reason, including EMPTY runs. Legacy records retain overlaps only in PLAN.risks;
+their checkpoint must state that limitation. Accepted PR snapshots are transient
+caller inputs; current overlap evidence is retained in the candidate assessment.
 
 Contract files are JSON lists of {literal, files}; SHARED_LITERAL additionally
 records the participating issue ids and why agreement is required. Write
@@ -610,6 +614,62 @@ admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
         "items": {
           "type": "string"
         }
+      },
+      "planning_tracks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "project": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "milestone": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "contract_citation": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "worktree": {
+              "type": "string"
+            },
+            "file_scope": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "integration_order": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "issue_id",
+            "title",
+            "project",
+            "milestone",
+            "contract_citation",
+            "branch",
+            "worktree",
+            "file_scope",
+            "integration_order"
+          ],
+          "additionalProperties": false
+        }
       }
     },
     "required": [
@@ -751,7 +811,8 @@ admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
         "enum": [
           "AWAITING_APPROVAL",
           "EMPTY",
-          "STOPPED"
+          "STOPPED",
+          "PLANNING_ONLY"
         ]
       },
       "run_id": {
@@ -1012,6 +1073,148 @@ admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
         "type": "array",
         "items": {
           "type": "string"
+        }
+      },
+      "schema_version": {
+        "type": "integer",
+        "enum": [
+          2
+        ]
+      },
+      "selection_report": {
+        "type": "string"
+      },
+      "planning_tracks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "project": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "milestone": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "contract_citation": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "worktree": {
+              "type": "string"
+            },
+            "file_scope": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "integration_order": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "issue_id",
+            "title",
+            "project",
+            "milestone",
+            "contract_citation",
+            "branch",
+            "worktree",
+            "file_scope",
+            "integration_order"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "planning_plans": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "worktree": {
+              "type": "string"
+            },
+            "linear_status_readback": {
+              "type": "string"
+            },
+            "acceptance_criteria_cited": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tests": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "risks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "PLANNED",
+                "STOPPED"
+              ]
+            },
+            "stop_reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "branch": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "issue_id",
+            "worktree",
+            "linear_status_readback",
+            "acceptance_criteria_cited",
+            "files",
+            "tests",
+            "risks",
+            "state",
+            "stop_reason",
+            "evidence",
+            "branch"
+          ],
+          "additionalProperties": false
         }
       }
     },

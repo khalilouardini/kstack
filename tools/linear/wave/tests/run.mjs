@@ -29,7 +29,7 @@ function validate(value, schema, where='record') {
 }
 async function run(stage, mutate=()=>{}, source=executable) {
   const f=clone(fixture);
-  const args={stage,repo_root:'/tmp/repo',default_branch:'origin/main',gates:{lint:'lint',test:'test'},identities:{maintainer:'human',reviewer:'review',implementer:'impl'},stack_config:{},date:'2026-10-05',run_id:stage+'-run',wave_id:'wave-1',wave:{max_review_rounds:3,review_concurrency:1,contract_dir:'contracts'},selection:['any','--parallel','3'],paths:Object.fromEntries(['wave','next','dispatch','land','pr_loop','records','seam_check'].map(n=>[n,'/stack/'+n])),plan_record:f.plan_record,approve:'all'};
+  const args={selection_version:1,stage,repo_root:'/tmp/repo',default_branch:'origin/main',gates:{lint:'lint',test:'test'},identities:{maintainer:'human',reviewer:'review',implementer:'impl'},stack_config:{},date:'2026-10-05',run_id:stage+'-run',wave_id:'wave-1',wave:{max_review_rounds:3,review_concurrency:1,contract_dir:'contracts'},selection:['any','--parallel','3'],paths:Object.fromEntries(['wave','next','dispatch','land','pr_loop','records','seam_check'].map(n=>[n,'/stack/'+n])),plan_record:f.plan_record,approve:'all'};
   args.graph_publication={main_sha:'a'.repeat(40),checked_at:'2026-10-05T12:00:00Z',projects:[{project_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',project_name:'Project',view_path:'docs/project.md',state:'CURRENT'}]};
   args.graph_admission=[{schema_version:1,main_sha:'a'.repeat(40),graph_sha:'a'.repeat(40),checked_at:'2026-10-05T12:00:00Z',
     transition:'build',base_digest:'sha256:'+'c'.repeat(64),graph_digest:'sha256:'+'c'.repeat(64),issue_evidence_digest:'sha256:'+'d'.repeat(64),
@@ -763,6 +763,82 @@ function seamIntegration(){
   writeFileSync(contract,'invalid');assert.equal(check('good').status,1);
  }finally{rmSync(temp,{recursive:true,force:true});}
 }
+
+const v2Args=(f,a)=>{
+  a.selection_version=2;
+  const tracks=f.responses['A1 select'].tracks;
+  tracks.forEach(t=>t.project=a.graph_publication.projects[0].project_id);
+  const candidates=tracks.map((t,i)=>({issue_id:t.issue_id,project:t.project,milestone:t.milestone,
+    priority:i,active_release:true,ownership:{state:'INACTIVE',source:'fixture:ownership'},
+    file_scope:t.file_scope,external_overlaps:[],checks:Object.fromEntries(
+      ['scope_plan','scope_build','native','plan_graph','build_graph','foundation'].map(key=>
+      [key,{state:'SATISFIED',source:'fixture:'+key,detail:'Verified '+key}]))}));
+  a.selection_snapshot={schema_version:2,complete:true,snapshot_id:'fixture',source_revision:'a'.repeat(40),
+    command:clone(a.selection),requested:3,limit:12,main_sha:a.graph_publication.main_sha,
+    checked_at:a.graph_publication.checked_at,candidates,pairs:candidates.flatMap((c,i)=>candidates.slice(i+1)
+      .map(d=>({a:c.issue_id,b:d.issue_id,relation:'INDEPENDENT',source:'fixture:pairs',detail:'Verified'})))};
+  f.responses['A1 select'].planning_tracks=[];
+};
+const v2Planning=(f,a,all=false)=>{
+  v2Args(f,a);
+  a.graph_admission.push({...clone(a.graph_admission[0]),transition:'plan'});
+  const ids=all ? ['T-1','T-2','T-3'] : ['T-3'];
+  for(const id of ids) {
+    a.selection_snapshot.candidates.find(c=>c.issue_id===id).checks.build_graph.state='UNSATISFIED';
+    a.graph_admission[0].candidates.find(c=>c.identifier===id).state='BLOCKED';
+  }
+  const response=f.responses['A1 select'];response.planning_tracks=response.tracks.filter(t=>ids.includes(t.issue_id));
+  response.tracks=response.tracks.filter(t=>!ids.includes(t.issue_id));
+};
+cases.push({number:40,name:'shared selector source and version 2 approval separation'});
+tests.push(async()=>{
+  const embedded=script.split('// BEGIN SHARED SELECTION\n')[1].split('\n// END SHARED SELECTION')[0];
+  assert.equal(embedded,readFileSync(join(dir,'../../next/lib/selection.cjs'),'utf8').split('\nmodule.exports')[0]);
+  const planned=await run('plan',v2Planning);
+  assert.equal(planned.result.state,'AWAITING_APPROVAL');
+  assert.equal(planned.result.schema_version,2);assert.equal(planned.result.plans.length,2);
+  assert.equal(planned.result.planning_plans.length,1);
+  assert.ok(planned.calls.find(c=>c.label==='A4 plan T-3').prompt.includes('use PLAN transition admission'));
+  const built=await run('build',(_f,a)=>{a.plan_record=planned.result;});
+  assert.equal(built.result.state,'COMPLETE');
+  assert.deepEqual(built.result.approved,['T-1','T-2']);
+  assert.ok(!built.calls.some(c=>c.label==='B1 build T-3'));
+  for(const tamper of ['explicit','promote','snapshot']) {
+    const r=await run('build',(_f,a)=>{
+      a.plan_record=clone(planned.result);
+      if(tamper==='explicit')a.approve=['T-3'];
+      if(tamper==='promote') {a.plan_record.tracks.push(a.plan_record.planning_tracks[0]);a.plan_record.plans.push(a.plan_record.planning_plans[0]);}
+      if(tamper==='snapshot')a.plan_record.selection_report='{}';
+    });
+    assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+  }
+});
+cases.push({number:41,name:'planning-only wave and no invented build authorization'});
+tests.push(async()=>{
+  const r=await run('plan',(f,a)=>v2Planning(f,a,true));
+  assert.equal(r.result.state,'PLANNING_ONLY');assert.equal(r.result.build_command,null);
+  assert.equal(r.result.planning_plans.length,3);assert.equal(r.result.tracks.length,0);
+  assert.ok(!r.calls.some(c=>/^A[23]/.test(c.label)));
+  const build=await run('build',(_f,a)=>a.plan_record=r.result);
+  assert.equal(build.result.state,'STOPPED');assert.equal(build.calls.length,0);
+});
+cases.push({number:42,name:'assessment membership, evidence and pin validation precede writes'});
+tests.push(async()=>{
+  for(const change of ['absent','incomplete','pins','count','membership','scope','plan_evidence']) {
+    const r=await run('plan',(f,a)=>{
+      v2Planning(f,a);
+      if(change==='absent')delete a.selection_snapshot;
+      if(change==='incomplete')a.selection_snapshot.complete=false;
+      if(change==='pins')a.selection_snapshot.main_sha='b'.repeat(40);
+      if(change==='count')a.selection_snapshot.requested=4;
+      if(change==='membership')f.responses['A1 select'].tracks.pop();
+      if(change==='scope')f.responses['A1 select'].tracks[0].file_scope=['unassessed'];
+      if(change==='plan_evidence')a.graph_admission.pop();
+    });
+    assert.equal(r.result.state,'STOPPED',change);assert.ok(!r.calls.some(c=>/^A[234]/.test(c.label)),change);
+  }
+});
+
 let failed=0;
 for(let i=0;i<tests.length;i++)try{await tests[i]();console.log(`PASS ${cases[i].number} ${cases[i].name}`);}catch(e){failed++;console.error(`FAIL ${cases[i].number} ${cases[i].name}: ${e.stack}`);}
 console.log(`${tests.length-failed}/${tests.length} wave cases passed`);
