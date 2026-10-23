@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+`/wave` 0.9.1 keeps shared agreements in the approved plan handoff for
+`--local-graph`, skipping the separate contract PR and merge prerequisite.
+Build still checks the approved literals across ticket branches and blocks
+review on missing or mismatched evidence.
+
 `/pr-loop` 0.9.1: identify the invoking Codex or Claude Code session from
 host-provided subprocess markers before creating a ledger and again before a
 review. Missing, simultaneous, or mismatched markers block; the route can no
