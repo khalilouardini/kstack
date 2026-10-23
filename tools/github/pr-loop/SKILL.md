@@ -29,6 +29,24 @@ Scope/dependency/release/human-gate changes require reviewed publication; unknow
 selected evidence blocks fixes. Read-only review remains allowed. Existing review
 and merge requirements hold; a graph-only repair uses the shared exception.
 
+When invoked inside a wave, retain its explicit Run A candidate baseline.
+Refresh admission at the start of every review round and before implementer
+writes, including when main has not changed: Linear and human evidence can move
+independently. Compare the saved semantic digest pair when present, otherwise
+the original pair; a repair published on main uses its saved own-closure pair.
+Unrelated main movement permits continuing after ancestry, clean merge and
+unchanged-condition checks. Publication of the accepted graph on main removes
+that track's obsolete pending flag from composed commands. A new unreviewed
+pending head, real conflict or changed conditions stops the affected PR.
+
+Head observations are per round. The loop's own verified fix commits advance
+its expected head only after gates and a successful pre-push guard; they are
+not foreign drift. Unexpected external commits still require reconciliation.
+Never rerun implementation merely to retry a review/CI result; recover the
+existing PR and apply the normal same-head review marker/CI skip-check. Report
+the final PR head and gate evidence so the wave can verify final seams. These
+context checks are prompt-level and do not remove any local/remote head guard.
+
 
 Accept `--local-graph` under the shared publication gate's **Explicit approved local graph**
 procedure. It replaces graph publication with fresh local indexed validation and

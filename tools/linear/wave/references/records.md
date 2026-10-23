@@ -44,7 +44,7 @@ JSON permits exact strings without Markdown escaping and stdlib parsing.
 This publication procedure applies to published-graph waves. With an approved
 local graph, `RUN_A.contract` stays null and `RUN_A.literals` is the approved
 agreement snapshot; a null contract does not imply an empty literal list.
-A4/B1 receive that snapshot. B2 materializes only its `{literal, files}` projection
+A4/B1 receive that snapshot. B2 and B4 materialize only its `{literal, files}` projection
 in a temporary file outside the repository and checks the built branches; no
 separate contract PR, tracked contract file or bookkeeping test is created.
 
@@ -54,15 +54,26 @@ branch tips, with evidence and verified (still current) or stale (superseded).
 Questions lacking that check remain explicit in unverified_questions; they
 must never acquire a fabricated verification label.
 
-READMISSION is the read-only B3 admission observation for one project-linked
-track, taken immediately before its pr-loop. main_sha and checked_at are the
-live main read. When main equals Run B's validated main, the remaining evidence
-fields are null. Otherwise ancestor_exit and merge_tree_exit are the exact exit
-codes of `git merge-base --is-ancestor` and `git merge-tree --write-tree`,
-head_sha is the PR head that merge-tree tested, and admission_report is the
-graph-admission helper's complete JSON output as a string, because the report
-is not a fixed-shape record. The script parses and validates it; a BLOCKED
-admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
+Recovery is a transient caller observation, not approval: each approved track
+has exact issue/branch/worktree identity, UTC checked_at, nonempty lookup evidence,
+ABSENT with null result, or PR_OPEN with a verified TRACK_RESULT. Existing PRs
+are recovered before B1; unavailable evidence is never a missing PR. RUN_A and
+WAVE_REPORT are persisted by the caller outside the checkout under the Git common
+directory's kstack/waves subtree. Partial runs can recover existing remote PRs.
+
+READMISSION is the read-only B3 observation immediately before a pr-loop.
+Always return actual main/head SHAs, checked_at, ancestry/merge-tree exit codes
+and a complete fresh admission_report string, including on unchanged main.
+Main movement alone is insufficient to detect Linear or human-gate changes.
+The script accepts publication on main with equal candidate conditions and drops
+obsolete pending flags. No-change retries require evidence refresh, not approval.
+
+FINAL_CHECK observes all final remote heads and same-head review/CI evidence
+after B3. Its heads identify issue, PR and branch with head_sha and nullable
+reviewed_head_sha; CLEAN requires equality. With a contract, seam is the raw
+SEAM result from immutable SHA branch arguments; otherwise it is null. Missing
+head evidence or seam rows cannot produce CLEAN. Head movement during observation
+requires a fresh check. Final results retain the updated head and both seam phases.
 
 ```json
 {
@@ -1445,6 +1456,139 @@ admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
       "unverified_questions",
       "stop_reason",
       "evidence"
+    ],
+    "additionalProperties": false
+  },
+  "FINAL_CHECK": {
+    "type": "object",
+    "properties": {
+      "heads": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "pr": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "reviewed_head_sha": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "issue_id",
+            "pr",
+            "branch",
+            "head_sha",
+            "reviewed_head_sha"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "seam": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "exit": {
+                "type": "integer"
+              },
+              "table": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "literal": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "file": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "PASS",
+                        "MISMATCH",
+                        "ERROR",
+                        "UNCHANGED"
+                      ]
+                    },
+                    "evidence": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "literal",
+                    "branch",
+                    "file",
+                    "state",
+                    "evidence"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "open_questions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "issue_id": {
+                      "type": "string"
+                    },
+                    "question": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "verified",
+                        "stale"
+                      ]
+                    },
+                    "evidence": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "issue_id",
+                    "question",
+                    "status",
+                    "evidence"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "exit",
+              "table",
+              "open_questions"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "heads",
+      "seam"
     ],
     "additionalProperties": false
   }

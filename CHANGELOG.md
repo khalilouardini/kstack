@@ -27,6 +27,18 @@ evidence and human approval checks without graph publication. Build requires ren
 local approval and matching saved pins; B3 re-audits local files even when main is
 unchanged. Preserve source_revision as adoption provenance across stack upgrades.
 
+`/wave` 0.9.0 recovers verified existing PRs before implementation, readmits fresh
+Linear conditions on unchanged main, handles graph publication while reviews
+queue, and refreshes conditions during review rounds without rejecting owned
+fix commits. Final remote-head/review checks and deterministic seams run after
+review fixes. Semantic fingerprints ignore explicit non-authoritative progress
+status markers and citation prose while preserving legacy checkpoints and full evidence.
+Free-text progress notes remain approval inputs; fixed status markers cannot hide
+new requirements. Final verification failures preserve review findings, rounds,
+model routing and open questions.
+`/pr-loop` 0.7.1 documents the per-round wave baseline and source refresh.
+
+
 `/wave` 0.8.0: a B3 review no longer stops before round 1 because main moved
 after B1. With the default `review_concurrency` of 1, a later track's review
 starts after earlier tracks' rounds, and any merge in that window moved main and

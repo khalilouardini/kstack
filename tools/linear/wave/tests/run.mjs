@@ -38,7 +38,11 @@ async function run(stage, mutate=()=>{}, source=executable) {
       state:'ELIGIBLE',mode:'PUBLISHED',node_id:t.issue_id,closure:[t.issue_id],closure_graph_digest:'sha256:'+'f'.repeat(64),closure_evidence_digest:'sha256:'+'e'.repeat(64),unmet:[]}))}];
   const pinEvidence=()=>['Graph publication evidence: '+JSON.stringify(args.graph_publication),'Graph admission evidence: '+JSON.stringify(args.graph_admission)];
   args.plan_record.evidence=pinEvidence();
+  args.recovery=null;
   mutate(f,args);
+  if(args.recovery===null) args.recovery=args.plan_record.tracks.map(t=>({issue_id:t.issue_id,
+    branch:t.branch,worktree:t.worktree,state:'ABSENT',checked_at:args.graph_publication?.checked_at || args.date+'T12:00:00Z',
+    result:null,evidence:['Verified no open PR on this branch']}));
   const calls=[],events=[],logs=[];let runningReview=0,maxReview=0;
   const agent=async (prompt,opts)=>{
     calls.push({prompt,...opts});events.push('start '+opts.label);
@@ -49,12 +53,23 @@ async function run(stage, mutate=()=>{}, source=executable) {
     assert.ok(Object.hasOwn(f.responses,opts.label),'unexpected call '+opts.label);
     const value=clone(f.responses[opts.label]);
     if(opts.label.startsWith('B3 admission') && value?.state==='OBSERVED' &&
-       value.main_sha==='a'.repeat(40) && value.checked_at==='2026-10-05T12:30:00Z' &&
+       value.checked_at==='2026-10-05T12:30:00Z' &&
        value.ancestor_exit===null && value.merge_tree_exit===null && value.admission_report===null) {
       value.main_sha=args.graph_publication.main_sha;
       value.checked_at=new Date(Date.parse(args.graph_publication.checked_at)+1800000).toISOString();
+      value.ancestor_exit=0;value.merge_tree_exit=0;
+      value.head_sha=f.responses['B1 build '+value.issue_id]?.head_sha || '1'.repeat(40);
+      const report=args.graph_admission.find(r=>r.candidates?.some(c=>c.identifier===value.issue_id));
+      value.admission_report=JSON.stringify({...clone(report),checked_at:value.checked_at});
     }
 
+    if(opts.label==='B4 final verification' && value && value.heads.length===0) {
+      const tracks=JSON.parse(prompt.match(/Final tracks: (\[[^\n]*\])\./)[1]);
+      value.heads=tracks.map(t=>({issue_id:t.issue_id,pr:t.pr,branch:t.branch,
+        head_sha:f.responses['B1 build '+t.issue_id]?.head_sha || '1'.repeat(40),
+        reviewed_head_sha:f.responses['B1 build '+t.issue_id]?.head_sha || '1'.repeat(40)}));
+      if(args.plan_record.contract || ((args.graph_update_flags || []).includes('--local-graph') && args.plan_record.literals.length))value.seam={exit:0,table:tracks.flatMap(t=>args.plan_record.literals.flatMap(e=>e.files.map(file=>({literal:e.literal,branch:value.heads.find(h=>h.issue_id===t.issue_id).head_sha,file,state:'UNCHANGED',evidence:'Final head checked'})))),open_questions:[]};
+    }
     if(value!==null) validate(value,opts.schema,opts.label);
     if(isReview) runningReview--;events.push('end '+opts.label);return value;
   };
@@ -108,6 +123,8 @@ const localArgs=(f,a)=>{
   }
   for(const t of f.tracks){
     const response=f.responses['B3 admission '+t.issue_id];
+    response.ancestor_exit=0;response.merge_tree_exit=0;
+    response.head_sha=f.responses['B1 build '+t.issue_id].head_sha;
     response.admission_report=JSON.stringify(a.graph_admission[0]);
   }
 };
@@ -270,8 +287,8 @@ const tests=[
      const currentReport=clone(change.startsWith('b3_')?reports.local:
        change==='origin'||change==='reverse'?reports[change==='origin'?'blocked':'local']:
        reports[change==='unrelated'?'unrelated':'published']);
-     if(change==='graph') currentReport.candidates[0].closure_graph_digest='sha256:'+'0'.repeat(64);
-     if(change==='evidence') currentReport.candidates[0].closure_evidence_digest='sha256:'+'0'.repeat(64);
+     if(change==='graph') Object.assign(currentReport.candidates[0],{closure_graph_digest:'sha256:'+'0'.repeat(64),semantic_closure_graph_digest:'sha256:'+'0'.repeat(64)});
+     if(change==='evidence') Object.assign(currentReport.candidates[0],{closure_evidence_digest:'sha256:'+'0'.repeat(64),semantic_closure_evidence_digest:'sha256:'+'0'.repeat(64)});
      const result=await run('build',(f,a)=>{
        const id=priorReport.candidates[0].identifier;
        Object.assign(f,JSON.parse(JSON.stringify(f).replaceAll('T-1',id)));
@@ -289,7 +306,7 @@ const tests=[
        a.graph_publication=pins(currentReport);a.graph_admission=[currentReport,currentSiblings];
        if(change.startsWith('b3_')) {
          const fresh=clone(change==='b3_unrelated'?reports.unrelated:reports.published);
-         if(change==='b3_evidence') fresh.candidates[0].closure_evidence_digest='sha256:'+'0'.repeat(64);
+         if(change==='b3_evidence') Object.assign(fresh.candidates[0],{closure_evidence_digest:'sha256:'+'0'.repeat(64),semantic_closure_evidence_digest:'sha256:'+'0'.repeat(64)});
          f.responses['B3 admission '+id]={issue_id:id,pr:f.responses['B1 build '+id].pr,state:'OBSERVED',
            main_sha:fresh.main_sha,checked_at:fresh.checked_at,ancestor_exit:0,merge_tree_exit:0,
            head_sha:'9'.repeat(40),admission_report:JSON.stringify(fresh),stop_reason:null,evidence:['Pinned fixture admission']};
@@ -664,13 +681,121 @@ const tests=[
      const review=r.result.tracks[0].review;
      assert.equal(review.rounds,0);
      assert.ok(review.open_findings[0].startsWith('B3 admission: T-1 '+reason),review.open_findings[0]);
-     assert.match(review.open_findings[0],/repeat condition analysis and plan approval/);
+     assert.match(review.open_findings[0],/refresh evidence; new approval only for changed conditions/);
      assert.ok(r.result.evidence.includes(review.open_findings[0]));
    }
    const dropped=await run('build',f=>{f.responses['B3 admission T-1']=null;});
    assert.deepEqual(dropped.result.tracks.map(t=>t.state),['BLOCKED','CLEAN','CLEAN']);
    assert.match(dropped.result.tracks[0].review.open_findings[0],/returned no matching admission record/);
+ },
+
+ async()=>{
+   const r=await run('build',(f,a)=>{
+     a.approve=['T-1'];
+     Object.assign(a.graph_publication.projects[0],{state:'ACCEPTED_UPDATE',pr_number:900,head_sha:'b'.repeat(40)});
+     a.graph_admission[0].graph_sha='b'.repeat(40);
+     a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(a.graph_publication),'Graph admission evidence: '+JSON.stringify(a.graph_admission)];
+     a.graph_update_flags=['--accept-graph-update','900'];
+     a.accepted_graph_updates=[{number:900,url:'https://example.test/pull/900',state:'OPEN',base:'main',head_sha:'b'.repeat(40),coverage_exit:0,coverage_state:'CURRENT',validation_exit:0,reviewed_head_sha:'b'.repeat(40),review_source:'Reviewed exact head',project_ids:['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']}];
+     movedAdmission(f,a,'T-1','7'.repeat(40));
+   });
+   assert.equal(r.result.tracks[0].state,'CLEAN','publication between B1 and B3 preserves approval');
+   assert.match(r.calls.find(c=>c.label==='B3 review T-1').prompt,/Run \/pr-loop https:\/\/example.test\/pr\/1 --max-rounds 3\s+in/);
+ },
+ async()=>{
+   const recovered=(f,a)=>{a.approve=['T-1'];a.recovery=[{issue_id:'T-1',branch:a.plan_record.tracks[0].branch,worktree:a.plan_record.tracks[0].worktree,state:'PR_OPEN',checked_at:a.graph_publication.checked_at,result:clone(f.responses['B1 build T-1']),evidence:['Verified existing PR/head and gates']}];};
+   const r=await run('build',recovered);
+   assert.equal(r.result.tracks[0].state,'CLEAN');
+   assert.ok(!r.calls.some(c=>c.label.startsWith('B1')),'an existing implementation resumes at review');
+   assert.ok(r.calls.some(c=>c.label==='B3 review T-1'));
+   for(const bad of ['branch','worktree','identity','gates','evidence']) {
+     const broken=await run('build',(f,a)=>{recovered(f,a);const x=a.recovery[0];
+       if(bad==='branch')x.branch='other';if(bad==='worktree')x.worktree='/other';
+       if(bad==='identity')x.result.issue_id='other';if(bad==='gates')x.result.gates.test.exit=1;
+       if(bad==='evidence')x.evidence=[];
+     });
+     assert.equal(broken.result.state,'STOPPED',bad);assert.equal(broken.calls.length,0,bad);
+   }
+ },
+ async()=>{
+   const r=await run('build',(f,a)=>{movedAdmission(f,a,'T-1','7'.repeat(40));});
+   const prompt=r.calls.find(c=>c.label==='B3 review T-1').prompt;
+   assert.ok(!prompt.includes('If main or the PR head moves again, return BLOCKED before any write.'));
+   assert.match(prompt,/Refresh admission at the start of every review round/);
+   assert.match(prompt,/own verified fix commits/);
+ },
+ async()=>{
+   for(const kind of ['blocker','missing','stale']) {
+     const r=await run('build',(f,a)=>{
+       const fresh=clone(a.graph_admission[0]);fresh.checked_at='2026-10-05T14:00:00Z';
+       if(kind==='blocker'){fresh.candidates[0].state='BLOCKED';fresh.candidates[0].unmet=[{}];}
+       if(kind==='stale')fresh.checked_at='2026-10-05T12:00:00Z';
+       Object.assign(f.responses['B3 admission T-1'],{checked_at:'2026-10-05T14:01:00Z',ancestor_exit:0,merge_tree_exit:0,head_sha:'9'.repeat(40),admission_report:kind==='missing'?null:JSON.stringify(fresh)});
+     });
+     assert.equal(r.result.tracks[0].state,'BLOCKED',kind);
+     assert.ok(!r.calls.some(c=>c.label==='B3 review T-1'),kind);
+     assert.equal(r.result.tracks[1].state,'CLEAN');
+   }
+ },
+ async()=>{
+   const r=await run('build',(f,a)=>{
+     a.plan_record.contract=f.contract;a.plan_record.literals=f.literals;
+     f.responses['B2 seam check'].table=seamTable(f);
+     f.responses['B3 review T-1'].rounds=3;
+     f.responses['B4 final verification']={heads:f.tracks.map(t=>({issue_id:t.issue_id,pr:f.responses['B1 build '+t.issue_id].pr,branch:t.branch,head_sha:f.responses['B1 build '+t.issue_id].head_sha,reviewed_head_sha:f.responses['B1 build '+t.issue_id].head_sha})),seam:{exit:1,table:seamTable(f).map(row=>row.branch==='codex/t-1'?{...row,state:'MISMATCH',evidence:'Review fix changed shared literal'}:row),open_questions:[]}};
+   });
+   assert.equal(r.result.tracks[0].state,'SEAM_MISMATCH');
+   assert.equal(r.result.tracks[1].state,'CLEAN');
+   assert.ok(r.events.indexOf('start B4 final verification')>r.events.indexOf('end B3 review T-1'));
  }
+,
+ async()=>{
+   for(const change of ['metadata','meaning','missing']) {
+     const r=await run('build',(_f,a)=>{
+       const c=a.graph_admission[0].candidates[0];
+       Object.assign(c,{semantic_closure_graph_digest:c.closure_graph_digest,semantic_closure_evidence_digest:c.closure_evidence_digest});
+       a.plan_record.evidence=['Graph publication evidence: '+JSON.stringify(a.graph_publication),'Graph admission evidence: '+JSON.stringify(a.graph_admission)];
+       c.closure_graph_digest='sha256:'+'0'.repeat(64);c.closure_evidence_digest='sha256:'+'0'.repeat(64);
+       if(change==='meaning')c.semantic_closure_graph_digest='sha256:'+'0'.repeat(64);
+       if(change==='missing')delete c.semantic_closure_evidence_digest;
+     });
+     assert.equal(r.result.tracks[0].state,change==='metadata'?'CLEAN':'STOPPED',change);
+     assert.equal(r.result.tracks[1].state,'CLEAN');
+     if(change==='metadata')assert.ok(r.calls.find(c=>c.label==='B1 build T-1').prompt.includes('use that semantic pair as the approval binding'));
+   }
+ }
+,
+ async()=>{
+   for(const kind of ['owned_fix','foreign_head','missing']) {
+     const r=await run('build',(f,a)=>{
+       a.approve=['T-1'];
+       f.responses['B3 review T-1'].rounds=2;
+       f.responses['B4 final verification']=kind==='missing'?null:{heads:[{
+         issue_id:'T-1',pr:f.responses['B1 build T-1'].pr,branch:'codex/t-1',
+         head_sha:'8'.repeat(40),reviewed_head_sha:(kind==='owned_fix'?'8':'1').repeat(40)}],seam:null};
+     });
+     assert.equal(r.result.tracks[0].state,kind==='owned_fix'?'CLEAN':'BLOCKED',kind);
+     if(kind!=='missing')assert.equal(r.result.tracks[0].result.head_sha,'8'.repeat(40));
+   }
+   for(const verdict of ['CLEAN','BLOCKED','ROUNDS_EXHAUSTED']) {
+     const r=await run('build',(f,a)=>{
+       a.approve=['T-1'];
+       Object.assign(f.responses['B3 review T-1'],{
+         verdict,rounds:3,open_findings:verdict==='CLEAN'?[]:['Existing finding'],
+         open_questions:[{question:'Does the sibling handle this case?',status:'stale',evidence:'Needs human verification'}]
+       });
+       f.responses['B4 final verification']=null;
+     });
+     const review=r.result.tracks[0].review;
+     assert.equal(review.verdict,verdict==='CLEAN'?'BLOCKED':verdict);
+     assert.equal(review.rounds,3);
+     assert.deepEqual(review.model_routing,fixture.responses['B3 review T-1'].model_routing);
+     assert.equal(review.open_questions.length,1);
+     assert.ok(review.open_findings.includes('Final PR head could not be verified'));
+     if(verdict!=='CLEAN')assert.ok(review.open_findings.includes('Existing finding'));
+   }
+ }
+
 ];
 // B3 admission observes live main after B1; a moved main carries fresh evidence.
 const movedAdmission=(f,a,id,live,change={})=>{
@@ -691,6 +816,10 @@ tests.push(
    assert.ok(build.result.tracks.every(t=>t.state==='CLEAN'));
    for(const call of build.calls.filter(c=>/^B[13]/.test(c.label)))
      assert.ok(call.prompt.includes(JSON.stringify(localFlags)),call.label);
+   for(const call of build.calls.filter(c=>c.label.startsWith('B3 review'))) {
+     assert.match(call.prompt,/Run \/pr-loop \S+ --max-rounds 3 --local-graph in /);
+     assert.ok(call.prompt.includes('Current graph flags ["--local-graph"]'));
+   }
    const warnings=await run('plan',(f,a)=>{localArgs(f,a);a.approved_local_graph.coverage_exit=1;
      a.approved_local_graph.coverage_state='UPDATE_REQUIRED';});
    assert.equal(warnings.result.state,'AWAITING_APPROVAL','unrelated missing tickets remain warnings');
@@ -701,6 +830,20 @@ tests.push(
    assert.ok(!contract.calls.some(c=>c.label==='A3 contract'));
    for(const c of contract.calls.filter(c=>c.label.startsWith('A4')))
      assert.ok(c.prompt.includes(JSON.stringify(fixture.literals)),c.label);
+   const finalMismatch=await run('build',(f,a)=>{
+     localArgs(f,a);a.plan_record=contract.result;a.wave.contract_dir=null;
+     f.responses['B2 seam check']={exit:0,table:seamTable(f),open_questions:[]};
+     const heads=f.tracks.map(t=>({issue_id:t.issue_id,pr:f.responses['B1 build '+t.issue_id].pr,
+       branch:t.branch,head_sha:f.responses['B1 build '+t.issue_id].head_sha,
+       reviewed_head_sha:f.responses['B1 build '+t.issue_id].head_sha}));
+     f.responses['B4 final verification']={heads,seam:{exit:1,open_questions:[],
+       table:seamTable(f).map(row=>({...row,branch:heads.find(h=>h.branch===row.branch).head_sha,
+         state:row.branch==='codex/t-2'?'MISMATCH':row.state,evidence:'Final local agreement checked'}))}};
+   });
+   assert.equal(finalMismatch.result.tracks[1].state,'SEAM_MISMATCH');
+   assert.equal(finalMismatch.result.tracks[0].state,'CLEAN');
+   assert.equal(finalMismatch.result.seam_check.state,'FAILED');
+   assert.ok(finalMismatch.calls.find(c=>c.label==='B4 final verification').prompt.includes('temporary file outside the repository'));
    for(const outcome of ['pass','mismatch','absent','incomplete']) {
      const checked=await run('build',(f,a)=>{
        localArgs(f,a);a.plan_record=contract.result;a.wave.contract_dir=null;
