@@ -1,11 +1,15 @@
 """Deterministic boundaries for the prompt-driven loop. Stdlib, no shell eval."""
 import argparse
+from contextlib import nullcontext
+import hashlib
+import sys
 import json
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import time
 
 
 class Blocked(ValueError):
@@ -189,10 +193,10 @@ def command(engine, repo, model, effort, prompt, report, fast=False):
     return args + [prompt]
 
 
-def run(argv, *, cwd, env=None, timeout=60):
+def run(argv, *, cwd, env=None, timeout=60, pass_fds=()):
     try:
         result = subprocess.run(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-                                capture_output=True, text=True, timeout=timeout)
+                                capture_output=True, text=True, timeout=timeout, pass_fds=pass_fds)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise Blocked('command unavailable or timed out: ' + argv[0]) from exc
     if result.returncode:
@@ -322,7 +326,31 @@ def execute(args):
     if before[0].strip() != args.head or any(
             line and not line.startswith('?? ') for line in before[1].splitlines()):
         raise Blocked('review checkout must be clean at the exact PR head')
-    output = run(argv, cwd=repo, env=env, timeout=args.timeout)
+    slots = getattr(args, 'review_slots', None)
+    if slots is not None:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[4] / 'core/land/lib'))
+        from resource_slots import permit
+        account_key = hashlib.sha256(route['reviewer'].casefold().encode()).hexdigest()
+        admission = permit('review-' + engine + '-' + account_key, slots,
+                           root=getattr(args, 'slot_state', None), timeout=args.slot_wait)
+    else:
+        admission = nullcontext(None)
+    queued_at = time.monotonic()
+    with admission as fd:
+        acquired_at = time.monotonic()
+        # Waiting for a permit can make both the head and the skip-check stale.
+        fresh()
+        evidence = observed()
+        if evidence:
+            return dict(evidence, reused=True, cli_version=version)
+        current = (run(['git', 'rev-parse', 'HEAD'], cwd=repo),
+                   run(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=repo))
+        if current != before:
+            raise Blocked('review checkout changed while waiting for a resource permit')
+        started_at = time.monotonic()
+        output = run(argv, cwd=repo, env=env, timeout=args.timeout,
+                     pass_fds=() if fd is None else (fd,))
+        finished_at = time.monotonic()
     if engine == 'claude':
         report.write_text(output.replace(token, '[REDACTED]'))
     if not report.is_file():
@@ -341,7 +369,9 @@ def execute(args):
     if submitted['head'] != args.head or submitted['review_id'] != evidence['review_id']:
         raise Blocked('captured report does not match submitted GitHub evidence')
     fresh()
-    return dict(evidence, reused=False, cli_version=version)
+    return dict(evidence, reused=False, cli_version=version,
+                timing=dict(slot_wait_seconds=acquired_at-queued_at,
+                            reviewer_process_seconds=finished_at-started_at))
 
 
 def route_main():
@@ -357,7 +387,7 @@ def route_main():
         args['pr'] = decode(Path(args.pop('pr_json')).read_text())
         args['commits'] = decode(Path(args.pop('commits_json')).read_text())
         print(json.dumps(resolve(**args)))
-    except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+    except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError, TimeoutError) as exc:
         parser.exit(2, 'BLOCKED: ' + str(exc) + '\n')
 
 
@@ -370,7 +400,7 @@ def prior_count_main():
     try:
         reviews = decode(Path(args.reviews).read_text())
         print(prior_review_count(reviews, args.reviewer, args.engine))
-    except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+    except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError, TimeoutError) as exc:
         parser.exit(2, 'BLOCKED: ' + str(exc) + '\n')
 
 
@@ -382,9 +412,15 @@ def review_main():
     parser.add_argument('--host', required=True, choices=sorted(ENGINES))
     parser.add_argument('--fast', action='store_true')
     parser.add_argument('--timeout', type=int, default=1800)
+    parser.add_argument('--slot-wait', type=float, default=7200)
+    parser.add_argument('--review-slots', type=int)
+    parser.add_argument('--slot-state')
     args = parser.parse_args()
     try:
         print(json.dumps(execute(args)))
-    except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+    except TimeoutError as exc:
+        print(json.dumps(dict(status='SLOT_WAIT_TIMEOUT', reason=str(exc))))
+        raise SystemExit(75)
+    except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError, TimeoutError) as exc:
         print(json.dumps(dict(status='BLOCKED', reason=str(exc))))
         raise SystemExit(2)

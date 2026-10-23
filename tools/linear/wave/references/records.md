@@ -401,6 +401,13 @@ admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
           ],
           "additionalProperties": false
         }
+      },
+      "reviewed_head": {
+        "type": "string"
+      },
+      "block_reason_code": {
+        "type": "string",
+        "enum": ["SLOT_WAIT_TIMEOUT"]
       }
     },
     "required": [
@@ -1470,6 +1477,13 @@ admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "reviewed_head": {
+                      "type": "string"
+                    },
+                    "block_reason_code": {
+                      "type": "string",
+                      "enum": ["SLOT_WAIT_TIMEOUT"]
                     }
                   },
                   "required": [
@@ -1641,6 +1655,127 @@ admission becomes a REVIEW_RESULT with rounds 0 and the reason as its finding.
       "open_questions",
       "unverified_questions",
       "stop_reason",
+      "evidence"
+    ],
+    "additionalProperties": false
+  },
+  "FINAL_EVIDENCE": {
+    "type": "object",
+    "properties": {
+      "exit": {
+        "type": "integer"
+      },
+      "base_sha": {
+        "type": "string"
+      },
+      "heads": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "pr_head_sha": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "issue_id",
+            "branch",
+            "head_sha",
+            "pr_head_sha"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "table": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "literal": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "file": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "PASS",
+                "MISMATCH",
+                "ERROR",
+                "UNCHANGED"
+              ]
+            },
+            "evidence": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "literal",
+            "branch",
+            "file",
+            "state",
+            "evidence"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "open_questions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "question": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "verified",
+                "stale"
+              ]
+            },
+            "evidence": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "issue_id",
+            "question",
+            "status",
+            "evidence"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "evidence": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "exit",
+      "base_sha",
+      "heads",
+      "table",
+      "open_questions",
       "evidence"
     ],
     "additionalProperties": false

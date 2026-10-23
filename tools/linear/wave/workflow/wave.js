@@ -349,6 +349,13 @@ const schemas = {
           ],
           "additionalProperties": false
         }
+      },
+      "reviewed_head": {
+        "type": "string"
+      },
+      "block_reason_code": {
+        "type": "string",
+        "enum": ["SLOT_WAIT_TIMEOUT"]
       }
     },
     "required": [
@@ -1418,6 +1425,13 @@ const schemas = {
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "reviewed_head": {
+                      "type": "string"
+                    },
+                    "block_reason_code": {
+                      "type": "string",
+                      "enum": ["SLOT_WAIT_TIMEOUT"]
                     }
                   },
                   "required": [
@@ -1592,10 +1606,131 @@ const schemas = {
       "evidence"
     ],
     "additionalProperties": false
+  },
+  "FINAL_EVIDENCE": {
+    "type": "object",
+    "properties": {
+      "exit": {
+        "type": "integer"
+      },
+      "base_sha": {
+        "type": "string"
+      },
+      "heads": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "pr_head_sha": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "issue_id",
+            "branch",
+            "head_sha",
+            "pr_head_sha"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "table": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "literal": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "file": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "PASS",
+                "MISMATCH",
+                "ERROR",
+                "UNCHANGED"
+              ]
+            },
+            "evidence": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "literal",
+            "branch",
+            "file",
+            "state",
+            "evidence"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "open_questions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "question": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "verified",
+                "stale"
+              ]
+            },
+            "evidence": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "issue_id",
+            "question",
+            "status",
+            "evidence"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "evidence": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "exit",
+      "base_sha",
+      "heads",
+      "table",
+      "open_questions",
+      "evidence"
+    ],
+    "additionalProperties": false
   }
 };
 const common = `Repository: ${args.repo_root}; default branch: ${args.default_branch}.
-Configuration, gates, identities and paths: ${JSON.stringify(args)}.
+Configuration, gates, identities and paths: ${JSON.stringify({gates:args.gates,identities:args.identities,paths:args.paths,stack_config:args.stack_config,wave:args.wave})}.
 Read ${args.paths.records} for the record contract. No human is present in a node.
 Prompt-level rules: stop at a PR; never perform a merge; never create, close or
 complete tracker issues. Tracker writes belong exclusively to dispatch lifecycle.
@@ -1604,16 +1739,23 @@ Do not launch a separate executor or use a throwaway Workflow worktree.
 Every shell command must explicitly address its absolute dispatch worktree.`;
 const read = (path, rule) => `Read ${path} and follow it top to bottom. If unreadable,
 return a stopped result with evidence. D4 node rule: ${rule}.`;
+let eventSequence=0;
+const event=(kind,label,details={})=>log('WAVE_EVENT '+JSON.stringify({schema_version:1,
+  sequence:++eventSequence,run_id:args.run_id,wave_id:args.wave_id,event:kind,label,...details}));
 const call = async (label, prompt, schema, title) => {
+  event('node_start',label);
   try {
     const value = await agent(`${common}
 ${prompt}`, {label, phase: title, schema});
     if (!value) log(`${label}: dropped or skipped; no result`);
     if (value?.state==='STOPPED' && (!value.stop_reason || !value.evidence?.length)) {
+      event('node_end',label,{status:'INVALID'});
       log(`${label}: invalid STOPPED record; missing reason/evidence`); return null;
     }
+    event('node_end',label,{status:value?.state || value?.verdict || (value ? 'RETURNED' : 'MISSING')});
     return value;
   } catch (error) {
+    event('node_error',label);
     log(`${label}: stopped: ${String(error)}`);
     return null;
   }
@@ -1760,6 +1902,29 @@ function selectCandidates(input) {
 }
 // END SHARED SELECTION
 const cfg = args.wave || {};
+const streaming=cfg.execution_mode==='streaming';
+if (cfg.execution_mode!=null && !['legacy','streaming'].includes(cfg.execution_mode))
+  return refuse('wave.execution_mode must be legacy or streaming');
+const workers=cfg.worker_concurrency ?? 3;
+if (!Number.isSafeInteger(workers) || workers<1) return refuse('wave.worker_concurrency must be a positive integer');
+// Queue thunks in the controller, not paid agents waiting for another agent.
+const limiter=limit=>{
+  let active=0;const queue=[];
+  const pump=()=>{while(active<limit && queue.length){
+    const job=queue.shift();active++;
+    Promise.resolve().then(job.fn).then(job.resolve,job.reject).finally(()=>{active--;pump();});
+  }};
+  return fn=>new Promise((resolve,reject)=>{queue.push({fn,resolve,reject});pump();});
+};
+const workerSlot=limiter(workers);
+const testSlots=cfg.test_concurrency ?? 1;
+if (!Number.isSafeInteger(testSlots) || testSlots<1) return refuse('wave.test_concurrency must be a positive integer');
+const slotPath=args.paths.land.replace(/SKILL\.md$/, 'bin/with-slot');
+const gateBudget=`Run expensive configured lint/test/build commands under ${slotPath}
+--group local-tests --limit ${testSlots} -- <shell> -c <exact configured command>
+from the verified worktree. This bounds local processes without changing test scope.
+Never fan out full test suites when project/user policy restricts tests to changed files.
+Do not hold this permit while waiting for review or CI.\n`;
 const rounds = cfg.max_review_rounds ?? 3;
 const concurrency = cfg.review_concurrency ?? 1;
 if (!Number.isInteger(rounds) || rounds < 1) return refuse('wave.max_review_rounds must be a positive integer');
@@ -1931,7 +2096,19 @@ const candidateChanges=(before,after) => {
 };
 const admissionEvidence='Graph admission evidence: '+JSON.stringify(admissions);
 const graphEvidence='Graph publication evidence: '+JSON.stringify(publication);
-const graphPrompt=`${localIndex ? `Explicit local graph approval from THIS invocation: ${JSON.stringify(graphFlags)}.
+const projectEvidence=(pins,t)=>t ? {...pins,projects:pins.projects.filter(p=>p.project_id===t.project || p.project_name===t.project)} : pins;
+const admissionProjection=(report,t)=>{
+  if (!report || !t) return report;
+  const c=report.candidates.find(c=>c.identifier===t.issue_id);
+  if (!c) return null;
+  const closure=new Set(c.closure);
+  const nodes=(report.evidence?.request?.nodes || []).filter(n=>closure.has(n.node_id));
+  return {projection:true,main_sha:report.main_sha,graph_sha:report.graph_sha,transition:report.transition,
+    checked_at:report.checked_at,local_graph:report.local_graph,candidate:c,nodes,
+    events:(report.evidence?.request?.events || []).filter(e=>closure.has(e.node_id)),delta:report.delta,
+    note:'Context projection only; full unedited report is retained in the wave audit. Recollect full live evidence before writes.'};
+};
+const graphContext=(t=null,transition='build')=>`${localIndex ? `Explicit local graph approval from THIS invocation: ${JSON.stringify(graphFlags)}.
 Use only this owning local index/manifest: ${JSON.stringify(localPins)}. Re-run indexed
 validation, local coverage and graph-admission --local-index ${localIndex} --main-ref <fresh main>
 before every transition. Use the saved local scope snapshots for Run A comparison;
@@ -1943,8 +2120,8 @@ Keep native blockers, typed event dependencies, independent tracks and human che
 ` : ''}For work linked to a Linear project, before selection or execution recheck the canonical graph publication gate
 against fresh implementation main, the chosen graph source and live evidence for the candidate and its relevant dependency closure.
 Project coverage gaps are warnings; never exclude all mapped candidates because an unrelated ticket is missing.
-Validated graph publication evidence: ${JSON.stringify(publication)}.
-Validated candidate admission reports: ${JSON.stringify(validAdmissions)}.
+Validated graph publication evidence: ${JSON.stringify(projectEvidence(publication,t))}.
+Candidate admission context: ${JSON.stringify(validAdmissionReports(admissions,publication,args.date,transition).map(r=>admissionProjection(r,t)).filter(Boolean))}.
 Other missing/incomplete audits do not authorize their candidates; report them separately.
 Validated accepted PR snapshots: ${JSON.stringify([...graphUpdates.values()])}.
 Re-fetch main and accepted PR heads before writes. An accepted head moving during
@@ -1969,6 +2146,7 @@ and the exact local delta against fresh main/live issue evidence at every transi
 other scope, dependency and approval gates still apply. Record these SHA pins in
 plan risks and execution evidence. Project-less tracks are exempt.\n`;
 
+const graphPrompt=graphContext();
 if (args.stage === 'plan') {
   const v2=args.selection_version!==1;
   let assessment=null;
@@ -2088,7 +2266,7 @@ Return its absolute file path, branch and PR. Do not implement any selected issu
   }
   phase('Plan');
   const planTracks=[...selected.tracks,...planning];
-  const plans=await pipeline(planTracks, async (_prev,t) => {
+  const plans=await pipeline(planTracks, async (_prev,t) => workerSlot(async () => {
     const overlaps=[...accepted.values()].map(pr=>({number:pr.number,title:pr.title,
       author:pr.author,head_sha:pr.head_sha,
       files:[...new Set(pr.files.flatMap(f=>[f.filename,f.previous_filename].filter(Boolean)))]
@@ -2119,21 +2297,21 @@ No intersection means no overlap risk or rebase instruction for this track.
 ` : '';
     const planningOnly=planning.some(x=>x.issue_id===t.issue_id);
     const stagePrompt=planningOnly ? `Planning-only lane: use PLAN transition admission, not build admission.
-Full plan admission observations: ${JSON.stringify(validAdmissionReports(admissions,publication,args.date,'plan'))}.
+Full plan admission observations: ${JSON.stringify(validAdmissionReports(admissions,publication,args.date,'plan').map(r=>admissionProjection(r,t)).filter(Boolean))}.
 Produce a read-only plan or decision brief; retain every unmet build condition.
 This track cannot enter this wave's build approval; a fresh selection is required.\n` : '';
     const integrationPrompt=v2 ? `Selection warnings and constraints for this track:
 ${JSON.stringify(assessment.outcomes.find(c=>c.issue_id===t.issue_id))}.
 Record overlaps as plan risks. Real dependencies still block. Before merge, rebase
 onto current default main, rerun relevant gates and review any changed head.\n` : '';
-    const p=await call(`A4 plan ${t.issue_id}`, `${graphPrompt}${stagePrompt}${integrationPrompt}${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
+    const p=await call(`A4 plan ${t.issue_id}`, `${graphContext(t,planningOnly?'plan':'build')}${stagePrompt}${integrationPrompt}${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
 Dispatch exact issue ${t.issue_id} with --plan-only ${graphFlags.join(' ')}. Proposed track: ${JSON.stringify(t)}.
 Contract: ${JSON.stringify(record.contract)}. Return criteria citations, files, tests,
 risks, status read-back and verified absolute worktree. No implementation permission.`, schemas.PLAN, 'Plan');
     if (!p || p.issue_id !== t.issue_id || !p.worktree.startsWith('/') || !p.branch) return stoppedPlan(t,'A4 missing or wrong issue record');
     if (p.state==='STOPPED') log(`${t.issue_id}: STOPPED ${p.stop_reason}`);
     return p;
-  });
+  }));
   record.plans=selected.tracks.map((t,i)=>plans[i] || stoppedPlan(t,'A4 pipeline dropped track'));
   if (v2) {
     record.planning_plans=planning.map((t,i)=>plans[selected.tracks.length+i] || stoppedPlan(t,'A4 planning lane dropped track'));
@@ -2188,7 +2366,7 @@ const priorGraphEvidence='Run A graph publication evidence: '+JSON.stringify(pri
 const priorAdmissionEvidence='Run A graph admission evidence: '+JSON.stringify(priorAdmissions);
 const auditTrail=[graphEvidence,admissionEvidence,priorGraphEvidence,priorAdmissionEvidence];
 const approvedGraphPrompt=t => t.project===null ? '' : `Run A approved observations for ${t.issue_id}: ${JSON.stringify({
-  publication:priorPublication,admission:candidateAdmission(t,validPriorAdmissions,priorPublication,false)})}.
+  publication:projectEvidence(priorPublication,t),admission:admissionProjection(candidateAdmission(t,validPriorAdmissions,priorPublication,false)?.report,t)})}.
 Run A pinned main ${priorPublication.main_sha}; Run B validated main ${publication.main_sha}.
 Verify ${priorPublication.main_sha} is an ancestor of the fetched ${args.default_branch};
 if not, return STOPPED before any write. Diff the cited scope sources at the saved
@@ -2218,23 +2396,26 @@ const mainMove=mainMoved ? `Main moved since Run A: ${priorPublication.main_sha}
 const report={state:'COMPLETE',run_ids:[a.run_id,args.run_id],wave_id:a.wave_id,
   approved:ids,tracks:[],seam_check:{state:'NOT_RUN',table:[],reason:'A2 found no shared literals'},
   open_questions:[],unverified_questions:[],stop_reason:null,evidence:[...auditTrail,...(mainMove ? [mainMove] : [])]};
+report.evidence.push('Execution budgets: '+JSON.stringify({mode:streaming?'streaming':'legacy',
+  workers,reviewers:concurrency,test_slots:testSlots}));
 if (mainMove) log(mainMove);
 for (const t of a.tracks) if (!ids.includes(t.issue_id)) log(`${t.issue_id}: skipped; not approved`);
 phase('Build');
-const built=await pipeline(approved, async (_prev,t) => {
+const buildOne=async t => {
   if (preflightStops.has(t.issue_id)) {
     log(`${t.issue_id}: STOPPED ${preflightStops.get(t.issue_id)}`);
     return {...stoppedBuild(t,preflightStops.get(t.issue_id)),evidence:[preflightStops.get(t.issue_id),...auditTrail]};
   }
   const plan=a.plans.find(p=>p.issue_id===t.issue_id);
-  const r=await call(`B1 build ${t.issue_id}`, `${graphPrompt}${approvedGraphPrompt(t)}${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
-${read(args.paths.land, 'headless land returns STOPPED with evidence instead of waiting')}
+  const r=await call(`B1 build ${t.issue_id}`, `${graphContext(t)}${approvedGraphPrompt(t)}${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
+${read(args.paths.land, 'headless land returns STOPPED with evidence instead of waiting')}${gateBudget}
 Human approval: ${JSON.stringify(ids)} for wave ${a.wave_id}. Approved plan: ${JSON.stringify(plan)}.
 Use the existing dispatch worktree ${t.worktree}, branch ${t.branch}. Read back the
 branch/worktree pairing and refuse drift. Fetch and rebase onto ${args.default_branch}.
 Contract: ${JSON.stringify(a.contract)}. If present, first verify its PR is merged
 AND its commit/file is on the fetched default branch; a PR state alone is insufficient.
-Verify exact contract contents match ${JSON.stringify(a.literals)}. If absent, stop.
+Verify exact contract contents match ${JSON.stringify(a.literals)} when a contract is
+required. Empty literals with no contract are valid; a required missing contract stops.
 Implement the approved plan, follow land to a PR, then dispatch section 5's
 review-status write/read-back if defined. Include every open question.`, schemas.TRACK_RESULT, 'Build');
   if (r?.state==='PR_OPEN' && (!r.pr || !r.head_sha || r.gates.lint.exit!==0 || r.gates.test.exit!==0 || !r.acceptance_evidence.length)) {
@@ -2244,8 +2425,10 @@ review-status write/read-back if defined. Include every open question.`, schemas
   if (!r || r.issue_id !== t.issue_id) return stoppedBuild(t,'B1 missing or wrong issue record');
   if (r.state==='STOPPED') log(`${t.issue_id}: STOPPED ${r.stop_reason}`);
   return r;
-});
-const results=approved.map((t,i)=>built[i] || stoppedBuild(t,'B1 pipeline dropped track'));
+};
+const results=new Array(approved.length).fill(null);
+const mismatched=new Set();
+const legacySeams=async()=>{
 const active=approved.filter((t,i)=>results[i].state==='PR_OPEN');
 let seam=null;
 if (a.contract && active.length) {
@@ -2259,7 +2442,7 @@ ${JSON.stringify(results)}. Mark checked questions verified (current) or stale w
   report.seam_check={state:seam?.exit===0?'PASSED':'FAILED',table:seam?.table || [],reason:seam?'seam-check exit '+seam.exit:'B2 returned no evidence'};
   report.open_questions=seam?.open_questions || [];
 } else if (a.contract) report.seam_check.reason='No built branches; all B1 tracks stopped';
-const mismatched=new Set();
+mismatched.clear();
 // Require a row for every expected branch/literal/file, including UNCHANGED.
 // A bare zero exit without the deterministic table is not seam evidence.
 if (a.contract && seam) for (const t of active) for (const entry of a.literals) for (const file of entry.files) {
@@ -2280,9 +2463,11 @@ if (a.contract && active.length) {
   }
 }
 if (mismatched.size) report.seam_check.state='FAILED';
-const eligible=active.filter(t=>!mismatched.has(t.issue_id));
+
 for (const t of active) if (mismatched.has(t.issue_id)) log(`${t.issue_id}: skipped review; SEAM_MISMATCH`);
-phase('Review');
+
+};
+if (streaming) phase('Review');
 const reviews={};
 const blockedReview=(r,finding)=>({pr:r.pr,verdict:'BLOCKED',rounds:0,open_findings:[finding],model_routing:[],open_questions:[]});
 // review_concurrency serializes B3, so a later track's review can start long after
@@ -2295,7 +2480,7 @@ const readmit=async (t,r) => {
   const project=publication.projects.find(p=>p.project_id===current.candidate.project_id);
   const ref=localIndex ? `--local-index ${localIndex} --main-ref <live main>` :
     project.state==='ACCEPTED_UPDATE' ? `--ref ${project.head_sha} --main-ref <live main>` : '--ref <live main>';
-  const obs=await call(`B3 admission ${t.issue_id}`, `${graphPrompt}${approvedGraphPrompt(t)}${read(args.paths.wave, 'B3 admission only: read-only observation; never review, fix, push, comment or write the tracker')}
+  const obs=await call(`B3 admission ${t.issue_id}`, `${graphContext(t)}${approvedGraphPrompt(t)}${read(args.paths.wave, 'B3 admission only: read-only observation; never review, fix, push, comment or write the tracker')}
 B3 admission for ${t.issue_id}, PR ${r.pr}, worktree ${t.worktree}. Fetch literal main and record
 its exact SHA and UTC checked_at. Run B validated main ${publication.main_sha}. If live main equals
 it, return OBSERVED with null ancestor_exit, merge_tree_exit and head_sha;
@@ -2310,7 +2495,7 @@ For a still-local repair reconstruct the recorded delta against fresh main. If t
 published, audit the published node without the old repairs/proposed overlay; its saved own-closure
 digests still bind approval. Recheck every accepted graph PR's OPEN state and reviewed exact head
 against ${JSON.stringify([...graphUpdates.values()])}; a moved/merged head stops before review.
-Run B report: ${JSON.stringify(current.report)}.
+Run B candidate context: ${JSON.stringify(admissionProjection(current.report,t))}.
 Return the helper's complete JSON output, unedited, as the admission_report string; never copy
 digests from Run B's report. Return STOPPED with evidence when a command or evidence is unavailable.`, schemas.READMISSION, 'Review');
   const pins=`Run B validated main ${publication.main_sha}, live main ${obs?.main_sha ?? 'unknown'}`;
@@ -2343,29 +2528,137 @@ digests from Run B's report. Return STOPPED with evidence when a command or evid
   log(evidence);
   return {evidence,auditEvidence,prompt:`${evidence}. For this review node live main ${obs.main_sha} replaces the
 validated main_sha in the rule above, and this fresh admission report replaces Run B's for ${t.issue_id}:
-${JSON.stringify(now.report)}. Verify the PR head still equals ${obs.head_sha || r.head_sha} before writes.
+${JSON.stringify(admissionProjection(now.report,t))}. Verify the PR head still equals ${obs.head_sha || r.head_sha} before writes.
 If main or the PR head moves again, return BLOCKED before any write.\n`};
 };
-// Batch only the review stage: build remains a per-track pipeline; B2 is the seam barrier.
-for (let offset=0;offset<eligible.length;offset+=concurrency) {
-  await pipeline(eligible.slice(offset,offset+concurrency), async (_prev,t) => {
+const reviewOne=async t=>{
     const r=results[approved.indexOf(t)];
     const admitted=await readmit(t,r);
     if (admitted.evidence) report.evidence.push(admitted.evidence);
     if (admitted.auditEvidence) report.evidence.push(admitted.auditEvidence);
-    const reviewed=admitted.review ? null : await call(`B3 review ${t.issue_id}`, `${graphPrompt}${approvedGraphPrompt(t)}${admitted.prompt}${read(args.paths.pr_loop, 'no adaptation: parse existing final verdict report; BLOCKED asks nothing')}
-Run /pr-loop ${r.pr} --max-rounds ${rounds} ${graphFlags.join(' ')} in ${t.worktree}.
+    const reviewed=admitted.review ? null : await call(`B3 review ${t.issue_id}`, `${graphContext(t)}${approvedGraphPrompt(t)}${admitted.prompt}${read(args.paths.pr_loop, 'no adaptation: parse existing final verdict report; BLOCKED asks nothing')}
+Run /pr-loop ${r.pr} --max-rounds ${rounds}${streaming ? ' --review-slots '+concurrency+' --test-slots '+testSlots : ''} ${graphFlags.join(' ')} in ${t.worktree}.
 Never exceed the round cap or retry a terminal verdict. Parse the existing verdict
-report into REVIEW_RESULT, including routing evidence. Verify this track's questions
-against every sibling branch tip: ${JSON.stringify(a.tracks)}; results: ${JSON.stringify(results)}.
-Return only checked questions with verified/stale labels and evidence.`, schemas.REVIEW_RESULT, 'Review');
+report into REVIEW_RESULT, including routing evidence. A reviewer permit expiry
+is verdict BLOCKED with block_reason_code SLOT_WAIT_TIMEOUT and no paid review;
+preserve that code in the track review record. Verify this track's questions
+${streaming ? 'against current evidence for this ticket only. Sibling work may still be running; leave cross-ticket questions for final verification.' : 'against every sibling branch tip: '+JSON.stringify(a.tracks)+'; results: '+JSON.stringify(results)+'.'}
+Return only checked questions with verified/stale labels and evidence.
+${streaming ? 'For CLEAN, return reviewed_head as the exact final SHA covered by the submitted review and CI. A missing or moved head is BLOCKED.' : ''}`, schemas.REVIEW_RESULT, 'Review');
     reviews[t.issue_id]=admitted.review || (reviewed?.pr===r.pr ? reviewed : null) ||
       blockedReview(r,'B3 returned no matching PR record');
+    if (streaming && reviews[t.issue_id].verdict==='CLEAN' && !/^[0-9a-f]{40}$/.test(reviews[t.issue_id].reviewed_head || ''))
+      reviews[t.issue_id]=blockedReview(r,'CLEAN has no exact final reviewed head');
     if (reviews[t.issue_id].verdict!=='CLEAN') log(`${t.issue_id}: ${reviews[t.issue_id].verdict}`);
-    for (const q of reviews[t.issue_id].open_questions) report.open_questions.push({issue_id:t.issue_id,...q});
+    for (const q of streaming ? [] : reviews[t.issue_id].open_questions) report.open_questions.push({issue_id:t.issue_id,...q});
     return reviews[t.issue_id];
-  });
+};
+const reviewSlot=limiter(streaming ? workers : concurrency);
+event('schedule','wave',{mode:streaming?'streaming':'legacy',workers,reviewers:concurrency,test_slots:testSlots});
+if (streaming) {
+  await pipeline(approved,async (_previous,t)=>workerSlot(async()=>{
+    const r=await buildOne(t);
+    results[approved.indexOf(t)]=r || stoppedBuild(t,'B1 pipeline dropped track');
+    if (results[approved.indexOf(t)].state==='PR_OPEN') {
+      event('review_queued',t.issue_id);
+        await reviewOne(t);
+        const hasAgreement=a.literals.some(l=>!l.tracks?.length || l.tracks.includes(t.issue_id));
+        if (reviews[t.issue_id]?.verdict==='CLEAN' && !hasAgreement && !r.open_questions.length &&
+            !reviews[t.issue_id].open_questions.length)
+          event('ticket_ready',t.issue_id,{head:reviews[t.issue_id].reviewed_head});
+    }
+    return r;
+  }));
+  approved.forEach((t,i)=>{if (!results[i]) results[i]=stoppedBuild(t,'B1 pipeline dropped track');});
+} else {
+  const built=await pipeline(approved,async (_previous,t)=>workerSlot(()=>buildOne(t)));
+  approved.forEach((t,i)=>results[i]=built[i] || stoppedBuild(t,'B1 pipeline dropped track'));
+  await legacySeams();
+  phase('Review');
+  const eligible=approved.filter((t,i)=>results[i].state==='PR_OPEN' && !mismatched.has(t.issue_id));
+  await pipeline(eligible,async (_previous,t)=>reviewSlot(()=>reviewOne(t)));
 }
+
+
+// Only connected participants wait for final agreement. A stopped/unapproved
+// participant never disappears from an obligation and cannot fabricate a pass.
+if (streaming) {
+  const allIds=a.tracks.map(t=>t.issue_id);
+  const literalGroups=a.literals.map(l=>({owners:l.tracks?.length ? l.tracks : allIds,
+    participants:l.tracks?.length ? l.tracks : allIds,literals:[l],questions:[]}));
+  const questionGroups=approved.flatMap((t,i)=>{
+    const questions=[...new Set([...(results[i]?.open_questions || []),
+      ...(reviews[t.issue_id]?.open_questions || []).map(q=>q.question)])];
+    return questions.length ? [{owners:[t.issue_id],participants:allIds,literals:[],questions}] : [];
+  });
+  const groups=[...literalGroups,...questionGroups];
+  const readyGroups=groups.filter(g=>{
+    const missing=g.participants.filter(id=>!ids.includes(id) || reviews[id]?.verdict!=='CLEAN');
+    if (missing.length) {
+      g.owners.forEach(id=>mismatched.add(id));
+      report.evidence.push('Final agreement blocked: '+JSON.stringify({owners:g.owners,missing}));
+      return false;
+    }
+    return true;
+  });
+  const finalIds=[...new Set(readyGroups.flatMap(g=>g.participants))];
+  if (finalIds.length) {
+    const finalTracks=a.tracks.filter(t=>finalIds.includes(t.issue_id));
+    const expected=finalTracks.map(t=>({issue_id:t.issue_id,branch:t.branch,
+      head_sha:reviews[t.issue_id].reviewed_head,pr:results[approved.findIndex(x=>x.issue_id===t.issue_id)].pr}));
+    phase('Seams');
+    const final=await call('B4 final evidence', `${read(args.paths.wave,'final evidence only: read-only, never fix or merge')}
+Verify final agreement for these obligations: ${JSON.stringify(readyGroups)}.
+Exact submitted-review/CI heads: ${JSON.stringify(expected)}.
+Fetch default main and record its exact SHA. Read back both every local branch tip
+and its GitHub PR head; both must equal the listed reviewed SHA before AND after
+checking. A changed head, missing participant or unavailable evidence cannot pass.
+For literal obligations, write temporary contract {literal,files} and participant
+literal-to-branch maps outside the repository, from ONLY these readyGroups. Run
+the helper with deduplicated contract entries and unioned participant lists for
+identical literals. Invoke
+${args.paths.seam_check} --repo ${args.repo_root} --base ${args.default_branch}
+--contract <temporary-contract> --expected-heads <branch-to-reviewed-SHA-json>
+--participants <literal-to-branches-json> --branches <each participating branch>.
+Preserve the helper's complete table and base SHA. Its refs must match the final
+reviewed heads. Do not reuse pre-review seam evidence. String presence is not
+behavioral acceptance. For question-only obligations, verify the same head/base
+pins directly with git and GitHub, then check each question against all listed heads.
+Return only verified/stale questions with citations; never label an unchecked
+question verified. Record exact head observations and commands in evidence.`,schemas.FINAL_EVIDENCE,'Seams');
+    const valid=final && /^[0-9a-f]{40}$/.test(final.base_sha) && final.evidence.length &&
+      final.heads.length===expected.length && new Set(final.heads.map(h=>h.issue_id)).size===expected.length;
+    const badHeads=new Set(expected.filter(e=>!valid || !final.heads.some(h=>
+      h.issue_id===e.issue_id && h.branch===e.branch && h.head_sha===e.head_sha && h.pr_head_sha===e.head_sha)).map(e=>e.issue_id));
+    const failureRows=final?.table.filter(row=>['ERROR','MISMATCH'].includes(row.state)) || [];
+    const globalFailure=failureRows.some(row=>!expected.some(e=>e.branch===row.branch));
+    for (const g of readyGroups) {
+      const branches=g.participants.map(id=>a.tracks.find(t=>t.issue_id===id).branch);
+      let failed=!valid || globalFailure || g.participants.some(id=>badHeads.has(id)) ||
+        (final.exit!==0 && !failureRows.length) ||
+        failureRows.some(row=>branches.includes(row.branch) && !row.literal);
+      for (const l of g.literals) for (const id of g.participants) for (const file of l.files) {
+        const branch=a.tracks.find(t=>t.issue_id===id)?.branch;
+        const rows=final?.table.filter(row=>row.literal===l.literal && row.file===file && row.branch===branch) || [];
+        if (rows.length!==1 || !['PASS','UNCHANGED'].includes(rows[0].state)) failed=true;
+      }
+      for (const id of g.owners) for (const question of g.questions) {
+        const rows=final?.open_questions.filter(q=>q.issue_id===id && q.question===question) || [];
+        if (rows.length!==1 || rows[0].status!=='verified' || !rows[0].evidence) failed=true;
+      }
+      if (failed) g.owners.forEach(id=>mismatched.add(id));
+    }
+    for (const id of new Set(readyGroups.flatMap(g=>g.owners)))
+      if (!mismatched.has(id)) event('ticket_ready',id,{head:reviews[id].reviewed_head});
+    report.evidence.push('Final head agreement: '+JSON.stringify({expected,observation:final}));
+    report.open_questions=final?.open_questions || [];
+    report.seam_check={state:mismatched.size ? 'FAILED':'PASSED',table:final?.table || [],reason:'Checked after review at exact final heads'};
+  } else if (groups.length) {
+    report.seam_check={state:'FAILED',table:[],reason:'Required participants stopped or unapproved'};
+  }
+  if (mismatched.size) report.evidence.push('Final agreement blocks: '+[...mismatched].join(', '));
+}
+
 for (const t of a.tracks) {
   const result=results[approved.indexOf(t)] || null;
   const review=reviews[t.issue_id] || null;

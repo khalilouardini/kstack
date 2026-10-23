@@ -136,6 +136,13 @@ which continue to refuse their required missing identities/gates/CI mode.
 batch size without silently clamping requests to five. Shared selection assesses
 plan and build separately; this limit does not authorize concurrent full tests.
 
+`wave.execution_mode` defaults to `legacy`; `streaming` opts in to early review
+and final-head agreements. `worker_concurrency` defaults to 3 and
+`test_concurrency` to 1, both positive integers. These separately bound ticket
+controllers and cooperative host-local gate commands. Streaming review permits
+cover paid reviewer processes only, releasing capacity during fixes and CI.
+See wave's `references/execution.md` for enforcement and rollout limits.
+
 `wave.max_review_rounds` missing/null defaults to 3, announced: observed later
 rounds addressed interactions among earlier fixes, so a bounded three-round run
 leaves further decisions human. `wave.review_concurrency` defaults to 1,

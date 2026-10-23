@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+`wave` 0.11.0 and `pr-loop` 0.10.0: opt-in streaming review as builds finish,
+bounded ticket workers, rolling legacy reviews and narrower candidate prompts.
+Check shared agreements against exact final reviewed heads and keep independent
+tickets available. Cooperative process permits separate paid-review capacity
+from fixes/CI and bound expensive local gates. Add ordered scheduling events and
+review-process timings. Defaults stay legacy pending the comparative live pilot;
+persistent ticket sessions remain gated on the host capability probe.
+
 `next` / `wave` 0.10.0 and dispatch 0.6.0: share cited stage assessments,
 deterministic bounded maximum selection, overlap warnings and explicit capacity.
 New wave plans preserve a separate planning queue that cannot enter build approval.

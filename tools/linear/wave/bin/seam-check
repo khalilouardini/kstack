@@ -13,8 +13,13 @@ def main():
     p.add_argument('--repo', required=True)
     p.add_argument('--base', required=True, help='Fetched default branch ref')
     p.add_argument('--branches', nargs='*', default=[])
+    p.add_argument('--expected-heads', help='JSON branch -> exact reviewed SHA; emits a pinned report')
+    p.add_argument('--participants', help='JSON literal -> participant branches; defaults to every branch')
     a = p.parse_args()
     table = []
+    heads = {}
+    base_sha = None
+    expected = None
 
     def error(branch, file, evidence, literal=''):
         table.append(dict(literal=literal, branch=branch, file=file,
@@ -41,18 +46,32 @@ def main():
         if base.returncode:
             raise ValueError('missing default branch: ' + a.base)
         base_sha = base.stdout.decode().strip()
+        expected = json.loads(Path(a.expected_heads).read_text()) if a.expected_heads else None
+        participants = json.loads(Path(a.participants).read_text()) if a.participants else {}
+        if not isinstance(participants, dict) or any(
+                not isinstance(k, str) or not isinstance(v, list) or not v or
+                any(b not in a.branches for b in v) for k, v in participants.items()):
+            raise ValueError('invalid or missing participant branches')
+        if expected is not None and (not isinstance(expected, dict) or set(expected) != set(a.branches)):
+            raise ValueError('expected heads must cover exactly the requested branches')
         for branch in a.branches:
             tip = git('rev-parse', '--verify', '--end-of-options', branch + '^{commit}')
             if tip.returncode:
                 error(branch, '', 'Missing branch: ' + branch)
                 continue
             tip_sha = tip.stdout.decode().strip()
+            heads[branch] = tip_sha
+            if expected is not None and expected[branch] != tip_sha:
+                error(branch, '', 'Branch differs from final reviewed head')
+                continue
             changed = git('diff', '--no-renames', '--name-only', '-z', base_sha + '...' + tip_sha, '--')
             if changed.returncode:
                 error(branch, '', changed.stderr.decode(errors='replace'))
                 continue
             files = set(changed.stdout.decode().split('\0'))
             for entry in entries:
+                if branch not in participants.get(entry['literal'], a.branches):
+                    continue
                 for file in entry['files']:
                     if file not in files:
                         table.append(dict(literal=entry['literal'], branch=branch, file=file,
@@ -65,9 +84,15 @@ def main():
                                       state=state, evidence=found.stdout.decode(errors='replace').strip()
                                       or found.stderr.decode(errors='replace').strip()
                                       or 'Literal absent at branch tip (including deleted file)'))
+        # Operate on immutable SHAs, then detect moves before handing off evidence.
+        for ref, pinned in [(a.base, base_sha), *heads.items()]:
+            now = git('rev-parse', '--verify', '--end-of-options', ref + '^{commit}')
+            if now.returncode or now.stdout.decode().strip() != pinned:
+                error(ref, '', 'Ref moved during seam verification')
     except (OSError, ValueError, TypeError) as exc:
         error('', a.contract, str(exc))
-    print(json.dumps(table, indent=2))
+    result = dict(base_sha=base_sha, heads=heads, table=table) if a.expected_heads else table
+    print(json.dumps(result, indent=2))
     return int(any(r['state'] in ('MISMATCH', 'ERROR') for r in table))
 
 
