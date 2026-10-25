@@ -355,7 +355,9 @@ const schemas = {
       },
       "block_reason_code": {
         "type": "string",
-        "enum": ["SLOT_WAIT_TIMEOUT"]
+        "enum": [
+          "SLOT_WAIT_TIMEOUT"
+        ]
       }
     },
     "required": [
@@ -1431,7 +1433,9 @@ const schemas = {
                     },
                     "block_reason_code": {
                       "type": "string",
-                      "enum": ["SLOT_WAIT_TIMEOUT"]
+                      "enum": [
+                        "SLOT_WAIT_TIMEOUT"
+                      ]
                     }
                   },
                   "required": [
@@ -1725,6 +1729,139 @@ const schemas = {
       "table",
       "open_questions",
       "evidence"
+    ],
+    "additionalProperties": false
+  },
+  "FINAL_CHECK": {
+    "type": "object",
+    "properties": {
+      "heads": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue_id": {
+              "type": "string"
+            },
+            "pr": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "head_sha": {
+              "type": "string"
+            },
+            "reviewed_head_sha": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "issue_id",
+            "pr",
+            "branch",
+            "head_sha",
+            "reviewed_head_sha"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "seam": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "exit": {
+                "type": "integer"
+              },
+              "table": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "literal": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "file": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "PASS",
+                        "MISMATCH",
+                        "ERROR",
+                        "UNCHANGED"
+                      ]
+                    },
+                    "evidence": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "literal",
+                    "branch",
+                    "file",
+                    "state",
+                    "evidence"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "open_questions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "issue_id": {
+                      "type": "string"
+                    },
+                    "question": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "verified",
+                        "stale"
+                      ]
+                    },
+                    "evidence": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "issue_id",
+                    "question",
+                    "status",
+                    "evidence"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "exit",
+              "table",
+              "open_questions"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "heads",
+      "seam"
     ],
     "additionalProperties": false
   }
@@ -2087,12 +2224,14 @@ const candidateChanges=(before,after) => {
   const publishedRepair=before.mode==='LOCAL_RECONCILIATION' && after.mode==='PUBLISHED';
   const comparisons=['issue_id','project_id','node_id'].map(field=>({field,prior:before[field],current:after[field]}));
   for (const field of ['closure_graph_digest','closure_evidence_digest']) {
-    const priorField=publishedRepair ? 'published_'+field : field;
-    comparisons.push({field,prior_field:priorField,prior:before[priorField],current:after[field]});
+    const semantic=Object.hasOwn(before,'semantic_'+(publishedRepair?'published_':'')+field);
+    const priorField=(semantic?'semantic_':'')+(publishedRepair?'published_':'')+field;
+    const currentField=(semantic?'semantic_':'')+field;
+    comparisons.push({field,prior_field:priorField,prior:before[priorField],current:after[currentField]});
   }
   if (!publishedRepair) comparisons.push({field:'mode',prior:before.mode,current:after.mode});
   return comparisons.filter(c=>c.prior!==c.current ||
-    (c.prior_field?.startsWith('published_') && !shaDigest(c.prior)));
+    (c.field.endsWith('_digest') && (!shaDigest(c.prior) || !shaDigest(c.current))));
 };
 const admissionEvidence='Graph admission evidence: '+JSON.stringify(admissions);
 const graphEvidence='Graph publication evidence: '+JSON.stringify(publication);
@@ -2135,6 +2274,12 @@ planning invocation before contract publication; repeat the plan audit.` :
 explicit Run A approved observations supplied below. For LOCAL_RECONCILIATION to
 PUBLISHED only, compare Run A's published_closure_graph_digest and
 published_closure_evidence_digest with the current full candidate digests instead.
+When Run A has semantic_closure_graph_digest and semantic_closure_evidence_digest,
+use that semantic pair as the approval binding instead of the legacy pair; for
+publication use its semantic_published_closure_* pair. Require the corresponding
+current semantic pair. Equal semantic conditions permit differences in the legacy
+metadata hashes; retain full bodies/citations and inspect contradictions, but do
+not revoke approval for non-authoritative notes or citation prose alone.
 Require valid saved publication digests; never invent missing evidence. Other mode
 changes require a new plan. Unrelated changes preserve
 approval; changed scope, prerequisites, acceptance, human gates, policy, mode or
@@ -2245,7 +2390,7 @@ List every literal two or more tracks must agree on: status tokens, schema field
 config keys, paths, marker comments. Return literals with files, participating ids, why.`, schemas.SCAN, 'Select') : {literals:[]};
   if (!scan) { record.stop_reason='A2 returned no record'; record.evidence.push(record.stop_reason); return record; }
   record.literals=scan.literals;
-  if (scan.literals.length) {
+  if (scan.literals.length && !localIndex) {
     if (!cfg.contract_dir) {
       record.stop_reason='wave.contract_dir is required for shared literals';
       record.evidence.push('A2 found shared literals',JSON.stringify(scan.literals));
@@ -2307,7 +2452,9 @@ Record overlaps as plan risks. Real dependencies still block. Before merge, reba
 onto current default main, rerun relevant gates and review any changed head.\n` : '';
     const p=await call(`A4 plan ${t.issue_id}`, `${graphContext(t,planningOnly?'plan':'build')}${stagePrompt}${integrationPrompt}${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
 Dispatch exact issue ${t.issue_id} with --plan-only ${graphFlags.join(' ')}. Proposed track: ${JSON.stringify(t)}.
-Contract: ${JSON.stringify(record.contract)}. Return criteria citations, files, tests,
+Contract: ${JSON.stringify(record.contract)}. Shared agreements: ${JSON.stringify(record.literals)}.
+${localIndex ? 'Keep shared agreements in this approved plan handoff. Do not create a separate wave contract branch, test, commit or PR; include any required product tests in the ticket plan.' : ''}
+Return criteria citations, files, tests,
 risks, status read-back and verified absolute worktree. No implementation permission.`, schemas.PLAN, 'Plan');
     if (!p || p.issue_id !== t.issue_id || !p.worktree.startsWith('/') || !p.branch) return stoppedPlan(t,'A4 missing or wrong issue record');
     if (p.state==='STOPPED') log(`${t.issue_id}: STOPPED ${p.stop_reason}`);
@@ -2350,6 +2497,14 @@ const ids=args.approve === 'all' ? a.plans.filter(p=>p.state==='PLANNED').map(p=
 if (!Array.isArray(ids) || !ids.length || ids.some(id=>!a.plans.some(p=>p.issue_id===id && p.state==='PLANNED')))
   return refuse('approve must name existing PLANNED issues, or all');
 const approved=a.tracks.filter(t=>ids.includes(t.issue_id));
+const recoveries=Array.isArray(args.recovery) ? args.recovery : [];
+const recoveryFor=t=>recoveries.filter(r=>r?.issue_id===t.issue_id);
+const validResult=(r,id)=>r?.state==='PR_OPEN' && r.issue_id===id &&
+  typeof r.pr==='string' && /^https:\/\//.test(r.pr) && /^[0-9a-f]{40}$/.test(r.head_sha || '') &&
+  r.gates?.lint?.exit===0 && r.gates?.test?.exit===0 &&
+  Array.isArray(r.acceptance_evidence) && r.acceptance_evidence.length>0 &&
+  Array.isArray(r.evidence) && r.evidence.length>0 &&
+  Array.isArray(r.files_touched) && Array.isArray(r.open_questions);
 // Approval belongs to the selected mapped units and their conditions, not a
 // repository SHA or the whole project's membership. Isolate affected tracks.
 const priorEvidence=a.evidence?.find(e=>e.startsWith('Graph publication evidence: '));
@@ -2375,6 +2530,17 @@ and fresh graph SHAs (or saved/fresh local scope snapshots) and recheck their fu
 Exact quote equality alone does not prove scope applicability.\n`;
 const preflightStops=new Map();
 const buildAdmissions=new Map();
+for (const t of approved) {
+  const rows=recoveryFor(t),r=rows[0];
+  if (rows.length!==1 || r.branch!==t.branch || r.worktree!==t.worktree ||
+      !validUTC(r.checked_at) || r.checked_at.slice(0,10)!==args.date ||
+      (validUTC(publication.checked_at) && Date.parse(r.checked_at)<Date.parse(publication.checked_at)) ||
+      !Array.isArray(r.evidence) || !r.evidence.length ||
+      !['ABSENT','PR_OPEN'].includes(r.state) ||
+      (r.state==='PR_OPEN' && !validResult(r.result,t.issue_id)) ||
+      (r.state==='ABSENT' && r.result!==null))
+    preflightStops.set(t.issue_id,`Recovery: ${t.issue_id} needs a fresh verified branch/worktree and existing-PR lookup`);
+}
 for (const t of approved.filter(t=>t.project!==null)) {
   const prior=candidateAdmission(t,validPriorAdmissions,priorPublication,false);
   // Display names may change between runs; the approved canonical project ID
@@ -2407,16 +2573,23 @@ const buildOne=async t => {
     log(`${t.issue_id}: STOPPED ${preflightStops.get(t.issue_id)}`);
     return {...stoppedBuild(t,preflightStops.get(t.issue_id)),evidence:[preflightStops.get(t.issue_id),...auditTrail]};
   }
+  const recovery=recoveryFor(t)[0];
+  if (recovery.state==='PR_OPEN') {
+    log(`${t.issue_id}: reuse verified PR ${recovery.result.pr}; skip implementation`);
+    return {...recovery.result,evidence:[...recovery.result.evidence,...recovery.evidence]};
+  }
   const plan=a.plans.find(p=>p.issue_id===t.issue_id);
   const r=await call(`B1 build ${t.issue_id}`, `${graphContext(t)}${approvedGraphPrompt(t)}${read(args.paths.dispatch, 'wave build approval permits only the supplied approved plan and section 5 lifecycle')}
 ${read(args.paths.land, 'headless land returns STOPPED with evidence instead of waiting')}${gateBudget}
 Human approval: ${JSON.stringify(ids)} for wave ${a.wave_id}. Approved plan: ${JSON.stringify(plan)}.
 Use the existing dispatch worktree ${t.worktree}, branch ${t.branch}. Read back the
 branch/worktree pairing and refuse drift. Fetch and rebase onto ${args.default_branch}.
-Contract: ${JSON.stringify(a.contract)}. If present, first verify its PR is merged
+Shared agreements: ${JSON.stringify(a.literals)}. Implement and test the agreed literals
+within the approved ticket scope; the local handoff alone never authorizes product scope changes.
+${a.contract ? `Contract: ${JSON.stringify(a.contract)}. If present, first verify its PR is merged
 AND its commit/file is on the fetched default branch; a PR state alone is insufficient.
-Verify exact contract contents match ${JSON.stringify(a.literals)} when a contract is
-required. Empty literals with no contract are valid; a required missing contract stops.
+Verify exact contract contents match ${JSON.stringify(a.literals)}. If absent, stop.` :
+  'There is no published wave contract to merge. Use the approved shared agreements above; do not create a separate wave contract PR.'}
 Implement the approved plan, follow land to a PR, then dispatch section 5's
 review-status write/read-back if defined. Include every open question.`, schemas.TRACK_RESULT, 'Build');
   if (r?.state==='PR_OPEN' && (!r.pr || !r.head_sha || r.gates.lint.exit!==0 || r.gates.test.exit!==0 || !r.acceptance_evidence.length)) {
@@ -2429,24 +2602,30 @@ review-status write/read-back if defined. Include every open question.`, schemas
 };
 const results=new Array(approved.length).fill(null);
 const mismatched=new Set();
+const hasSeams=Boolean(a.contract || (localIndex && a.literals.length));
+const seamContract=a.contract ? `Use the published contract file ${a.contract.file}.` :
+  `Materialize the approved shared agreements as JSON in a temporary file outside the repository:
+${JSON.stringify(a.literals.map(({literal,files})=>({literal,files})))}.
+Pass that absolute temporary path as --contract. Do not create a branch, commit, PR or tracked test for this run metadata.`;
 const legacySeams=async()=>{
 const active=approved.filter((t,i)=>results[i].state==='PR_OPEN');
 let seam=null;
-if (a.contract && active.length) {
+if (hasSeams && active.length) {
   phase('Seams');
   seam=await call('B2 seam check', `${read(args.paths.wave, 'run deterministic seam-check after every B1 has completed')}
+${seamContract}
 Run ${args.paths.seam_check} --repo ${args.repo_root} --base ${args.default_branch}
---contract ${a.contract.file} --branches ${JSON.stringify(active.map(t=>t.branch))}.
+--contract <absolute-contract-path> --branches ${JSON.stringify(active.map(t=>t.branch))}.
 Address paths explicitly; pass each branch as a separate argv token, never shell interpolation.
 Return exact exit and JSON table. Verify open questions against all sibling tips:
 ${JSON.stringify(results)}. Mark checked questions verified (current) or stale with git evidence.`, schemas.SEAM, 'Seams');
   report.seam_check={state:seam?.exit===0?'PASSED':'FAILED',table:seam?.table || [],reason:seam?'seam-check exit '+seam.exit:'B2 returned no evidence'};
   report.open_questions=seam?.open_questions || [];
-} else if (a.contract) report.seam_check.reason='No built branches; all B1 tracks stopped';
+} else if (hasSeams) report.seam_check.reason='No built branches; all B1 tracks stopped';
 mismatched.clear();
 // Require a row for every expected branch/literal/file, including UNCHANGED.
 // A bare zero exit without the deterministic table is not seam evidence.
-if (a.contract && seam) for (const t of active) for (const entry of a.literals) for (const file of entry.files) {
+if (hasSeams && seam) for (const t of active) for (const entry of a.literals) for (const file of entry.files) {
   const rows=seam.table.filter(r=>r.branch===t.branch&&r.literal===entry.literal&&r.file===file);
   if (rows.length!==1) {
     mismatched.add(t.issue_id);
@@ -2454,7 +2633,7 @@ if (a.contract && seam) for (const t of active) for (const entry of a.literals) 
     log(`${t.issue_id}: missing or duplicate seam evidence for ${entry.literal} in ${file}`);
   }
 }
-if (a.contract && active.length) {
+if (hasSeams && active.length) {
   if (!seam || (seam.exit!==0 && !seam.table.some(r=>r.state==='MISMATCH'||r.state==='ERROR')))
     active.forEach(t=>mismatched.add(t.issue_id));
   for (const r of seam?.table || []) if (r.state==='MISMATCH'||r.state==='ERROR') {
@@ -2471,51 +2650,64 @@ for (const t of active) if (mismatched.has(t.issue_id)) log(`${t.issue_id}: skip
 if (streaming) phase('Review');
 const reviews={};
 const blockedReview=(r,finding)=>({pr:r.pr,verdict:'BLOCKED',rounds:0,open_findings:[finding],model_routing:[],open_questions:[]});
+const finalReviewFailure=(review,r,finding)=>review?{
+  ...review,verdict:review.verdict==='CLEAN'?'BLOCKED':review.verdict,
+  open_findings:[...review.open_findings,finding]
+}:blockedReview(r,finding);
 // review_concurrency serializes B3, so a later track's review can start long after
 // Run B validated main. A read-only node observes live main first. When main moved,
 // the script proceeds only if Run B's main is an ancestor, the PR head merges cleanly
 // and a fresh build admission at live main preserves this candidate's conditions.
 const readmit=async (t,r) => {
-  if (t.project===null) return {prompt:''};
+  if (t.project===null) return {prompt:'',flags:[]};
   const current=buildAdmissions.get(t.issue_id);
   const project=publication.projects.find(p=>p.project_id===current.candidate.project_id);
-  const ref=localIndex ? `--local-index ${localIndex} --main-ref <live main>` :
-    project.state==='ACCEPTED_UPDATE' ? `--ref ${project.head_sha} --main-ref <live main>` : '--ref <live main>';
   const obs=await call(`B3 admission ${t.issue_id}`, `${graphContext(t)}${approvedGraphPrompt(t)}${read(args.paths.wave, 'B3 admission only: read-only observation; never review, fix, push, comment or write the tracker')}
 B3 admission for ${t.issue_id}, PR ${r.pr}, worktree ${t.worktree}. Fetch literal main and record
-its exact SHA and UTC checked_at. Run B validated main ${publication.main_sha}. If live main equals
-it, return OBSERVED with null ancestor_exit, merge_tree_exit and head_sha;
-admission_report is null except local mode, which always requires a fresh full local audit.
-Otherwise record exact exit codes without interpreting them:
-git -C ${t.worktree} merge-base --is-ancestor ${publication.main_sha} <live main> as ancestor_exit, and
-git -C ${t.worktree} merge-tree --write-tree <live main> <PR head> as merge_tree_exit, with that PR head as head_sha.
-Then follow the publication gate from the physical stack root of ${args.paths.wave}: refresh full live
-closure evidence pinned to live main and run graph-admission ${ref}. Keep this track's selected
-issue identity and build transition, but refresh node proofs, citation lines and event observations.
-For a still-local repair reconstruct the recorded delta against fresh main. If the repair is now
-published, audit the published node without the old repairs/proposed overlay; its saved own-closure
-digests still bind approval. Recheck every accepted graph PR's OPEN state and reviewed exact head
-against ${JSON.stringify([...graphUpdates.values()])}; a moved/merged head stops before review.
+its exact SHA and UTC checked_at. Run B validated main ${publication.main_sha}.
+Always refresh full live Linear closure evidence, even when main is unchanged.
+Record exact exit codes: git -C ${t.worktree} merge-base --is-ancestor ${publication.main_sha} <live main>
+as ancestor_exit, and git -C ${t.worktree} merge-tree --write-tree <live main> <PR head>
+as merge_tree_exit. Record the actual PR head as head_sha.
+${localIndex ? `For the explicitly approved local graph, re-read its canonical owner index/manifest
+and require the same local pins. Run graph-admission --local-index ${localIndex}
+--main-ref <live main> with fresh full closure evidence and scope snapshots.
+Never switch this local source to main or to a graph PR.` : `For this track's accepted graph PR, re-read its state. If MERGED, audit the graph
+on live main and drop its obsolete pending-graph flag. If OPEN, require the same
+reviewed exact head before using it as --ref with --main-ref <live main>. A CLOSED
+unmerged graph, or an unreviewed new graph head, stops only this track.
+A published graph uses graph-admission --ref <live main>; a pending graph uses
+graph-admission --ref <resolved graph SHA> --main-ref <live main>.`}
+Follow the publication gate with fresh full issue bodies, relations, scope sections
+and event observations. For a local repair reconstruct its recorded delta; if now
+published, audit its own closure without the temporary overlay.
 Run B candidate context: ${JSON.stringify(admissionProjection(current.report,t))}.
-Return the helper's complete JSON output, unedited, as the admission_report string; never copy
-digests from Run B's report. Return STOPPED with evidence when a command or evidence is unavailable.`, schemas.READMISSION, 'Review');
+Return the helper's complete JSON output, unedited, as admission_report; never
+copy digests from Run B. No null freshness evidence on an unchanged main.
+Return STOPPED with evidence when a command or evidence is unavailable.`, schemas.READMISSION, 'Review');
   const pins=`Run B validated main ${publication.main_sha}, live main ${obs?.main_sha ?? 'unknown'}`;
   const auditEvidence=`B3 admission observation ${t.issue_id}: ${JSON.stringify(obs)}`;
   const stop=what=>{
-    const finding=`B3 admission: ${t.issue_id} ${what} (${pins}); repeat condition analysis and plan approval`;
+    const finding=`B3 admission: ${t.issue_id} ${what} (${pins}); refresh evidence; new approval only for changed conditions`;
     log(finding); return {review:blockedReview(r,finding),evidence:finding,auditEvidence};
   };
   if (!obs || obs.issue_id!==t.issue_id || obs.pr!==r.pr) return stop('returned no matching admission record');
   if (obs.state==='STOPPED') return stop(`stopped: ${obs.stop_reason}`);
   if (!/^[0-9a-f]{40}$/.test(obs.main_sha || '') || !validUTC(obs.checked_at) ||
       Date.parse(obs.checked_at)<Date.parse(publication.checked_at)) return stop('returned invalid live main evidence');
-  const moved=obs.main_sha!==publication.main_sha;
-  if (!moved && !localIndex) return {prompt:'',auditEvidence};
-  if (moved && obs.ancestor_exit!==0) return stop('validated main is not an ancestor of live main');
-  if (moved && (obs.merge_tree_exit!==0 || !/^[0-9a-f]{40}$/.test(obs.head_sha || ''))) return stop('PR head does not merge cleanly with live main');
+  if (obs.ancestor_exit!==0) return stop('validated main is not an ancestor of live main');
+  if (obs.merge_tree_exit!==0 || !/^[0-9a-f]{40}$/.test(obs.head_sha || '')) return stop('PR head does not merge cleanly with live main');
   let fresh=null;
   try { fresh=JSON.parse(obs.admission_report); } catch { fresh=null; }
-  const livePins={...publication,main_sha:obs.main_sha,checked_at:obs.checked_at};
+  // Publication on main supersedes a pending source; the unit's conditions still
+  // have to match. Pending sources remain pinned to their reviewed exact head.
+  const published=fresh?.graph_sha===obs.main_sha;
+  const liveProject={...project};
+  if (published) {
+    liveProject.state='CURRENT';delete liveProject.pr_number;delete liveProject.head_sha;
+  }
+  const livePins={...publication,main_sha:obs.main_sha,checked_at:obs.checked_at,
+    projects:publication.projects.map(p=>p.project_id===project.project_id?liveProject:p)};
   const now=candidateAdmission({...t,project:current.candidate.project_id},
     validAdmissionReports([fresh],livePins,obs.checked_at.slice(0,10)),livePins);
   if (!now || Date.parse(now.report.checked_at)<Date.parse(publication.checked_at) ||
@@ -2524,13 +2716,27 @@ digests from Run B's report. Return STOPPED with evidence when a command or evid
     return stop('has no eligible build admission at live main');
   const changed=candidateChanges(current.candidate,now.candidate);
   if (changed.length) return stop('closure changed: '+JSON.stringify(changed));
-  const evidence=moved ? `B3 admission ${t.issue_id}: main moved ${publication.main_sha} -> ${obs.main_sha}; ancestor, clean merge of ${obs.head_sha}, graph and closure digests unchanged` :
-    `B3 admission ${t.issue_id}: fresh local graph pins and candidate conditions unchanged at ${obs.main_sha}`;
+  const flags=localIndex ? [...graphFlags] : [];
+  if (liveProject.state==='ACCEPTED_UPDATE') for(let i=0;i<graphFlags.length;i+=2)
+    if(Number(graphFlags[i+1])===liveProject.pr_number) flags.push(graphFlags[i],graphFlags[i+1]);
+  const movement=obs.main_sha===publication.main_sha?'main unchanged':`main moved ${publication.main_sha} -> ${obs.main_sha}`;
+  const evidence=`B3 admission ${t.issue_id}: ${movement}; ancestor, clean merge of ${obs.head_sha}, graph and closure digests unchanged`;
   log(evidence);
-  return {evidence,auditEvidence,prompt:`${evidence}. For this review node live main ${obs.main_sha} replaces the
-validated main_sha in the rule above, and this fresh admission report replaces Run B's for ${t.issue_id}:
-${JSON.stringify(admissionProjection(now.report,t))}. Verify the PR head still equals ${obs.head_sha || r.head_sha} before writes.
-If main or the PR head moves again, return BLOCKED before any write.\n`};
+  return {flags,evidence,auditEvidence,prompt:`${evidence}. For this review node live main ${obs.main_sha} replaces the
+validated main_sha and this fresh report replaces Run B's report for ${t.issue_id}:
+${JSON.stringify(admissionProjection(now.report,t))}. Current publication: ${JSON.stringify(projectEvidence(livePins,t))}.
+Current graph flags ${JSON.stringify(flags)} supersede the earlier source/flags for this track.
+Refresh admission at the start of every review round and before implementer writes.
+An unrelated main advance permits continuing after ancestry, clean merge, current
+scope and both candidate digests are revalidated. Preserve explicit local graph
+pins and --local-graph throughout local mode; changed local pins require a new plan.
+For a pending graph PR only, if it reaches main, switch to main and drop its flag.
+Do not demand new plan approval solely
+for commit movement or publication. Retain the explicit Run A baseline.
+The initial PR head ${obs.head_sha} is a starting observation. The loop's own verified fix commits
+advance its expected head after gates and a successful guarded push; they do not
+count as external drift. Unexpected foreign PR-head changes or changed conditions
+stop this track. Preserve pr-loop's per-round head/worktree and pre-push guards.\n`};
 };
 const reviewOne=async t=>{
     const r=results[approved.indexOf(t)];
@@ -2538,7 +2744,7 @@ const reviewOne=async t=>{
     if (admitted.evidence) report.evidence.push(admitted.evidence);
     if (admitted.auditEvidence) report.evidence.push(admitted.auditEvidence);
     const reviewed=admitted.review ? null : await call(`B3 review ${t.issue_id}`, `${graphContext(t)}${approvedGraphPrompt(t)}${admitted.prompt}${read(args.paths.pr_loop, 'no adaptation: parse existing final verdict report; BLOCKED asks nothing')}
-Run /pr-loop ${r.pr} --max-rounds ${rounds}${streaming ? ' --review-slots '+concurrency+' --test-slots '+testSlots : ''} ${graphFlags.join(' ')} in ${t.worktree}.
+Run /pr-loop ${r.pr} --max-rounds ${rounds}${streaming ? ' --review-slots '+concurrency+' --test-slots '+testSlots : ''} ${(admitted.flags || graphFlags).join(' ')} in ${t.worktree}.
 Never exceed the round cap or retry a terminal verdict. Parse the existing verdict
 report into REVIEW_RESULT, including routing evidence. A reviewer permit expiry
 is verdict BLOCKED with block_reason_code SLOT_WAIT_TIMEOUT and no paid review;
@@ -2579,6 +2785,63 @@ if (streaming) {
   const eligible=approved.filter((t,i)=>results[i].state==='PR_OPEN' && !mismatched.has(t.issue_id));
   await pipeline(eligible,async (_previous,t)=>reviewSlot(()=>reviewOne(t)));
 }
+// Review fixes can change both PR heads and shared literals. Recheck actual
+// remote tips after all loops; B2's pre-review table cannot certify final code.
+const active=approved.filter((t,i)=>results[i].state==='PR_OPEN');
+if (active.length) {
+  phase('Seams');
+  const final=await call('B4 final verification', `${read(args.paths.wave, 'final verification only; read-only remote heads, reviewer markers, CI and deterministic seams')}
+Final tracks: ${JSON.stringify(active.map(t=>({...t,pr:results[approved.indexOf(t)].pr,review:reviews[t.issue_id] || null})))}.
+Read each actual remote PR head and its branch/worktree pairing. Return head_sha
+after fetching that exact commit object without moving the implementation branch,
+and reviewed_head_sha from the final same-head configured reviewer marker and
+pr-loop/CI evidence; null reviewed_head_sha if that evidence is unavailable.
+Do not edit, rebase, push, review or write Linear. Shared agreements: ${JSON.stringify(a.literals)}.
+${!streaming && hasSeams ? `${seamContract}
+Run ${args.paths.seam_check} --repo ${args.repo_root} --base ${args.default_branch}
+--contract <absolute-contract-path> --branches <each verified final head SHA>.
+Return its unedited table keyed by those SHA arguments as seam.` :
+  'Return seam null here. Streaming shared obligations are checked separately at their exact reviewed heads.'}
+Re-read remote heads after the check; head movement makes this
+observation unavailable. A bare successful exit is insufficient.`, schemas.FINAL_CHECK, 'Seams');
+  const finalRows=Array.isArray(final?.heads)?final.heads:[];
+  for (const t of active) {
+    const result=results[approved.indexOf(t)];
+    const rows=finalRows.filter(h=>h.issue_id===t.issue_id && h.pr===result.pr && h.branch===t.branch);
+    const head=rows[0];
+    if (rows.length!==1 || !/^[0-9a-f]{40}$/.test(head?.head_sha || '')) {
+      reviews[t.issue_id]=finalReviewFailure(reviews[t.issue_id],result,'Final PR head could not be verified');
+    } else {
+      result.head_sha=head.head_sha;
+      if (reviews[t.issue_id]?.verdict==='CLEAN' && (head.reviewed_head_sha!==head.head_sha ||
+          (streaming && head.head_sha!==reviews[t.issue_id].reviewed_head)))
+        reviews[t.issue_id]=finalReviewFailure(reviews[t.issue_id],result,'Final head has no matching review/CI evidence');
+    }
+  }
+  if (!streaming && hasSeams) {
+    const checked=final?.seam;
+    const earlierErrors=report.seam_check.table.filter(row=>['MISMATCH','ERROR'].includes(row.state))
+      .map(row=>({...row,evidence:'Pre-review seam failure: '+row.evidence}));
+    const table=Array.isArray(checked?.table)?checked.table.flatMap(row=>{
+      const heads=finalRows.filter(h=>h.head_sha===row.branch);
+      return heads.length?heads.map(h=>({...row,branch:h.branch})):[row];
+    }):[];
+    report.seam_check={state:checked?.exit===0?'PASSED':'FAILED',table,reason:'Final seams after review fixes'};
+    for(const t of active) {
+      let bad=!checked || (checked.exit!==0 && !table.some(r=>r.state==='MISMATCH'||r.state==='ERROR'));
+      for(const entry of a.literals) for(const file of entry.files) {
+        const rows=table.filter(r=>r.branch===t.branch && r.literal===entry.literal && r.file===file);
+        if(rows.length!==1 || !['PASS','UNCHANGED'].includes(rows[0].state))bad=true;
+      }
+      if(table.some(r=>(r.state==='MISMATCH'||r.state==='ERROR') && (!active.some(t=>t.branch===r.branch) || r.branch===t.branch)))bad=true;
+      if(bad)mismatched.add(t.issue_id);
+    }
+    if(mismatched.size)report.seam_check.state='FAILED';
+    report.seam_check.table.push(...earlierErrors);
+  }
+  report.evidence.push('Final head/seam verification: '+JSON.stringify(final));
+}
+
 
 
 // Only connected participants wait for final agreement. A stopped/unapproved

@@ -329,3 +329,26 @@ more than one hour old. A refusal yields BLOCKED/rounds 0 without a review call;
 retain the full observation and failure reason in WAVE_REPORT evidence. Successful
 reviews pin live main and the merge-tested PR head; another move stops writes.
 These caller observations are evidence, not durable human approval records.
+
+## Semantic approval metadata and review freshness
+
+Full legacy digests and all observations remain available for old checkpoints.
+New candidates also emit semantic_closure_graph_digest and
+semantic_closure_evidence_digest, plus semantic_published_closure_* for repairs.
+The semantic graph omits node/edge citation prose, retaining project authority,
+identity, acceptance, conditions, policy and verified scope. Semantic evidence
+omits only exact standalone `<!-- kstack-progress: STATE -->` status markers
+outside fenced code, where STATE is one of PLANNED, BUILDING, PR_OPEN, REVIEWING,
+STOPPED or COMPLETE. No extra fields or prose are allowed in the marker. Blank
+separators around an excluded marker do not add an empty paragraph. All free-text
+description lines, including `Progress note:` prose, remain protected. Full bodies
+and citations remain required and retained; exclusions and contradictions must
+still be read. A status marker is metadata and cannot grant or change scope.
+
+Wave compares semantic pairs only when saved in Run A; missing current semantic
+evidence then blocks. Legacy checkpoints keep their original recipe. Always
+refresh relevant Linear evidence before review even if Git main is unchanged.
+A reviewed pending graph reaching main permits a source switch and removal of
+its obsolete flag after fresh closure verification. Main commits and the loop's
+own guarded fix pushes do not alone revoke approval. Final remote heads must
+match review/CI observations and final seam checks after all review fixes.

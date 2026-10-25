@@ -148,7 +148,9 @@ rounds addressed interactions among earlier fixes, so a bounded three-round run
 leaves further decisions human. `wave.review_concurrency` defaults to 1,
 announced, because concurrent reviewer processes share an account quota window.
 Both must be positive integers. `wave.contract_dir` has no project-neutral
-default; missing/null with shared literals refuses naming that exact key.
+default; missing/null with shared literals refuses naming that exact key for
+published graphs. Explicit local-graph waves retain agreements in the approved
+plan handoff and need no contract directory or separate contract PR.
 These defaults bound work rather than invent evidence; gates and identities
 continue to refuse when absent.
 

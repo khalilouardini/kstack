@@ -16,6 +16,16 @@ New wave plans preserve a separate planning queue that cannot enter build approv
 Replace the five-track clamp with configurable `wave.selection_limit` (default 12).
 Legacy wave records keep their original membership and approval boundary.
 
+`/wave` 0.9.1 keeps shared agreements in the approved plan handoff for
+`--local-graph`, skipping the separate contract PR and merge prerequisite.
+Build still checks the approved literals across ticket branches and blocks
+review on missing or mismatched evidence.
+
+`/pr-loop` 0.9.1: identify the invoking Codex or Claude Code session from
+host-provided subprocess markers before creating a ledger and again before a
+review. Missing, simultaneous, or mismatched markers block; the route can no
+longer certify its own `--host` claim.
+
 `/pr-loop` 0.9.0, `/review-claude-pr` 0.4.0 and `/review-comments` 0.6.0:
 bidirectional independent review with commit-based engine provenance, explicit
 mixed-authorship selection, and one implementation controller. Add a tested
@@ -30,6 +40,18 @@ skills. Explicit local graph use retains fresh candidate/closure, scope, depende
 evidence and human approval checks without graph publication. Build requires renewed
 local approval and matching saved pins; B3 re-audits local files even when main is
 unchanged. Preserve source_revision as adoption provenance across stack upgrades.
+
+`/wave` 0.9.0 recovers verified existing PRs before implementation, readmits fresh
+Linear conditions on unchanged main, handles graph publication while reviews
+queue, and refreshes conditions during review rounds without rejecting owned
+fix commits. Final remote-head/review checks and deterministic seams run after
+review fixes. Semantic fingerprints ignore explicit non-authoritative progress
+status markers and citation prose while preserving legacy checkpoints and full evidence.
+Free-text progress notes remain approval inputs; fixed status markers cannot hide
+new requirements. Final verification failures preserve review findings, rounds,
+model routing and open questions.
+`/pr-loop` 0.7.1 documents the per-round wave baseline and source refresh.
+
 
 `/wave` 0.8.0: a B3 review no longer stops before round 1 because main moved
 after B1. With the default `review_concurrency` of 1, a later track's review

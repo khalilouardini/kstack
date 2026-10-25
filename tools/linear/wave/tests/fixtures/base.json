@@ -271,7 +271,7 @@
       "issue_id": "T-1",
       "state": "PR_OPEN",
       "pr": "https://example.test/pr/1",
-      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head_sha": "1111111111111111111111111111111111111111",
       "files_touched": [
         "file1.txt"
       ],
@@ -345,7 +345,7 @@
       "issue_id": "T-2",
       "state": "PR_OPEN",
       "pr": "https://example.test/pr/2",
-      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head_sha": "2222222222222222222222222222222222222222",
       "files_touched": [
         "file2.txt"
       ],
@@ -419,7 +419,7 @@
       "issue_id": "T-3",
       "state": "PR_OPEN",
       "pr": "https://example.test/pr/3",
-      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head_sha": "3333333333333333333333333333333333333333",
       "files_touched": [
         "file3.txt"
       ],
@@ -467,6 +467,10 @@
       "evidence": [
         "git rev-parse origin/main"
       ]
+    },
+    "B4 final verification": {
+      "heads": [],
+      "seam": null
     }
   }
 }

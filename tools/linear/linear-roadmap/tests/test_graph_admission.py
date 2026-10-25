@@ -72,6 +72,57 @@ class AdmissionTests(unittest.TestCase):
     def audit(self, proposed=None):
         return API['audit'](self.repo, 'main', self.snapshot, self.request, proposed, now=NOW)
 
+    def test_progress_metadata_never_hides_requirements_or_fenced_text(self):
+        normalize = API['approval_body']
+        self.assertEqual(normalize('Approved requirement\n\n<!-- kstack-progress: PLANNED -->'), 'Approved requirement')
+        for text in ('Progress note: owner approval required.',
+                     'Progress note: disable the gate.',
+                     '```\nProgress note: literal example\n```',
+                     'New acceptance criterion: require review.'):
+            self.assertEqual(normalize(text), text)
+
+    def test_free_text_progress_notes_cannot_hide_scope_changes(self):
+        before = self.audit()['candidates'][0]
+        issue = next(i for i in self.snapshot['projects'][0]['issues'] if i['id'] == self.request['selected'][0])
+        original = issue['description']
+        for note in ('Progress note: support PDF export too',
+                     'Progress note: now needs a PDF export migration',
+                     '<!-- kstack-progress: PLANNED support PDF export too -->'):
+            with self.subTest(note=note):
+                issue['description'] = original + '\n' + note
+                after = self.audit()['candidates'][0]
+                self.assertNotEqual(before['semantic_closure_evidence_digest'],
+                                    after['semantic_closure_evidence_digest'])
+
+    def test_only_exact_status_markers_are_excluded_outside_fences(self):
+        normalize = API['approval_body']
+        note = '<!-- kstack-progress: PLANNED -->'
+        for status in ('PLANNED', 'BUILDING', 'PR_OPEN', 'REVIEWING', 'STOPPED', 'COMPLETE'):
+            self.assertEqual(normalize('A\n\n' + note.replace('PLANNED', status)), 'A')
+        self.assertEqual(normalize('A\n\n' + note + '\n\nB'), 'A\n\nB')
+        self.assertEqual(normalize(note + '\n\nA'), 'A')
+        for fence in (chr(96) * 3, '~~~'):
+            body = fence + '\n' + note + '\n' + fence
+            self.assertEqual(normalize(body), body)
+        for body in (note + ' more requirements', '<!-- kstack-progress: UNKNOWN -->'):
+            self.assertEqual(normalize(body), body)
+
+    def test_explicit_progress_notes_and_citation_prose_preserve_approval(self):
+        before = self.audit()['candidates'][0]
+        issue = next(i for i in self.snapshot['projects'][0]['issues'] if i['id'] == self.request['selected'][0])
+        issue['description'] += '\n\n<!-- kstack-progress: PLANNED -->'
+        after = self.audit()['candidates'][0]
+        self.assertEqual(before['semantic_closure_evidence_digest'], after['semantic_closure_evidence_digest'])
+        node = next(n for n in self.base['nodes'] if n['issue_ref'] == issue['id'] and n['kind'] == 'unit')
+        node['source'] += ' Citation wording refreshed.'
+        (self.repo / 'orchestration/graph.json').write_text(json.dumps(self.base))
+        self.git('add', '.')
+        self.git('commit', '-m', 'citation refresh')
+        self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+        self.assertEqual(before['semantic_closure_graph_digest'], self.audit()['candidates'][0]['semantic_closure_graph_digest'])
+        issue['description'] += '\nNew acceptance criterion: approval from an owner is required.'
+        self.assertNotEqual(before['semantic_closure_evidence_digest'], self.audit()['candidates'][0]['semantic_closure_evidence_digest'])
+
     def local_audit(self, **kwargs):
         with patch.dict(API['GRAPH']['load_index'].__globals__, installed_revision=lambda: 'a' * 40):
             return API['audit'](self.repo, None, self.snapshot, self.request, now=NOW,

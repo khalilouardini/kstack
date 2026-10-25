@@ -33,6 +33,8 @@ indexed/candidate admission without graph publication to GitHub or Linear. Scope
 native blockers, dependencies, evidence and human plan/merge decisions still apply.
 Changed local index/manifest/provenance pins require a new plan; source_revision
 remains the original adoption provenance across compatible stack upgrades.
+Local waves also keep shared agreements in the approved plan handoff, without
+a separate wave contract PR; build still checks agreement across ticket branches.
 
 The [interactive map](docs/skill-map.html) adds filtering when opened locally.
 

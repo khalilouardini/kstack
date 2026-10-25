@@ -99,11 +99,23 @@ def resolve(maintainer, reviewer, implementer, pr, commits,
     )
 
 
-def controller(route, host, delegated=False):
+def invoking_host(environ=None):
+    """Identify the agent that launched this shell, independently of PR evidence."""
+    environ = os.environ if environ is None else environ
+    codex = bool(environ.get('CODEX_SESSION_ID') or environ.get('CODEX_THREAD_ID'))
+    claude = environ.get('CLAUDE_CODE_CHILD_SESSION') == '1'
+    if codex == claude:
+        raise Blocked('cannot uniquely identify invoking Codex or Claude Code session')
+    return 'codex' if codex else 'claude'
+
+
+def controller(route, delegated=False, environ=None):
     if delegated:
         raise Blocked('automatic loop delegation is unsupported; one implementation controller only')
+    host = invoking_host(environ)
     if host != route['implementer_engine']:
         raise Blocked('run pr-loop in the ' + route['implementer_engine'] + ' implementation session')
+    return host
 
 
 def review_evidence(reviews, comments, reviewer, engine, head):
@@ -247,7 +259,7 @@ def execute(args):
     if not re.fullmatch(r'[\w.-]+/[\w.-]+', args.owner_repo) or args.pr <= 0:
         raise Blocked('invalid repository or PR')
     route = decode(Path(args.route).read_text())
-    controller(route, args.host)
+    controller(route)
     engine = route['reviewer_engine']
     report_dir = Path(args.report_dir).resolve()
     if report_dir == repo or repo in report_dir.parents:
@@ -391,6 +403,16 @@ def route_main():
         parser.exit(2, 'BLOCKED: ' + str(exc) + '\n')
 
 
+def controller_host_main():
+    parser = argparse.ArgumentParser(description='Verify the invoking pr-loop host')
+    parser.add_argument('--route', required=True)
+    args = parser.parse_args()
+    try:
+        print(controller(decode(Path(args.route).read_text())))
+    except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        parser.exit(2, 'BLOCKED: ' + str(exc) + '\n')
+
+
 def prior_count_main():
     parser = argparse.ArgumentParser(description='Count verified historical reviewer submissions')
     parser.add_argument('--reviews', required=True)
@@ -409,7 +431,6 @@ def review_main():
     for key in ('repo-root', 'skill', 'owner-repo', 'head', 'route', 'model', 'effort', 'report-dir'):
         parser.add_argument('--' + key, required=True)
     parser.add_argument('--pr', required=True, type=int)
-    parser.add_argument('--host', required=True, choices=sorted(ENGINES))
     parser.add_argument('--fast', action='store_true')
     parser.add_argument('--timeout', type=int, default=1800)
     parser.add_argument('--slot-wait', type=float, default=7200)

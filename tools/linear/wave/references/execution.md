@@ -66,7 +66,13 @@ dependency list yet, so their checks observe all selected tracks and block their
 owning ticket until verified. A stopped/unapproved required participant never
 disappears from the agreement.
 
-B4 runs after reviews. It checks local and GitHub heads before and after checking
+After reviews, FINAL_CHECK re-reads every active PR head and its same-head
+configured reviewer/CI evidence in both modes. Streaming also requires that head
+to equal B3's exact `reviewed_head`; unavailable or moved evidence blocks the
+affected track. Recovered PRs enter this path without rerunning implementation.
+
+Streaming B4 then checks connected groups through FINAL_EVIDENCE. It checks local
+and GitHub heads before and after checking
 agreements and runs `seam-check` against the final reviewed SHAs, not the B1 heads.
 Use `--expected-heads` with a JSON branch-to-SHA map and `--participants` with a
 literal-to-branch-list map. Deduplicate identical contract entries and union
