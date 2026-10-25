@@ -959,6 +959,34 @@ tests.push(async()=>{
   assert.equal(r.result.tracks[0].review.rounds,0);
 });
 
+
+cases.push({number:50,name:'local build and review prompts retain saved Run A scope text'});
+tests.push(async()=>{
+  const saved={'docs/scope.md':{text:'RUN_A_SCOPE: approved section and exclusions',digest:'sha256:'+'a'.repeat(64)}};
+  for(const mode of ['legacy','streaming']) {
+    const plan=await run('plan',(f,a)=>{
+      localArgs(f,a);a.graph_admission[0].evidence.local_scope_sources=clone(saved);
+    });
+    const build=await run('build',(f,a)=>{
+      localArgs(f,a);a.plan_record=plan.result;
+      a.wave.execution_mode=mode;
+      a.graph_admission[0].evidence.local_scope_sources['docs/scope.md'].text='RUN_B_SCOPE: current text';
+    });
+    assert.equal(build.result.state,'COMPLETE',mode);
+    const calls=build.calls.filter(c=>/^B[13]/.test(c.label));
+    assert.ok(calls.length>=6,mode);
+    for(const call of calls) {
+      const id=call.label.split(' ').at(-1);
+      const prefix=`Run A approved observations for ${id}: `;
+      const line=call.prompt.split('\n').find(line=>line.startsWith(prefix));
+      assert.ok(line,call.label);
+      const approved=JSON.parse(line.slice(prefix.length,-1));
+      assert.deepEqual(approved.admission.local_scope_sources,saved,mode+': '+call.label);
+      assert.ok(call.prompt.includes('RUN_B_SCOPE: current text'),call.label);
+    }
+  }
+});
+
 let failed=0;
 for(let i=0;i<tests.length;i++)try{await tests[i]();console.log(`PASS ${cases[i].number} ${cases[i].name}`);}catch(e){failed++;console.error(`FAIL ${cases[i].number} ${cases[i].name}: ${e.stack}`);}
 console.log(`${tests.length-failed}/${tests.length} wave cases passed`);

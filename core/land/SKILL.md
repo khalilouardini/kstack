@@ -272,6 +272,10 @@ it does not change required tests or override project/user test-scope rules.
 The permit wait has its own 7200-second default. Exit 75 means the wait expired
 before the gate ran; report a retryable queue delay, not a failed gate, and
 recheck the branch/head before retrying. `--wait SEC` may set another bound.
+Exit 78 accompanied by `with-slot: refused:` on stderr means permit setup or
+command launch failed before the gate ran. Stop, report the setup error, and
+correct it before retrying; do not consume a gate repair attempt. A child may
+return 78 itself, so require the wrapper diagnostic as well as the status.
 Do not hold it during review or CI waits. Without a supplied budget this procedure
 retains its normal gate invocation.
 

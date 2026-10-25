@@ -2104,7 +2104,8 @@ const admissionProjection=(report,t)=>{
   const closure=new Set(c.closure);
   const nodes=(report.evidence?.request?.nodes || []).filter(n=>closure.has(n.node_id));
   return {projection:true,main_sha:report.main_sha,graph_sha:report.graph_sha,transition:report.transition,
-    checked_at:report.checked_at,local_graph:report.local_graph,candidate:c,nodes,
+    checked_at:report.checked_at,local_graph:report.local_graph,
+    local_scope_sources:report.evidence?.local_scope_sources,candidate:c,nodes,
     events:(report.evidence?.request?.events || []).filter(e=>closure.has(e.node_id)),delta:report.delta,
     note:'Context projection only; full unedited report is retained in the wave audit. Recollect full live evidence before writes.'};
 };

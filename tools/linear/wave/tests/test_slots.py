@@ -43,6 +43,27 @@ class Slots(unittest.TestCase):
             self.assertEqual(p.returncode, 7)
             self.assertEqual(p.stdout.strip(), '$(echo unsafe); literal')
 
+    def test_wrapper_refusal_is_distinct_from_command_exit(self):
+        with tempfile.TemporaryDirectory() as root:
+            prefix = [sys.executable, str(BIN), '--group', 'tests', '--limit', '1',
+                      '--state-root', root, '--']
+            missing = subprocess.run(prefix + [str(Path(root) / 'missing')],
+                                     capture_output=True, text=True)
+            self.assertEqual(missing.returncode, 78)
+            self.assertIn('with-slot: refused:', missing.stderr)
+            with slots.permit('tests', 1, root=root):
+                conflict = subprocess.run([sys.executable, str(BIN), '--group', 'tests',
+                    '--limit', '2', '--state-root', root, '--', sys.executable, '-c',
+                    'print("RAN")'], capture_output=True, text=True)
+                self.assertEqual(conflict.returncode, 78)
+                self.assertIn('with-slot: refused:', conflict.stderr)
+                self.assertNotIn('RAN', conflict.stdout)
+            for code in (2, 78):
+                child = subprocess.run(prefix + [sys.executable, '-c', f'raise SystemExit({code})'],
+                                       capture_output=True, text=True)
+                self.assertEqual(child.returncode, code)
+                self.assertNotIn('with-slot: refused:', child.stderr)
+
     def test_invalid_groups_and_limits(self):
         for group, limit in [('../escape', 1), ('..', 1), ('.', 1), ('tests', 0), ('tests', True)]:
             with self.assertRaises(ValueError):

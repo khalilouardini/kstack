@@ -26,5 +26,5 @@ except TimeoutError as exc:
     print(str(exc), file=sys.stderr)
     raise SystemExit(75)  # queue wait expired; the command never ran
 except (OSError, ValueError) as exc:
-    print(str(exc), file=sys.stderr)
-    raise SystemExit(2)
+    print('with-slot: refused: ' + str(exc), file=sys.stderr)
+    raise SystemExit(78)  # wrapper setup/launch failed; the command never ran

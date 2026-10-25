@@ -36,6 +36,10 @@ For shell gate commands, explicitly supply the shell and `-c` argument. The
 wrapper never interprets argv itself and returns the command's exit code.
 Its permit wait defaults to 7200 seconds; exit 75 means the gate never ran
 because the queue wait expired, so it is retryable rather than a gate failure.
+Exit 78 with `with-slot: refused:` on stderr means permit setup or command launch
+failed before the gate ran. Report and correct the setup error before retrying;
+it does not consume a gate repair attempt. Require both the diagnostic and the
+status, since a child command may itself return 78.
 The wrapper changes concurrency only: user/project restrictions on full tests
 still apply. Release the permit before review or CI waiting.
 

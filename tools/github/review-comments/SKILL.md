@@ -224,7 +224,11 @@ stack root's `core/land/bin/with-slot --group local-tests --limit N --
 between commands and before review or CI waits. Do not silently fall back to
 bare gate commands. Exit 75 means the permit wait expired before that gate ran:
 report a retryable queue delay, push and reply nothing, then recheck branch and
-head before any later retry. Without `--test-slots`, use the normal gate above.
+head before any later retry. Exit 78 with `with-slot: refused:` on stderr
+means permit setup or command launch failed before the gate ran. Stop, push and
+reply nothing, and correct that setup error before retrying; this does not
+consume the single gate repair attempt. Require both the diagnostic and status:
+a child command may itself return 78. Without `--test-slots`, use the normal gate above.
 Commit/push under the user's normal branch discipline. **Commits use the repository's git author configuration (transport credentials are separate) — only the PR comments go out as the bot.** Keep truthful engine attribution in commit trailers; never change global author settings. This split is intentional: the fix is attributed to the implementation session, the conversation reply is authored by the bot.
 
 **Re-fetch the comment `databaseId`s immediately before posting.** Reviews can be re-attributed or re-submitted mid-session, which invalidates ids captured earlier — a reply against a dead id fails or lands on the wrong thread.
