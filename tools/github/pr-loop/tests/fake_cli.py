@@ -26,7 +26,8 @@ def emit(value):
 
 if name == 'git':
     if args[0] == 'rev-parse':
-        print('a' * 40)
+        reads = sum(c['name'] == 'git' and c['args'][0] == 'rev-parse' for c in s['calls'])
+        print(('b' if mode == 'checkout-moved-before-review' and reads > 1 else 'a') * 40)
     elif mode == 'edited' and s.get('posted'):
         print(' M implementation.py')
     sys.exit(0)
@@ -43,6 +44,9 @@ if name == 'gh':
         emit([s['commits']])
     if endpoint.endswith('/reviews'):
         assert '--paginate' in args and '--slurp' in args
+        if mode == 'reuse-after-wait':
+            reads = sum(c['name'] == 'gh' and c['args'][-1].endswith('/reviews') for c in s['calls'])
+            s['reuse'] = reads > 1
         emit([[], s['reviews'] if s.get('posted') or s.get('reuse') else []])
     if endpoint.endswith('/comments'):
         assert '--paginate' in args and '--slurp' in args
@@ -66,6 +70,15 @@ if mode == 'nonzero':
     print('fixture-secret', file=sys.stderr)
     sys.exit(9)
 assert sys.stdin.read() == ''
+if mode == 'check-slot':
+    import fcntl
+    with open(s['slot_file'], 'a+') as slot:
+        try:
+            fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            pass
+        else:
+            raise AssertionError('paid process started without its resource permit')
 assert os.environ.get('GH_TOKEN') == 'fixture-secret'
 assert 'GITHUB_TOKEN' not in os.environ
 assert args[-1].find(s['route']['head']) >= 0

@@ -29,7 +29,7 @@ function validate(value, schema, where='record') {
 }
 async function run(stage, mutate=()=>{}, source=executable) {
   const f=clone(fixture);
-  const args={stage,repo_root:'/tmp/repo',default_branch:'origin/main',gates:{lint:'lint',test:'test'},identities:{maintainer:'human',reviewer:'review',implementer:'impl'},stack_config:{},date:'2026-10-05',run_id:stage+'-run',wave_id:'wave-1',wave:{max_review_rounds:3,review_concurrency:1,contract_dir:'contracts'},selection:['any','--parallel','3'],paths:Object.fromEntries(['wave','next','dispatch','land','pr_loop','records','seam_check'].map(n=>[n,'/stack/'+n])),plan_record:f.plan_record,approve:'all'};
+  const args={selection_version:1,stage,repo_root:'/tmp/repo',default_branch:'origin/main',gates:{lint:'lint',test:'test'},identities:{maintainer:'human',reviewer:'review',implementer:'impl'},stack_config:{},date:'2026-10-05',run_id:stage+'-run',wave_id:'wave-1',wave:{max_review_rounds:3,review_concurrency:1,contract_dir:'contracts'},selection:['any','--parallel','3'],paths:Object.fromEntries(['wave','next','dispatch','land','pr_loop','records','seam_check'].map(n=>[n,'/stack/'+n])),plan_record:f.plan_record,approve:'all'};
   args.graph_publication={main_sha:'a'.repeat(40),checked_at:'2026-10-05T12:00:00Z',projects:[{project_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',project_name:'Project',view_path:'docs/project.md',state:'CURRENT'}]};
   args.graph_admission=[{schema_version:1,main_sha:'a'.repeat(40),graph_sha:'a'.repeat(40),checked_at:'2026-10-05T12:00:00Z',
     transition:'build',base_digest:'sha256:'+'c'.repeat(64),graph_digest:'sha256:'+'c'.repeat(64),issue_evidence_digest:'sha256:'+'d'.repeat(64),
@@ -49,7 +49,7 @@ async function run(stage, mutate=()=>{}, source=executable) {
     assert.ok(opts.schema);assert.ok(prompt.includes('D4 node rule:'));
     const isReview=opts.label.startsWith('B3');
     if (isReview) {runningReview++;maxReview=Math.max(maxReview,runningReview);}
-    await new Promise(r=>setTimeout(r,2));
+    await new Promise(r=>setTimeout(r,f.delays?.[opts.label] ?? 2));
     assert.ok(Object.hasOwn(f.responses,opts.label),'unexpected call '+opts.label);
     const value=clone(f.responses[opts.label]);
     if(opts.label.startsWith('B3 admission') && value?.state==='OBSERVED' &&
@@ -66,8 +66,8 @@ async function run(stage, mutate=()=>{}, source=executable) {
     if(opts.label==='B4 final verification' && value && value.heads.length===0) {
       const tracks=JSON.parse(prompt.match(/Final tracks: (\[[^\n]*\])\./)[1]);
       value.heads=tracks.map(t=>({issue_id:t.issue_id,pr:t.pr,branch:t.branch,
-        head_sha:f.responses['B1 build '+t.issue_id]?.head_sha || '1'.repeat(40),
-        reviewed_head_sha:f.responses['B1 build '+t.issue_id]?.head_sha || '1'.repeat(40)}));
+        head_sha:(args.wave.execution_mode==='streaming' ? f.responses['B3 review '+t.issue_id]?.reviewed_head : null) || f.responses['B1 build '+t.issue_id]?.head_sha || '1'.repeat(40),
+        reviewed_head_sha:(args.wave.execution_mode==='streaming' ? f.responses['B3 review '+t.issue_id]?.reviewed_head : null) || f.responses['B1 build '+t.issue_id]?.head_sha || '1'.repeat(40)}));
       if(args.plan_record.contract || ((args.graph_update_flags || []).includes('--local-graph') && args.plan_record.literals.length))value.seam={exit:0,table:tracks.flatMap(t=>args.plan_record.literals.flatMap(e=>e.files.map(file=>({literal:e.literal,branch:value.heads.find(h=>h.issue_id===t.issue_id).head_sha,file,state:'UNCHANGED',evidence:'Final head checked'})))),open_questions:[]};
     }
     if(value!==null) validate(value,opts.schema,opts.label);
@@ -77,7 +77,7 @@ async function run(stage, mutate=()=>{}, source=executable) {
     let prev=item;try {for(const stage of stages) prev=await stage(prev,item,index);return prev;}catch(e){logs.push('pipeline drop '+e);return null;}
   }));
   const parallel=async thunks=>Promise.all(thunks.map(async fn=>{try{return await fn();}catch{return null;}}));
-  const phase=t=>assert.ok(['Select','Plan','Build','Seams','Review'].includes(t));
+  const phase=t=>{assert.ok(['Select','Plan','Build','Seams','Review'].includes(t));events.push('phase '+t);};
   const result=await new AsyncFunction('agent','pipeline','parallel','phase','log','args','budget',source)(agent,pipeline,parallel,phase,m=>logs.push(m),args,{});
   validate(result,schemas[stage==='plan'?'RUN_A':'WAVE_REPORT']);
   return {result,calls,events,logs,maxReview};
@@ -932,9 +932,285 @@ function seamIntegration(){
   assert.equal(check('good').status,0);const bad=check('good','bad');assert.equal(bad.status,1);assert.ok(JSON.parse(bad.stdout).some(r=>r.state==='MISMATCH'&&r.branch==='bad'));
   git('checkout','-b','renamed','main');git('mv','marker.txt','renamed.txt');git('commit','-m','rename');const rename=check('renamed');assert.equal(rename.status,1);assert.ok(JSON.parse(rename.stdout).some(r=>r.file==='marker.txt'&&r.state==='MISMATCH'));
   assert.equal(check('missing').status,1);assert.equal(check().status,1);assert.ok(JSON.parse(check().stdout).some(r=>r.state==='ERROR'));
+  const heads=join(temp,'heads.json'),participants=join(temp,'participants.json');
+  writeFileSync(heads,JSON.stringify({good:git('rev-parse','good'),bad:git('rev-parse','bad')}));
+  writeFileSync(participants,JSON.stringify({AGREED:['good']}));
+  const pinned=()=>spawnSync('python3',[resolve(dir,'../bin/seam-check'),'--repo',temp,'--base','main',
+    '--contract',contract,'--expected-heads',heads,'--participants',participants,'--branches','good','bad'],{encoding:'utf8'});
+  const pass=pinned();assert.equal(pass.status,0);assert.deepEqual(JSON.parse(pass.stdout).heads,JSON.parse(readFileSync(heads,'utf8')));
+  assert.ok(JSON.parse(pass.stdout).table.every(r=>r.branch==='good'));
+  writeFileSync(heads,JSON.stringify({good:git('rev-parse','main'),bad:git('rev-parse','bad')}));
+  assert.equal(pinned().status,1,'stale reviewed head cannot pass');
+  writeFileSync(heads,JSON.stringify({good:git('rev-parse','good')}));
+  assert.equal(pinned().status,1,'missing reviewed head cannot pass');
   writeFileSync(contract,'invalid');assert.equal(check('good').status,1);
  }finally{rmSync(temp,{recursive:true,force:true});}
 }
+
+const v2Args=(f,a)=>{
+  a.selection_version=2;
+  const tracks=f.responses['A1 select'].tracks;
+  tracks.forEach(t=>t.project=a.graph_publication.projects[0].project_id);
+  const candidates=tracks.map((t,i)=>({issue_id:t.issue_id,project:t.project,milestone:t.milestone,
+    priority:i,active_release:true,ownership:{state:'INACTIVE',source:'fixture:ownership'},
+    file_scope:t.file_scope,external_overlaps:[],checks:Object.fromEntries(
+      ['scope_plan','scope_build','native','plan_graph','build_graph','foundation'].map(key=>
+      [key,{state:'SATISFIED',source:'fixture:'+key,detail:'Verified '+key}]))}));
+  a.selection_snapshot={schema_version:2,complete:true,snapshot_id:'fixture',source_revision:'a'.repeat(40),
+    command:clone(a.selection),requested:3,limit:12,main_sha:a.graph_publication.main_sha,
+    checked_at:a.graph_publication.checked_at,candidates,pairs:candidates.flatMap((c,i)=>candidates.slice(i+1)
+      .map(d=>({a:c.issue_id,b:d.issue_id,relation:'INDEPENDENT',source:'fixture:pairs',detail:'Verified'})))};
+  f.responses['A1 select'].planning_tracks=[];
+};
+const v2Planning=(f,a,all=false)=>{
+  v2Args(f,a);
+  a.graph_admission.push({...clone(a.graph_admission[0]),transition:'plan'});
+  const ids=all ? ['T-1','T-2','T-3'] : ['T-3'];
+  for(const id of ids) {
+    a.selection_snapshot.candidates.find(c=>c.issue_id===id).checks.build_graph.state='UNSATISFIED';
+    a.graph_admission[0].candidates.find(c=>c.identifier===id).state='BLOCKED';
+  }
+  const response=f.responses['A1 select'];response.planning_tracks=response.tracks.filter(t=>ids.includes(t.issue_id));
+  response.tracks=response.tracks.filter(t=>!ids.includes(t.issue_id));
+};
+cases.push({number:cases.length+1,name:'shared selector source and version 2 approval separation'});
+tests.push(async()=>{
+  const embedded=script.split('// BEGIN SHARED SELECTION\n')[1].split('\n// END SHARED SELECTION')[0];
+  assert.equal(embedded,readFileSync(join(dir,'../../next/lib/selection.cjs'),'utf8').split('\nmodule.exports')[0]);
+  const planned=await run('plan',v2Planning);
+  assert.equal(planned.result.state,'AWAITING_APPROVAL');
+  assert.equal(planned.result.schema_version,2);assert.equal(planned.result.plans.length,2);
+  assert.equal(planned.result.planning_plans.length,1);
+  assert.ok(planned.calls.find(c=>c.label==='A4 plan T-3').prompt.includes('use PLAN transition admission'));
+  const built=await run('build',(_f,a)=>{a.plan_record=planned.result;});
+  assert.equal(built.result.state,'COMPLETE');
+  assert.deepEqual(built.result.approved,['T-1','T-2']);
+  assert.ok(!built.calls.some(c=>c.label==='B1 build T-3'));
+  for(const tamper of ['explicit','promote','snapshot']) {
+    const r=await run('build',(_f,a)=>{
+      a.plan_record=clone(planned.result);
+      if(tamper==='explicit')a.approve=['T-3'];
+      if(tamper==='promote') {a.plan_record.tracks.push(a.plan_record.planning_tracks[0]);a.plan_record.plans.push(a.plan_record.planning_plans[0]);}
+      if(tamper==='snapshot')a.plan_record.selection_report='{}';
+    });
+    assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+  }
+});
+cases.push({number:cases.length+1,name:'planning-only wave and no invented build authorization'});
+tests.push(async()=>{
+  const r=await run('plan',(f,a)=>v2Planning(f,a,true));
+  assert.equal(r.result.state,'PLANNING_ONLY');assert.equal(r.result.build_command,null);
+  assert.equal(r.result.planning_plans.length,3);assert.equal(r.result.tracks.length,0);
+  assert.ok(!r.calls.some(c=>/^A[23]/.test(c.label)));
+  const build=await run('build',(_f,a)=>a.plan_record=r.result);
+  assert.equal(build.result.state,'STOPPED');assert.equal(build.calls.length,0);
+});
+cases.push({number:cases.length+1,name:'assessment membership, evidence and pin validation precede writes'});
+tests.push(async()=>{
+  for(const change of ['absent','incomplete','pins','count','membership','scope','plan_evidence']) {
+    const r=await run('plan',(f,a)=>{
+      v2Planning(f,a);
+      if(change==='absent')delete a.selection_snapshot;
+      if(change==='incomplete')a.selection_snapshot.complete=false;
+      if(change==='pins')a.selection_snapshot.main_sha='b'.repeat(40);
+      if(change==='count')a.selection_snapshot.requested=4;
+      if(change==='membership')f.responses['A1 select'].tracks.pop();
+      if(change==='scope')f.responses['A1 select'].tracks[0].file_scope=['unassessed'];
+      if(change==='plan_evidence')a.graph_admission.pop();
+    });
+    assert.equal(r.result.state,'STOPPED',change);assert.ok(!r.calls.some(c=>/^A[234]/.test(c.label)),change);
+  }
+});
+
+
+const streamingArgs=(f,a)=>{
+  a.wave.execution_mode='streaming';a.wave.worker_concurrency=3;
+  for(const t of f.tracks)f.responses['B3 review '+t.issue_id].reviewed_head='a'.repeat(40);
+};
+const finalFixture=(f,a)=>{
+  streamingArgs(f,a);a.plan_record.literals=clone(f.literals);a.plan_record.contract=clone(f.contract);
+  const ids=f.literals[0].tracks;
+  f.responses['B4 final evidence']={exit:0,base_sha:'b'.repeat(40),
+    heads:f.tracks.filter(t=>ids.includes(t.issue_id)).map(t=>({issue_id:t.issue_id,branch:t.branch,head_sha:'a'.repeat(40),pr_head_sha:'a'.repeat(40)})),
+    table:seamTable(f).filter(row=>ids.some(id=>f.tracks.find(t=>t.issue_id===id).branch===row.branch)),
+    open_questions:[],evidence:['verified current GitHub/local heads before and after helper']};
+};
+cases.push({number:cases.length+1,name:'review begins before the last independent build finishes'});
+tests.push(async()=>{
+  const r=await run('build',(f,a)=>{
+    streamingArgs(f,a);f.delays={'B1 build T-1':1,'B1 build T-2':3,'B1 build T-3':90};
+  });
+  assert.equal(r.result.state,'COMPLETE');assert.ok(r.result.tracks.every(t=>t.state==='CLEAN'));
+  assert.ok(r.events.indexOf('start B3 review T-1')<r.events.indexOf('end B1 build T-3'));
+  assert.ok(r.calls.find(c=>c.label==='B3 review T-1').prompt.includes('--review-slots 1 --test-slots 1'));
+  assert.ok(r.logs.some(l=>l.includes('"event":"ticket_ready"')&&l.includes('T-1')));
+});
+cases.push({number:cases.length+1,name:'rolling worker and review queues reuse capacity'});
+tests.push(async()=>{
+  const r=await run('build',(f,a)=>{
+    streamingArgs(f,a);a.wave.worker_concurrency=2;
+    f.delays={'B1 build T-1':2,'B1 build T-2':3,'B1 build T-3':25,'B3 review T-1':90,'B3 review T-2':1};
+  });
+  assert.ok(r.events.indexOf('start B3 review T-3')<r.events.indexOf('end B3 review T-1'));
+  let running=0,peak=0;
+  for(const event of r.events){if(event.startsWith('start B1'))peak=Math.max(peak,++running);if(event.startsWith('end B1'))running--;}
+  assert.equal(peak,2);
+  for(const key of ['worker_concurrency','test_concurrency']) {
+    const bad=await run('build',(_f,a)=>a.wave[key]=0);assert.equal(bad.result.state,'STOPPED');assert.equal(bad.calls.length,0);
+  }
+});
+cases.push({number:cases.length+1,name:'final agreement uses reviewed heads after fixes'});
+tests.push(async()=>{
+  const r=await run('build',(f,a)=>{
+    finalFixture(f,a);f.responses['B3 review T-1'].reviewed_head='c'.repeat(40);
+    Object.assign(f.responses['B4 final evidence'].heads[0],{head_sha:'c'.repeat(40),pr_head_sha:'c'.repeat(40)});
+  });
+  assert.ok(r.result.tracks.every(t=>t.state==='CLEAN'));
+  assert.equal(r.result.tracks[0].result.head_sha,'c'.repeat(40),'final result retains the reviewed fix head');
+  assert.ok(!r.calls.some(c=>c.label==='B2 seam check'));
+  assert.ok(r.events.indexOf('start B4 final evidence')>r.events.indexOf('end B3 review T-2'));
+  for(const damage of ['old_head','pr_drift','missing_row','literal_changed','missing_observation','base_moved','branch_error']) {
+    const bad=await run('build',(f,a)=>{
+      finalFixture(f,a);const final=f.responses['B4 final evidence'];
+      if(damage==='old_head')f.responses['B3 review T-1'].reviewed_head='c'.repeat(40);
+      if(damage==='pr_drift')final.heads[0].pr_head_sha='d'.repeat(40);
+      if(damage==='missing_row')final.table.pop();
+      if(damage==='literal_changed'){final.exit=1;final.table[0].state='MISMATCH';}
+      if(damage==='missing_observation')f.responses['B4 final evidence']=null;
+      if(damage==='base_moved'||damage==='branch_error'){
+        final.exit=1;final.table.push({literal:'',file:'',branch:damage==='base_moved'?'origin/main':final.heads[0].branch,state:'ERROR',evidence:'Ref moved'});
+      }
+    });
+    assert.equal(bad.result.tracks[0].state,'SEAM_MISMATCH',damage);
+    assert.equal(bad.result.tracks[1].state,'SEAM_MISMATCH',damage);
+    assert.equal(bad.result.tracks[2].state,'CLEAN',damage);
+  }
+});
+cases.push({number:cases.length+1,name:'missing agreement participants block only their group'});
+tests.push(async()=>{
+  for(const missing of ['unapproved','stopped']) {
+    const r=await run('build',(f,a)=>{
+      finalFixture(f,a);
+      if(missing==='unapproved')a.approve=['T-1','T-3'];
+      else{const result=f.responses['B1 build T-2'];result.state='STOPPED';result.pr=null;result.stop_reason='gate failed';result.evidence=['gate failed'];}
+    });
+    assert.equal(r.result.tracks[0].state,'SEAM_MISMATCH');assert.equal(r.result.tracks[2].state,'CLEAN');
+    assert.ok(!r.calls.some(c=>c.label==='B4 final evidence'));
+  }
+});
+cases.push({number:cases.length+1,name:'narrow context excludes sibling plans and issue bodies'});
+tests.push(async()=>{
+  const r=await run('build',(f,a)=>{
+    streamingArgs(f,a);a.plan_record.plans[1].risks=['SIBLING-PLAN-PRIVATE'];
+    a.graph_admission[0].evidence.issues.unrelated='UNRELATED-ISSUE-BODY';
+    a.graph_admission[0].evidence.request.nodes=[{node_id:'outside-closure',description:'UNRELATED-NODE'}];
+    a.selection_snapshot={secret:'SELECTION-NOT-FOR-BUILDER'};
+  });
+  const prompt=r.calls.find(c=>c.label==='B1 build T-1').prompt;
+  for(const marker of ['SIBLING-PLAN-PRIVATE','UNRELATED-ISSUE-BODY','UNRELATED-NODE','SELECTION-NOT-FOR-BUILDER'])assert.ok(!prompt.includes(marker));
+  assert.ok(r.result.evidence.some(e=>e.includes('UNRELATED-ISSUE-BODY')),'full audit retained');
+});
+cases.push({number:cases.length+1,name:'legacy review phase follows the seam barrier'});
+tests.push(async()=>{
+  const r=await run('build',(f,a)=>{a.plan_record.contract=f.contract;a.plan_record.literals=f.literals;});
+  const seamEnd=r.events.indexOf('end B2 seam check');
+  const reviewPhase=r.events.indexOf('phase Review');
+  assert.ok(seamEnd>=0);
+  assert.ok(reviewPhase>seamEnd);
+});
+cases.push({number:cases.length+1,name:'review permit expiry stays distinct in the wave result'});
+tests.push(async()=>{
+  const r=await run('build',f=>{
+    const review=f.responses['B3 review T-1'];
+    review.verdict='BLOCKED';
+    review.rounds=0;
+    review.block_reason_code='SLOT_WAIT_TIMEOUT';
+    review.open_findings=['Reviewer permit queue wait expired before a paid review'];
+  });
+  assert.equal(r.result.tracks[0].state,'BLOCKED');
+  assert.equal(r.result.tracks[0].review.block_reason_code,'SLOT_WAIT_TIMEOUT');
+  assert.equal(r.result.tracks[0].review.rounds,0);
+});
+
+
+cases.push({number:cases.length+1,name:'local build and review prompts retain saved Run A scope text'});
+tests.push(async()=>{
+  const saved={'docs/scope.md':{text:'RUN_A_SCOPE: approved section and exclusions',digest:'sha256:'+'a'.repeat(64)}};
+  for(const mode of ['legacy','streaming']) {
+    const plan=await run('plan',(f,a)=>{
+      localArgs(f,a);a.graph_admission[0].evidence.local_scope_sources=clone(saved);
+    });
+    const build=await run('build',(f,a)=>{
+      localArgs(f,a);a.plan_record=plan.result;
+      a.wave.execution_mode=mode;
+      a.graph_admission[0].evidence.local_scope_sources['docs/scope.md'].text='RUN_B_SCOPE: current text';
+    });
+    assert.equal(build.result.state,'COMPLETE',mode);
+    const calls=build.calls.filter(c=>/^B[13]/.test(c.label));
+    assert.ok(calls.length>=6,mode);
+    for(const call of calls) {
+      const id=call.label.split(' ').at(-1);
+      const prefix=`Run A approved observations for ${id}: `;
+      const line=call.prompt.split('\n').find(line=>line.startsWith(prefix));
+      assert.ok(line,call.label);
+      const approved=JSON.parse(line.slice(prefix.length,-1));
+      assert.deepEqual(approved.admission.local_scope_sources,saved,mode+': '+call.label);
+      assert.ok(call.prompt.includes('RUN_B_SCOPE: current text'),call.label);
+    }
+  }
+});
+
+
+cases.push({number:cases.length+1,name:'streaming recovery and fresh admission retain main safeguards'});
+tests.push(async()=>{
+  const recovered=await run('build',(f,a)=>{
+    streamingArgs(f,a);a.approve=['T-1'];
+    a.recovery=[{issue_id:'T-1',branch:a.plan_record.tracks[0].branch,worktree:a.plan_record.tracks[0].worktree,
+      state:'PR_OPEN',checked_at:a.graph_publication.checked_at,result:clone(f.responses['B1 build T-1']),evidence:['Verified existing PR/head and gates']}];
+  });
+  assert.equal(recovered.result.tracks[0].state,'CLEAN');
+  assert.ok(!recovered.calls.some(c=>c.label.startsWith('B1')));
+  assert.ok(recovered.calls.some(c=>c.label==='B3 review T-1'));
+  const blocked=await run('build',(f,a)=>{
+    streamingArgs(f,a);
+    const fresh=clone(a.graph_admission[0]);fresh.checked_at='2026-10-05T14:00:00Z';
+    fresh.candidates[0].state='BLOCKED';fresh.candidates[0].unmet=[{}];
+    Object.assign(f.responses['B3 admission T-1'],{checked_at:'2026-10-05T14:01:00Z',ancestor_exit:0,
+      merge_tree_exit:0,head_sha:'9'.repeat(40),admission_report:JSON.stringify(fresh)});
+  });
+  assert.equal(blocked.result.tracks[0].state,'BLOCKED');
+  assert.equal(blocked.result.tracks[1].state,'CLEAN');
+  assert.ok(!blocked.calls.some(c=>c.label==='B3 review T-1'));
+});
+cases.push({number:cases.length+1,name:'streaming rechecks final review identity and local agreements'});
+tests.push(async()=>{
+  for(const kind of ['owned_fix','foreign_head','stale_marker','missing']) {
+    const r=await run('build',(f,a)=>{
+      streamingArgs(f,a);a.approve=['T-1'];
+      f.responses['B3 review T-1'].reviewed_head='8'.repeat(40);
+      f.responses['B4 final verification']=kind==='missing'?null:{heads:[{
+        issue_id:'T-1',pr:f.responses['B1 build T-1'].pr,branch:'codex/t-1',
+        head_sha:(kind==='foreign_head'?'9':'8').repeat(40),
+        reviewed_head_sha:(kind==='stale_marker'?'7':kind==='foreign_head'?'9':'8').repeat(40)}],seam:null};
+    });
+    assert.equal(r.result.tracks[0].state,kind==='owned_fix'?'CLEAN':'BLOCKED',kind);
+    if(kind==='owned_fix')assert.equal(r.result.tracks[0].result.head_sha,'8'.repeat(40));
+  }
+  const plan=await run('plan',(f,a)=>{localArgs(f,a);f.responses['A2 shared-literal scan'].literals=f.literals;a.wave.contract_dir=null;});
+  assert.equal(plan.result.contract,null);
+  for(const damage of [false,true]) {
+    const r=await run('build',(f,a)=>{
+      localArgs(f,a);a.plan_record=clone(plan.result);finalFixture(f,a);
+      a.plan_record.contract=null;a.wave.contract_dir=null;
+      if(damage)f.responses['B4 final evidence'].table.pop();
+    });
+    assert.equal(r.result.tracks[1].state,damage?'SEAM_MISMATCH':'CLEAN');
+    assert.equal(r.result.tracks[2].state,'CLEAN');
+    assert.ok(!r.calls.some(c=>c.label==='B2 seam check'));
+    assert.ok(r.calls.some(c=>c.label==='B4 final evidence'));
+  }
+});
+
 let failed=0;
 for(let i=0;i<tests.length;i++)try{await tests[i]();console.log(`PASS ${cases[i].number} ${cases[i].name}`);}catch(e){failed++;console.error(`FAIL ${cases[i].number} ${cases[i].name}: ${e.stack}`);}
 console.log(`${tests.length-failed}/${tests.length} wave cases passed`);

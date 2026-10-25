@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""Run one authorized argv under a host-local resource permit."""
+import argparse
+from pathlib import Path
+import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
+from resource_slots import permit
+
+p = argparse.ArgumentParser(description=__doc__)
+p.add_argument('--group', required=True)
+p.add_argument('--limit', type=int, required=True)
+p.add_argument('--state-root')
+p.add_argument('--wait', type=float, default=7200)
+p.add_argument('command', nargs=argparse.REMAINDER)
+a = p.parse_args()
+command = a.command[1:] if a.command[:1] == ['--'] else a.command
+if not command:
+    p.error('a command after -- is required')
+try:
+    with permit(a.group, a.limit, root=a.state_root, timeout=a.wait) as fd:
+        code = subprocess.run(command, pass_fds=(fd,)).returncode
+    raise SystemExit(code if code >= 0 else 128-code)
+except TimeoutError as exc:
+    print(str(exc), file=sys.stderr)
+    raise SystemExit(75)  # queue wait expired; the command never ran
+except (OSError, ValueError) as exc:
+    print('with-slot: refused: ' + str(exc), file=sys.stderr)
+    raise SystemExit(78)  # wrapper setup/launch failed; the command never ran

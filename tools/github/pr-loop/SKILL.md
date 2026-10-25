@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.9.1
+version: 0.10.0
 description: Drive an independent Codex↔Claude review/fix loop on one PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. The implementation session keeps fixes; the other engine reviews with verified GitHub identity and head evidence. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#>". (kstack)
 ---
 
@@ -11,7 +11,7 @@ description: Drive an independent Codex↔Claude review/fix loop on one PR to CL
 One open PR needs review rounds driven to a stop condition without a human in
 the seat: review → fix → reply → re-review, until the PR is clean, a
 disagreement blocks it, or the round budget runs out. Invoke as
-`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--implementation-engine codex|claude] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--accept-graph-update <PR#>]... [--local-graph]`. Not for reviewing a
+`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--implementation-engine codex|claude] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--review-slots N] [--slot-wait SEC] [--test-slots N] [--accept-graph-update <PR#>]... [--local-graph]`. Not for reviewing a
 human-authored PR, not for deciding contested design questions, and not for
 approving — see "What this skill is NOT for".
 
@@ -172,6 +172,32 @@ python3 "$STACK_ROOT/tools/github/pr-loop/bin/require-controller-host" \
 
 An unknown, ambiguous, or mismatched host blocks. Do not use a route field as
 the host claim; no whole-loop delegation or fallback self-review.
+
+## Resource permits for wave execution
+
+`--review-slots N` bounds paid reviewer processes, not the whole review/fix/CI
+loop. Validate a positive integer and pass `--review-slots N` to **every**
+`bin/run-review` call, including later rounds. It acquires a host-local permit
+for the resolved engine/account, rechecks the head and existing review after
+waiting, then releases the permit when the reviewer exits. Fixes and CI hold no
+reviewer permit. Keep one controller, its existing round cap, exact-head markers
+and durable repeat-finding ledger; this option never restarts a terminal loop.
+`--slot-wait SEC` sets a separate reviewer-permit wait (default 7200 seconds);
+it never reduces the reviewer's 1800-second process timeout. If the helper
+returns `SLOT_WAIT_TIMEOUT` with exit 75, no paid review started: stop with a
+retryable queue-wait report: `verdict: BLOCKED`,
+`block_reason_code: SLOT_WAIT_TIMEOUT`, and the paid round count unchanged.
+This code is distinct from review findings and gate failures in wave's
+`REVIEW_RESULT` and final track review record. A later invocation
+rechecks the current head and route before attempting the round again.
+
+`--test-slots N` bounds expensive local gates. For each lint/test/build command,
+run the configured command through `core/land/bin/with-slot --group local-tests
+--limit N -- <shell> -c <exact-command>` from the canonical physical stack root,
+with the verified worktree as cwd. Forward the same bound into review-comments
+as `--test-slots N` and into land instructions. It changes neither which tests are authorized nor CI
+requirements. Default state is outside the repository in KSTACK_STATE. Do not
+hold a local-test permit while waiting for paid review or CI.
 
 ## Preflight — run once, stop on any failure
 
@@ -431,8 +457,11 @@ invocation explicitly pins `--model gpt-6-astra`. This prevents an automatic
 Astra charge for each small fix while allowing a deliberate deep re-review.
 
 For Claude, skip the Codex escalation block entirely. Run `bin/run-review`
-with the selected model/effort and inspect its JSON and exit status. Failure
-means BLOCKED with no blind retry, engine substitution or self-review.
+with the selected model/effort and inspect its JSON and exit status. Pass an
+explicit `--slot-wait` through when supplied. A `SLOT_WAIT_TIMEOUT`/75 result
+is retryable queue expiry with no paid review; report it distinctly and stop.
+Other failures mean BLOCKED with no blind retry, engine substitution or
+self-review.
 
 **3. Read the findings.** Use the helper's verified review ID/head and structured
 findings (summary plus inline). Missing/malformed evidence is BLOCKED. Apply
@@ -499,6 +528,8 @@ holds — its thread-selection rules, its fix-don't-just-reply rule, its
 per-command implementer token, its `<gates.lint> && <gates.test>` gate, never
 switching global `gh` identity, never resolving threads, and posting
 the conversation-level summary comment **last**.
+Forward `--test-slots N` into that invocation when supplied, so both
+review-comments gates acquire the `local-tests` permit.
 
 If `<gates.lint>` or `<gates.test>` fails after your fixes, you get **one**
 repair attempt. Still failing → push nothing further, exit `BLOCKED`.

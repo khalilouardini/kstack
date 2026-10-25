@@ -81,7 +81,7 @@ needs a Linear workspace.
 |---|---|---|
 | [`/spec`](roles/spec/SKILL.md) | Product gate: the scope role runs first and alone; only an in-scope verdict fans out to tech-lead + designer, then qa | Spending four agents on an idea that fails the first gate |
 | [`/triage`](roles/triage/SKILL.md) | PR intent, merge/CI and review/thread evidence against scope; optional project/label filters; branches/worktrees on request | Reviewing, posting, merging, closing or tracker writes |
-| [`/next`](tools/linear/next/SKILL.md) | Recommends one scoped issue or up to five independent tracks across repeated project filters | Inventing a ticket; any write |
+| [`/next`](tools/linear/next/SKILL.md) | Recommends one scoped issue or a configurable parallel batch with separate planning capacity | Inventing a ticket; any write |
 | [`/linear-feature-intake`](tools/linear/linear-feature-intake/SKILL.md) | Turns a scope verdict into the right tracker records | Forming a verdict of its own |
 | [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) | Creates or updates the product scope contract; maps work, validates JSON and generates Mermaid | Creating tickets, granting scope or launching sessions |
 
@@ -117,7 +117,7 @@ half-day estimate, refuses to estimate what it cannot name),
 
 | Skill | Does | Enforcement |
 |---|---|---|
-| [`/wave`](tools/linear/wave/SKILL.md) | One independent batch through a Claude Code Workflow graph | prompt-level checkpoints; script checks approval/review routing; Codex selection only |
+| [`/wave`](tools/linear/wave/SKILL.md) | One fixed batch; opt-in streaming build/review | prompt-level checkpoints; script checks approval and final heads; cooperative process limits; Codex selection only |
 | [`/dispatch-implementation`](tools/linear/dispatch-implementation/SKILL.md) | Starts one approved issue in an isolated worktree and automatically moves it to the contract's started status after the worktree exists | Linear write + mandatory read-back; prompt-level outside the skill |
 | [`/investigate`](core/investigate/SKILL.md) | Root-cause debugging: no fix before the cause is found; three failed attempts stops the run; every fix ships a fail-then-pass test | prompt + optional scope lock |
 | [`/careful`](core/careful/SKILL.md) | Pre-checks every shell command. Recursive deletes rooted at `/` or `$HOME` and force-pushes to the default branch are denied; the rest asks | **hook** (Claude Code) |

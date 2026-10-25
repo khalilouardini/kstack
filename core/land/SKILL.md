@@ -1,6 +1,6 @@
 ---
 name: land
-version: 0.6.0
+version: 0.6.2
 description: Land an agent session's work safely — dedicated branch, concurrent-session guards re-run before every commit, the repo's own lint and test gates from .agents/stack.yml, atomic commits, then one PR. Stops at the PR; merging is a human decision. Use when asked to "land this", "commit and push", "open a PR", "ship it", or "/land". (kstack)
 ---
 
@@ -264,6 +264,21 @@ it alone too, and report it.
 
 ## Step 7 — gates before push
 
+When a composing wave/pr-loop supplies a local-test budget, run configured gate
+commands through canonical `core/land/bin/with-slot --group local-tests --limit N
+-- <argv...>` from the verified worktree. Use the shell explicitly for configured
+shell commands. This host-local cooperative permit bounds command concurrency;
+it does not change required tests or override project/user test-scope rules.
+The permit wait has its own 7200-second default. Exit 75 means the wait expired
+before the gate ran; report a retryable queue delay, not a failed gate, and
+recheck the branch/head before retrying. `--wait SEC` may set another bound.
+Exit 78 accompanied by `with-slot: refused:` on stderr means permit setup or
+command launch failed before the gate ran. Stop, report the setup error, and
+correct it before retrying; do not consume a gate repair attempt. A child may
+return 78 itself, so require the wrapper diagnostic as well as the status.
+Do not hold it during review or CI waits. Without a supplied budget this procedure
+retains its normal gate invocation.
+
 ```bash
 <gates.lint>
 <gates.test>
@@ -297,6 +312,13 @@ MAINTAINER_TOKEN=$(gh auth token --hostname github.com --user "$MAINTAINER")
 test "$(GH_TOKEN="$MAINTAINER_TOKEN" gh api user --jq .login)" = "$MAINTAINER"
 GH_TOKEN="$MAINTAINER_TOKEN" gh pr create --base <default-branch> --title "<type>: <what changed>" --body "<body>"
 ```
+
+Carry known file overlaps from the approved plan into a **Pending overlap** PR
+section with exact PRs/paths and integration obligations. Overlap alone does not
+block opening a PR. Before merge, the owner fetches current default main, rebases
+if behind, resolves conflicts, reruns gates and obtains review of any changed
+head. This includes overlaps between tickets selected in the same wave. It grants
+no permission to merge or depend on an unrelated unmerged foundation.
 
 Body: what changed and why, the gate results as evidence (`<gates.lint>` clean,
 `<gates.test>` N passed), and anything a reviewer should look at first. A merged

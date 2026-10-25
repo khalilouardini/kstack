@@ -166,6 +166,10 @@ pr_labels:
 
 # Missing/null rounds and concurrency use announced defaults, not host settings.
 wave:
+  selection_limit: 12  # explicit batch bound; independent of local test concurrency
+  execution_mode: legacy  # opt in to streaming only for the bounded pilot
+  worker_concurrency: 3  # active planners/ticket controllers, independent of batch size
+  test_concurrency: 1  # cooperative host-wide expensive local gate permits
   max_review_rounds: 3  # three bounds unattended review; later rounds address fix interactions
   review_concurrency: 1  # reviewer processes share one account quota window
   contract_dir: null  # published graphs: required for shared-literal PRs; local graphs use the plan handoff

@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.5.0
+version: 0.6.0
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -52,6 +52,18 @@ the single `unstarted → started` write after its branch/worktree exists. The l
 and read-back remain mandatory; a second approval prompt for that one row is not.
 
 ## 1. Resolve the issue and prove it is startable
+
+Read `tools/linear/next/references/selection.md` from the physical stack root.
+Assess the named issue with the same plan/build checks as next and wave and run
+the shared helper on that single-candidate snapshot (`requested: 1`, no pairs).
+Do not reinterpret stage eligibility merely because dispatch names one issue.
+Plan eligibility permits only planning; build still needs an approved exact plan,
+fresh build eligibility and existing lifecycle guards. Resume verified active
+work instead of treating its ownership exclusion as a fresh-start failure.
+Reconcile newer named scope decisions with older exclusions before requesting
+repeat approval. File overlap alone warns; real dependencies and unmerged
+foundations still constrain implementation. Retain assessment and overlap evidence.
+
 
 Before any git or tracker write, follow the canonical
 `tools/linear/linear-roadmap/references/publication-gate.md` from the physical

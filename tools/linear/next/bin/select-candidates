@@ -1,0 +1,10 @@
+#!/usr/bin/env node
+'use strict';
+const fs=require('node:fs');
+const select=require('../lib/selection.cjs');
+try {
+  if (process.argv.length!==3) throw new Error('usage: select-candidates <assessment.json>');
+  process.stdout.write(JSON.stringify(select(JSON.parse(fs.readFileSync(process.argv[2],'utf8'))),null,2)+'\n');
+} catch (error) {
+  process.stderr.write(String(error.message)+'\n'); process.exitCode=2;
+}
