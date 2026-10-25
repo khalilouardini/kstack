@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+`session-titles` 0.4.0: a session whose title is only keys (`<PREFIX>-490`, or
+a bare `<PREFIX>-490 / PR#580`) gets a one-line description from its PR title,
+else its tracker issue title, and is no longer counted as already correct.
+Without either source it is skipped; an existing description is never changed.
+
 `wave` 0.11.0 and `pr-loop` 0.10.0: opt-in streaming review as builds finish,
 bounded ticket workers, rolling legacy reviews and narrower candidate prompts.
 Check shared agreements against exact final reviewed heads and keep independent

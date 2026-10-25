@@ -1,6 +1,6 @@
 ---
 name: session-titles
-version: 0.3.0
+version: 0.4.0
 description: Sweep open agent sessions (Claude Code and Codex), resolve the GitHub PR and issue key each one is working on, and prefix each session title so the session list is scannable at a glance. Dry-run by default; nothing is renamed until --apply. Use when asked to "label my sessions", "what is each session working on?", "retitle the agent sessions", or "/session-titles [--apply] [--include-archived]". (kstack)
 ---
 
@@ -226,6 +226,43 @@ whose hand-typed prefix carries the same keys as the new one still changes
 (format only); mark such rows `format only` in the dry-run so the user can
 drop them.
 
+**A title with no description gets a one-line one.** After the strip above,
+`{original}` has no description when nothing is left, or when what is left is
+only keys and separators — it matches, case-insensitive (with `issue_prefix`
+unset, drop the `<PREFIX>-\d+` alternatives):
+
+```
+^\s*(<PREFIX>-\d+|PR\s*#\s*\d+)?(\s*/\s*(<PREFIX>-\d+|PR\s*#\s*\d+))*\s*/?\s*$
+```
+
+That covers a session titled only `<PREFIX>-490`, and a bare
+`<PREFIX>-490 / PR#580` left by an earlier sweep. Such a session is never a
+no-op, even when it already starts with the exact prefix. Replace `{original}`
+with one line; the first source that exists wins:
+
+1. **The resolved PR's title**, with a leading conventional-commit type removed
+   (`^[a-z]+(\([^)]*\))?!?:\s*`, case-insensitive, so `feat(api): turn X off`
+   becomes `turn X off`) and the first letter capitalized.
+2. **The tracker issue's title**, when no PR resolved and the tracker MCP is
+   connected — read from the same call that validates the key (§2 still
+   forbids searching the tracker for one), with a leading `Bug:` / `Feature:` /
+   `Improvement:`-style label removed and the first letter capitalized.
+3. **Neither:** leave the session out of the rename set. A key with nothing
+   after it is not a description.
+
+This rule only fills an empty description; a description the session already
+carries is never replaced or extended. Mark each such row in the dry-run with
+its source (`one-liner: PR title` or `one-liner: issue title`) so the user can
+check the wording before `--apply`.
+
+> **Worked example (OGUR, 2026-10-25).** A session titled `OGUR-490`, bound to
+> PR#580, was renamed `OGUR-490 / PR#580` and the owner asked for the
+> description. With this rule the PR title
+> `feat(OGUR-490): turn "Ask this report" off for one served report` gives
+> `OGUR-490 / PR#580 / Turn "Ask this report" off for one served report`. A
+> session titled `OGUR-504` with no PR took its line from the Linear issue
+> title instead.
+
 ## 3a. Apply — Claude Code sessions
 
 ```
@@ -297,11 +334,12 @@ running and appending to this file concurrently:
 ## Output
 
 Always show the dry-run table first, one row per session that will change:
-`harness | session/id | old title | new title`. Then, only after `--apply`
+`harness | session/id | old title | new title`, plus the one-liner source on
+rows whose description §3 supplied. Then, only after `--apply`
 (given up front or confirmed after reviewing the table):
 
-- Count renamed per harness, count skipped (no PR/issue resolved), count
-  already-correct (no-op).
+- Count renamed per harness, count skipped (no PR/issue resolved, or a title
+  with no description and no one-liner source), count already-correct (no-op).
 - Any errors per session, without aborting the rest of the sweep for one
   failure.
 - Whether the run was in PR-only mode because `issue_prefix` was unset.
