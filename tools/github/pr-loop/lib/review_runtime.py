@@ -334,7 +334,12 @@ def execute(args):
     if before[0].strip() != args.head or any(
             line and not line.startswith('?? ') for line in before[1].splitlines()):
         raise Blocked('review checkout must be clean at the exact PR head')
-    output = run(argv, cwd=repo, env=env, timeout=args.timeout)
+    # Session identity belongs to the launching host, not the opposite reviewer.
+    # Let the reviewer CLI establish its own markers without inheriting ours.
+    reviewer_env = env.copy()
+    for key in ('CODEX_SESSION_ID', 'CODEX_THREAD_ID', 'CLAUDE_CODE_CHILD_SESSION'):
+        reviewer_env.pop(key, None)
+    output = run(argv, cwd=repo, env=reviewer_env, timeout=args.timeout)
     if engine == 'claude':
         report.write_text(output.replace(token, '[REDACTED]'))
     if not report.is_file():
