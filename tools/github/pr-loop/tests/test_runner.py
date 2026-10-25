@@ -52,6 +52,7 @@ class RunnerTests(unittest.TestCase):
         host = engine.lower() if host is None else host
         if host == 'codex':
             env['CODEX_SESSION_ID'] = 'fake-session'
+            env['CODEX_THREAD_ID'] = 'fake-thread'
         elif host == 'claude':
             env['CLAUDE_CODE_CHILD_SESSION'] = '1'
         elif host == 'ambiguous':
@@ -86,6 +87,23 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(len(launches), 1)
         self.assertIn('service_tier="fast"', launches[0]['args'])
         self.assertEqual(json.loads((self.root / 'reports/report.txt').read_text())['status'], 'REVIEW_SUBMITTED')
+
+    def assert_isolated_reviewer_host(self, implementation, reviewer, marker):
+        result, report, state = self.invoke(implementation)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(report['engine'], reviewer)
+        launch = next(c for c in state['calls'] if c['name'] == reviewer
+                      and ('-o' in c['args'] or '--print' in c['args']))
+        self.assertEqual(launch['host_markers'], {})
+        # The reviewer CLI establishes its own marker before running tools.
+        child_env = dict(launch['host_markers'], **{marker: '1'})
+        self.assertEqual(rt.invoking_host(child_env), reviewer)
+
+    def test_codex_reviewer_does_not_inherit_claude_host(self):
+        self.assert_isolated_reviewer_host('Claude', 'codex', 'CODEX_THREAD_ID')
+
+    def test_claude_reviewer_does_not_inherit_codex_host(self):
+        self.assert_isolated_reviewer_host('Codex', 'claude', 'CLAUDE_CODE_CHILD_SESSION')
 
     def test_reuse_needs_no_cli_or_auth(self):
         (self.fake / 'claude').unlink()

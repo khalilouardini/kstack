@@ -338,6 +338,11 @@ def execute(args):
     if before[0].strip() != args.head or any(
             line and not line.startswith('?? ') for line in before[1].splitlines()):
         raise Blocked('review checkout must be clean at the exact PR head')
+    # Session identity belongs to the launching host, not the opposite reviewer.
+    # Let the reviewer CLI establish its own markers without inheriting ours.
+    reviewer_env = env.copy()
+    for key in ('CODEX_SESSION_ID', 'CODEX_THREAD_ID', 'CLAUDE_CODE_CHILD_SESSION'):
+        reviewer_env.pop(key, None)
     slots = getattr(args, 'review_slots', None)
     if slots is not None:
         sys.path.insert(0, str(Path(__file__).resolve().parents[4] / 'core/land/lib'))
@@ -360,7 +365,7 @@ def execute(args):
         if current != before:
             raise Blocked('review checkout changed while waiting for a resource permit')
         started_at = time.monotonic()
-        output = run(argv, cwd=repo, env=env, timeout=args.timeout,
+        output = run(argv, cwd=repo, env=reviewer_env, timeout=args.timeout,
                      pass_fds=() if fd is None else (fd,))
         finished_at = time.monotonic()
     if engine == 'claude':

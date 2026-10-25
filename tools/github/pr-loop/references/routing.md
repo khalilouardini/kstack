@@ -100,6 +100,9 @@ delegate the whole loop.** The user can invoke it in the correct existing
 session. Child reviewers may not invoke pr-loop or review-comments. This bounds
 handoffs to zero and prevents recursive controllers. Environment markers guard
 accidental host confusion; they are not cryptographic identity proof.
+Before launching the opposite reviewer, the runner removes the controller's
+session markers from the child environment so the reviewer CLI can establish
+its own identity. Controller preflight still checks the original environment.
 The standalone reviewer requires the actual host to equal reviewer_engine;
 review-comments requires implementer_engine before edits/replies.
 
