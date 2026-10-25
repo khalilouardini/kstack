@@ -11,7 +11,10 @@ name = Path(sys.argv[0]).name
 args = sys.argv[1:]
 s['calls'].append({'name': name, 'args': args, 'cwd': os.getcwd(),
                    'has_expected_token': os.environ.get('GH_TOKEN') == 'fixture-secret',
-                   'has_other_token': 'GITHUB_TOKEN' in os.environ})
+                   'has_other_token': 'GITHUB_TOKEN' in os.environ,
+                   'host_markers': {key: os.environ[key] for key in
+                                    ('CODEX_SESSION_ID', 'CODEX_THREAD_ID',
+                                     'CLAUDE_CODE_CHILD_SESSION') if key in os.environ}})
 state_path.write_text(json.dumps(s))
 mode = s.get('mode', '')
 
