@@ -322,8 +322,7 @@ def main(argv: list[str]) -> int:
             if out.returncode:
                 r.fail("tools/linear/wave/tests/run.mjs", "harness", out.stderr.strip() or "wave harness failed")
 
-    selection_tests = REPO / "tools/linear/next/tests/selection.cjs"
-    if shutil.which("node"):
+    for selection_tests in (REPO / "tools/linear/next/tests").glob("*.cjs") if shutil.which("node") else []:
         out = subprocess.run(["node", str(selection_tests)], capture_output=True, text=True)
         print(out.stdout, end="")
         if out.returncode:

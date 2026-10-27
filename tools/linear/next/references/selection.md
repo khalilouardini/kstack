@@ -13,6 +13,65 @@ evidence is UNKNOWN, never an invented dependency or a passing condition.
 
 ## Collect once, explain every candidate
 
+New collections use the observation compiler below, rather than six agent-written
+eligibility booleans. This addresses errors before optimization: a perfect solver
+cannot recover a candidate that the collector incorrectly excluded.
+
+1. Resolve and pin the invocation's graph source once. Default is freshly fetched
+   main; explicit `--local-graph` uses the canonical owner index/manifest, never a
+   stale dispatch copy. A local graph's existence does not silently select it.
+   If default-main mapping prevents the requested comparison, report that source
+   mismatch and the explicit local/pending option; do not describe all live work
+   as intrinsically blocked. Preserve the user's flags unchanged.
+2. Recover the original authorized owner's admission from configured scope,
+   decision logs, linked original comments or an explicit original transcript
+   locator provided by the owner. Verify actor, date, exact boundary and current
+   applicability. Do this before declaring scope unavailable. Never search every
+   unrelated private conversation. Generic admission authorizes only that boundary;
+   enumerate specific unresolved behavior choices separately with their target
+   stages. An admission does not resolve these choices or approve release.
+3. Audit each candidate's plan and build transition separately. Attach the full
+   helper reports, including BLOCKED reports, at the same main/time/source pins.
+   Group BLOCKED, UPDATE_REQUIRED and missing unrelated tickets are not per-ticket
+   graph verdicts. Missing/invalid candidate reports become UNKNOWN for that
+   candidate/stage, while verified siblings remain selectable. Merge/release
+   prerequisites stay in the audit; only their actual targeted ancestors constrain
+   plan/build. Native blockers still constrain planning independently of the graph.
+4. Save the original observation packet and run
+   `node <stack-root>/tools/linear/next/bin/assess-candidates <observations.json>`.
+   Exit 2 refuses malformed observations. Save returned `input` and `output` as
+   the selector snapshot and assessment. Use those exact IDs for next, wave and
+   named dispatch. Source truth, scope meaning, actor identity and complete reads
+   remain collector responsibilities; the compiler cannot authenticate prose.
+
+The packet has the selector metadata/ranking/pair fields below plus:
+
+- `main_sha` and `checked_at`: the freshly observed main and UTC timestamp used
+  by all admission reports. `graph_source` is `{mode: "PUBLISHED", graph_sha}`,
+  `{mode: "ACCEPTED_UPDATE", graph_sha}` (after exact-head review validation), or
+  `{mode: "APPROVED_LOCAL", local_graph}`. Local pins contain `index_path`,
+  `manifest_path`, `index_digest`, `manifest_digest`, `source_revision` from the
+  canonical helper. Source must agree with exact command tokens.
+- `graph_reports: [{source: <absolute audit path>, report: <full helper JSON>}]`.
+  The compiler matches issue UUID, identifier, project, transition and source pins,
+  never the aggregate report state. Missing or duplicate matches are UNKNOWN.
+- Each candidate retains identity/rank/ownership/files/overlaps, adds `issue_uuid`,
+  and supplies `scope`, `native`, `foundation` instead of `checks`. Every check
+  observation is `{state, source, detail}` using the three selector states below.
+  `scope` contains `admission` (original authorization), `plan` and `build` (exact
+  boundary applicability), and `decisions` (explicit empty list after checking).
+  Each decision adds `id` and `stages` from plan/build/merge/release. A generic
+  admission cannot override a pending named decision. Keep older exclusion and
+  superseding decision sources together in the boundary rationale.
+- `native: {complete: true, source, blockers: [<check observation>...]}` records
+  both native relation directions and verified resolution of every blocker.
+  Incomplete reads become UNKNOWN, never an empty unblocked set. `foundation`
+  is the cited implementation foundation check. Project-less candidates require
+  a cited `graph_exemption` observation; no implicit project exemption exists.
+
+`select-candidates` remains a low-level pure solver and legacy checkpoint reader.
+Running it alone on hand-written booleans does not verify collection correctness.
+
 Use next's complete paginated project/milestone pool and existing scope filters.
 Dispatch collects the same facts for its named issue; it need not fetch unrelated
 candidate issues. Refresh mutable evidence before writes. Reuse only immutable

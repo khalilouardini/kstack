@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.11.0
+version: 0.12.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -155,7 +155,9 @@ The graph's policies remain prompt-level; absence of Workflow on Codex is
 ## Procedure
 
 New plans use version 2 selection. Read next's `references/selection.md`, collect
-its complete normalized candidate/pair snapshot and run the shared helper first.
+its complete observation packet and run `next/bin/assess-candidates` first.
+Use its returned normalized input and assessment; never hand-author graph checks
+from project coverage or treat merge-only holds as start prerequisites.
 Pass `selection_version: 2` and `selection_snapshot` to Workflow. Match requested
 N, command tokens, `wave.selection_limit` (default 12), main SHA and observation
 time to this invocation. A1 must return the helper's exact build and planning

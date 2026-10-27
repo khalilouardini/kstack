@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.6.0
+version: 0.7.0
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -54,8 +54,12 @@ and read-back remain mandatory; a second approval prompt for that one row is not
 ## 1. Resolve the issue and prove it is startable
 
 Read `tools/linear/next/references/selection.md` from the physical stack root.
-Assess the named issue with the same plan/build checks as next and wave and run
-the shared helper on that single-candidate snapshot (`requested: 1`, no pairs).
+Assess the named issue with the same observation compiler as next and wave:
+`node <stack-root>/tools/linear/next/bin/assess-candidates <observations.json>`.
+Use a single-candidate packet (`requested: 1`, no pairs). Keep the original
+owner admission separate from unresolved named product decisions. Derive graph
+checks from candidate-specific plan/build reports at the explicit source pins;
+coverage gaps and merge-only conditions cannot become start blockers.
 Do not reinterpret stage eligibility merely because dispatch names one issue.
 Plan eligibility permits only planning; build still needs an approved exact plan,
 fresh build eligibility and existing lifecycle guards. Resume verified active
