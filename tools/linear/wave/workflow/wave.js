@@ -2242,10 +2242,24 @@ const admissionProjection=(report,t)=>{
   if (!c) return null;
   const closure=new Set(c.closure);
   const nodes=(report.evidence?.request?.nodes || []).filter(n=>closure.has(n.node_id));
+  // Only narrow complete, understood evidence; incomplete or newer report
+  // shapes must retain their full context instead of losing a required source.
+  const scopes=report.evidence?.local_scope_sources;
+  const scopePaths=nodes.map(n=>n.scope?.path);
+  const completeScopes=nodes.length===closure.size && new Set(nodes.map(n=>n.node_id)).size===closure.size &&
+    scopePaths.every(path=>typeof path==='string' && path && Object.hasOwn(scopes || {},path));
+  const localScopes=scopes && completeScopes ? Object.fromEntries(scopePaths.map(path=>[path,scopes[path]])) : scopes;
+  const delta=report.delta;
+  const knownDelta=delta && Object.keys(delta).every(key=>['added_nodes','changed_edges','repairs'].includes(key)) &&
+    Array.isArray(delta.added_nodes) && delta.added_nodes.every(n=>typeof n?.id==='string') &&
+    Array.isArray(delta.changed_edges) && delta.changed_edges.length===0 &&
+    (delta.repairs===undefined || (Array.isArray(delta.repairs) && delta.repairs.every(r=>typeof r?.node_id==='string')));
+  const projectedDelta=knownDelta ? {...delta,added_nodes:delta.added_nodes.filter(n=>closure.has(n.id)),
+    ...(delta.repairs===undefined ? {} : {repairs:delta.repairs.filter(r=>closure.has(r.node_id))})} : delta;
   return {projection:true,main_sha:report.main_sha,graph_sha:report.graph_sha,transition:report.transition,
     checked_at:report.checked_at,local_graph:report.local_graph,
-    local_scope_sources:report.evidence?.local_scope_sources,candidate:c,nodes,
-    events:(report.evidence?.request?.events || []).filter(e=>closure.has(e.node_id)),delta:report.delta,
+    local_scope_sources:localScopes,candidate:c,nodes,
+    events:(report.evidence?.request?.events || []).filter(e=>closure.has(e.node_id)),delta:projectedDelta,
     note:'Context projection only; full unedited report is retained in the wave audit. Recollect full live evidence before writes.'};
 };
 const graphContext=(t=null,transition='build')=>`${localIndex ? `Explicit local graph approval from THIS invocation: ${JSON.stringify(graphFlags)}.

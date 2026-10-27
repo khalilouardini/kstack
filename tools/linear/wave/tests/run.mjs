@@ -1277,6 +1277,52 @@ tests.push(async()=>{
   assert.equal(published.calls[0].label,'A3 contract');
   assert.ok(published.result.contract);
 });
+cases.push({number:cases.length+1,name:'planner scope snapshots follow each closure and keep the full audit'});
+tests.push(async()=>{
+  const prepare=(f,a)=>{
+    localArgs(f,a);
+    const report=a.graph_admission[0];
+    report.candidates.forEach(c=>c.closure.push('shared'));
+    report.evidence.request.nodes=['T-1','T-2','T-3','shared'].map(id=>
+      ({node_id:id,scope:{path:`docs/${id}.md`}}));
+    report.evidence.local_scope_sources=Object.fromEntries(['T-1','T-2','T-3','shared'].map(id=>
+      [`docs/${id}.md`,{text:`SCOPE-${id}`,digest:'sha256:'+'a'.repeat(64)}]));
+  };
+  const r=await run('plan',prepare);
+  for(const id of ['T-1','T-2','T-3']) {
+    const prompt=r.calls.find(c=>c.label==='A4 plan '+id).prompt;
+    assert.ok(prompt.includes(`SCOPE-${id}`));assert.ok(prompt.includes('SCOPE-shared'));
+    for(const sibling of ['T-1','T-2','T-3'].filter(x=>x!==id)) assert.ok(!prompt.includes(`SCOPE-${sibling}`));
+  }
+  assert.ok(r.result.evidence.some(e=>e.includes('SCOPE-T-1')&&e.includes('SCOPE-T-2')&&e.includes('SCOPE-T-3')));
+  const incomplete=await run('plan',(f,a)=>{prepare(f,a);delete a.graph_admission[0].evidence.request.nodes[0].scope;});
+  assert.ok(incomplete.calls.find(c=>c.label==='A4 plan T-1').prompt.includes('SCOPE-T-2'),
+    'missing scope mapping conservatively retains all snapshots');
+});
+cases.push({number:cases.length+1,name:'repair deltas follow each candidate closure and keep origin evidence'});
+tests.push(async()=>{
+  const prepare=(_f,a)=>{
+    const report=a.graph_admission[0];
+    report.candidates.forEach(c=>{c.mode='LOCAL_RECONCILIATION';c.closure.push('origin-'+c.node_id);});
+    report.evidence.request.nodes=report.candidates.flatMap(c=>[
+      {node_id:c.node_id,description:'NODE-'+c.node_id},
+      {node_id:'origin-'+c.node_id,description:'ORIGIN-'+c.node_id}]);
+    report.delta.added_nodes=report.candidates.map(c=>({id:c.node_id,issue_ref:c.issue_id,description:'REPAIR-'+c.node_id}));
+    report.delta.repairs=report.candidates.map(c=>({node_id:c.node_id,origin:'origin-'+c.node_id,rationale:'RATIONALE-'+c.node_id}));
+  };
+  const r=await run('plan',prepare);
+  for(const id of ['T-1','T-2','T-3']) {
+    const prompt=r.calls.find(c=>c.label==='A4 plan '+id).prompt;
+    for(const marker of [`ORIGIN-${id}`,`REPAIR-${id}`,`RATIONALE-${id}`])assert.ok(prompt.includes(marker));
+    for(const sibling of ['T-1','T-2','T-3'].filter(x=>x!==id))
+      for(const marker of [`ORIGIN-${sibling}`,`REPAIR-${sibling}`,`RATIONALE-${sibling}`])assert.ok(!prompt.includes(marker));
+  }
+  assert.ok(r.result.evidence.some(e=>e.includes('RATIONALE-T-1')&&e.includes('RATIONALE-T-2')&&e.includes('RATIONALE-T-3')));
+  const unknown=await run('plan',(f,a)=>{prepare(f,a);a.graph_admission[0].delta.future_field='UNKNOWN-DELTA';});
+  const prompt=unknown.calls.find(c=>c.label==='A4 plan T-1').prompt;
+  assert.ok(prompt.includes('UNKNOWN-DELTA')&&prompt.includes('RATIONALE-T-2'),
+    'unknown delta fields conservatively retain all repair context');
+});
 let failed=0;
 for(let i=0;i<tests.length;i++)try{await tests[i]();console.log(`PASS ${cases[i].number} ${cases[i].name}`);}catch(e){failed++;console.error(`FAIL ${cases[i].number} ${cases[i].name}: ${e.stack}`);}
 console.log(`${tests.length-failed}/${tests.length} wave cases passed`);
