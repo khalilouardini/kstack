@@ -8,9 +8,9 @@
 #   bin/install --host codex         generate ~/.codex/skills/<name>/SKILL.md pointers
 #
 # The claude host gets symlinks, so editing the repo is live. The codex host gets
-# a generated pointer file per skill — Codex does not follow symlinked skill dirs
-# reliably, and a pointer that names the canonical path cannot drift from it,
-# because it never restates the procedure.
+# a generated pointer file per skill. This is this installer's existing layout,
+# not a limitation of Codex symlink support; see hosts/HOSTS.md for current
+# discovery paths. Pointers reference rather than duplicate the procedure.
 #
 # Safety: a real directory in the way is never removed, with or without --force.
 

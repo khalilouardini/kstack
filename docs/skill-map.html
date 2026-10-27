@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>kstack Skill Map</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -140,6 +145,7 @@ h1 {
 .chip.roles[aria-pressed="true"]  { color: var(--t-roles);  background: var(--t-roles-bg); }
 .chip.gh[aria-pressed="true"]     { color: var(--t-gh);     background: var(--t-gh-bg); }
 .chip.linear[aria-pressed="true"] { color: var(--t-linear); background: var(--t-linear-bg); }
+.chip.external[aria-pressed="true"] { color: var(--signal); background: var(--signal-soft); }
 
 /* ---------- phases ---------- */
 .phase { margin-top: 2.75rem; }
@@ -154,7 +160,7 @@ h1 {
 }
 .phase-when { font-size: var(--step--1); color: var(--ink-faint); margin-left: auto; text-align: right; }
 
-.grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); }
+.grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr)); }
 
 .card {
   background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
@@ -166,6 +172,7 @@ h1 {
 .card.roles  { --tier-c: var(--t-roles); }
 .card.gh     { --tier-c: var(--t-gh); }
 .card.linear { --tier-c: var(--t-linear); }
+.card.external { --tier-c: var(--signal); }
 .card[hidden] { display: none; }
 
 .card-top { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
@@ -173,6 +180,7 @@ h1 {
   font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: var(--step-0);
   color: var(--tier-c); letter-spacing: -.01em;
 }
+.name:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
 .badge {
   font-family: "IBM Plex Mono", monospace; font-size: .68rem; letter-spacing: .06em;
   text-transform: uppercase; padding: .12rem .38rem; border-radius: 2px; white-space: nowrap;
@@ -214,6 +222,7 @@ h1 {
 .pill.roles  { color: var(--t-roles);  border-color: var(--t-roles);  background: var(--t-roles-bg); }
 .pill.gh     { color: var(--t-gh);     border-color: var(--t-gh);     background: var(--t-gh-bg); }
 .pill.linear { color: var(--t-linear); border-color: var(--t-linear); background: var(--t-linear-bg); }
+.pill.external { color: var(--signal); border-color: var(--signal); background: var(--signal-soft); }
 
 /* ---------- tables ---------- */
 .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--panel); }
@@ -248,11 +257,13 @@ footer code { font-family: "IBM Plex Mono", monospace; color: var(--ink-soft); }
   .card:hover { transform: translateY(-1px); border-color: var(--tier-c); }
 }
 </style>
+</head>
+<body>
 
 <div class="wrap">
 
 <header class="mast">
-  <div class="eyebrow">kstack · v0.2.0 · 20 skills + 4 roles</div>
+  <div class="eyebrow">kstack · v0.4.0 · <span id="catalog-count"></span></div>
   <h1>What do I run, and what does it need?</h1>
   <p class="dek">One agent harness across every project. Skills are grouped by <strong>when</strong> in the work you reach for them, and colored by <strong>what they depend on</strong> — because that is what decides whether a skill works in a fresh repo or needs a key in <code>.agents/stack.yml</code> first.</p>
 </header>
@@ -268,35 +279,37 @@ footer code { font-family: "IBM Plex Mono", monospace; color: var(--ink-soft); }
   <button class="chip roles"  data-tier="roles"  aria-pressed="true">roles · scope doc</button>
   <button class="chip gh"     data-tier="gh"     aria-pressed="true">github · gh cli</button>
   <button class="chip linear" data-tier="linear" aria-pressed="true">linear · workspace</button>
+  <button class="chip external" data-tier="external" aria-pressed="true">external · node + network</button>
 </div>
 
 <div id="phases"></div>
 <p class="empty" id="empty" hidden>Nothing matches. The router's rule: when in doubt, invoke the skill anyway.</p>
 
 <div class="legend">
-  <div><span class="badge hook">hook</span> a PreToolUse hook blocks the call</div>
-  <div><span class="badge tool">tool-list</span> the capability is absent from the agent</div>
+  <div><span class="badge hook">hook</span> guard registered by the Claude adapter</div>
+  <div><span class="badge tool">tool-list</span> restriction in the Claude role adapter</div>
   <div><span class="badge prompt">prompt</span> the contract asks; nothing checks</div>
-  <div><span class="badge ro">read-only</span> proposes, never mutates</div>
+  <div><span class="badge ro">read-only</span> default mode makes no tracker or source changes; local reports may be written</div>
 </div>
+<p class="sub">Kstack's Codex pointers do not register its hooks. The investigation rule itself is prompt-level on both hosts. Read <a href="../hosts/HOSTS.md">host support</a> for discovery and enforcement details.</p>
 
 <section class="section">
   <h2>The configuration ladder</h2>
-  <p class="sub">Every general skill reads <code>.agents/stack.yml</code> instead of hardcoding your project. Each key you fill in unlocks the skills below it. A missing key is a supported state — the skill asks you, or refuses naming the key. It never guesses.</p>
+  <p class="sub">These are configuration entry points, not complete prerequisite lists. Gates and write identities refuse when absent; review-model and wave limits have announced defaults. Triage reports missing interpretation inputs as UNKNOWN. See the <a href="../project-template/ONBOARDING.md">onboarding guide</a> for setup.</p>
   <div class="ladder" id="ladder"></div>
 </section>
 
 <section class="section">
   <h2>Which review do I run?</h2>
-  <p class="sub">Four skills touch a pull request. The split is deliberate: the human maintainer governs and merges, the reviewer (Codex by default) publishes findings, and the implementer (Claude by default) opens PRs, fixes, and replies.</p>
+  <p class="sub">The maintainer opens PRs and authorizes merges. The implementation session keeps fixes; the opposite engine reviews under a separate verified account. CLEAN also requires configured CI checks at the reviewed head; <code>ci.checks: none</code> is an explicit exception for repositories without CI. <code>/pr-loop --merge</code> requires human authorization and its merge gates.</p>
   <div class="scroll">
     <table>
       <caption>Review cluster — who is reviewing × what stage</caption>
       <thead><tr><th scope="col">Who</th><th scope="col">Produce the review</th><th scope="col">Answer existing comments</th><th scope="col">Drive rounds unattended</th></tr></thead>
       <tbody>
         <tr><th scope="row">Me, by hand</th><td>the project's own gate, when the diff is inside <code>review_gate.scope</code></td><td class="na">—</td><td class="na">—</td></tr>
-        <tr><th scope="row">Reviewer (Codex default)</th><td><code>/review-claude-pr</code> — P0–P3 as a comment review</td><td class="na">—</td><td class="na">—</td></tr>
-        <tr><th scope="row">Implementer (Claude default)</th><td class="na">—</td><td><code>/review-comments</code> — fix, then reply</td><td class="na">—</td></tr>
+        <tr><th scope="row">Resolved reviewer</th><td><code>/review-claude-pr</code> — P0–P3 as a comment review</td><td class="na">—</td><td class="na">—</td></tr>
+        <tr><th scope="row">Implementation session</th><td class="na">—</td><td><code>/review-comments</code> — fix, then reply</td><td class="na">—</td></tr>
         <tr><th scope="row">Nobody watching</th><td class="na">—</td><td class="na">—</td><td><code>/pr-loop</code> — runs both halves, bounded rounds</td></tr>
       </tbody>
     </table>
@@ -313,9 +326,10 @@ footer code { font-family: "IBM Plex Mono", monospace; color: var(--ink-soft); }
       <tbody>
         <tr><th scope="row">A new idea coming in</th><td>should we build this at all?</td><td><code>/spec</code> — the gate runs first and alone; only an in-scope verdict spends three more agents</td></tr>
         <tr><th scope="row">One narrow question</th><td>is just this in scope? how long? which component? what proves it?</td><td>the single role contract, dispatched alone</td></tr>
-        <tr><th scope="row">The backlog, forward</th><td>what do I pick up next?</td><td><code>/next</code> — recommends exactly one thing</td></tr>
+        <tr><th scope="row">The backlog, forward</th><td>what do I pick up next?</td><td><code>/next</code> — one issue, or an independent batch with repeated project filters</td></tr>
         <tr><th scope="row">Open work, backward</th><td>what about everything unfinished?</td><td><code>/triage</code> — scores it, executes nothing</td></tr>
         <tr><th scope="row">A decision already made</th><td>file it</td><td><code>/linear-feature-intake</code> — executes a verdict, never forms one</td></tr>
+        <tr><th scope="row">Project dependencies</th><td>map these tickets</td><td><code>/linear-roadmap</code> — typed roadmap and scope contract; no execution permission</td></tr>
       </tbody>
     </table>
   </div>
@@ -335,46 +349,50 @@ footer code { font-family: "IBM Plex Mono", monospace; color: var(--ink-soft); }
 </section>
 
 <footer>
-  Canonical files live once, at <code>&lt;tier&gt;/&lt;name&gt;/SKILL.md</code>. Hosts and projects point at them and never restate the procedure — a second copy of a prompt drifts, and the drift stays invisible until two harnesses disagree about the same proposal. Project skills shadow stack skills of the same name; domain skills stay in their own repo.
+  Read the canonical contract through each card's link. Kstack's routing policy selects project skills first; Codex may display duplicate names. Domain skills stay in their own repository. <a href="skill-map.md">Markdown diagrams</a> · <a href="../README.md">Installation and workflows</a>
 </footer>
 
 </div>
 
 <script>
 const SKILLS = [
-  { n:"/stack", t:"core", p:0, e:null, does:"The router. Matches what you said against every skill's trigger phrases and names one. Never does the work itself.", says:["which skill fits this?","/stack"] },
+  { n:"/stack", href:"../router/stack/SKILL.md", t:"core", p:0, e:null, does:"The router. Matches what you said against every skill's trigger phrases and names one. Never does the work itself.", says:["which skill fits this?","/stack"] },
 
-  { n:"/spec", t:"roles", p:1, e:"ro", does:"The product gate. The scope role runs first and alone; only an in-scope verdict fans out to tech-lead and designer, then qa. A rejection costs one agent instead of four.", says:["should we build X?","spec this out","is this worth building"] },
-  { n:"/next", t:"linear", p:1, e:"ro", does:"Reads the whole board — cycles, priorities, deadlines, blockers — and recommends exactly one thing to pick up, with a ranked top three and paste-ready kickoff text.", says:["what's next?","what should I work on"] },
-  { n:"/triage", t:"roles", p:1, e:"ro", does:"Reports PR intent, scope, merge/CI and review/thread evidence. Optional project/label filters; branches and worktrees on request. Proposal only.", says:["triage the backlog","which branches can we delete"] },
-  { n:"product-manager", t:"roles", p:1, e:"tool", does:"One verdict, citing the exact line of the scope doc that justifies it. Defaults to OUT. Refuses to write specs, estimate, or soften a rejection.", says:["is this in scope?"] },
-  { n:"tech-lead", t:"roles", p:1, e:"prompt", does:"Reuse-vs-build delta naming real files and symbols, the seam it touches, collisions with open PRs, an estimate in half-days. Refuses to estimate what it cannot name.", says:["how long would this take?","does this already exist?"] },
-  { n:"designer", t:"roles", p:1, e:"tool", does:"Which existing components render this, what data shape they need, what states it has. Refuses to invent a component when one exists; a spec conflict stops the run.", says:["which component renders this?"] },
-  { n:"qa", t:"roles", p:1, e:"tool", does:"Acceptance criteria that are runnable checks, plus the false-positive definition that stops a demo being mistaken for evidence.", says:["what would prove this works?"] },
-  { n:"/linear-roadmap", t:"linear", p:1, e:"prompt", does:"Maps existing tickets or drafts a proposed project graph. Writes local typed JSON and Mermaid; a bundled validator checks event dependencies. No tracker writes or session launch.", says:["map this Linear project","prepare an orchestration roadmap"] },
-  { n:"/linear-feature-intake", t:"linear", p:1, e:null, does:"Turns a scope verdict into the right tracker records and nothing else. Searches for duplicates first; performs no scope assessment of its own.", says:["file this","turn this into tickets"] },
+  { n:"/spec", href:"../roles/spec/SKILL.md", t:"roles", p:1, e:"prompt", does:"The product gate. The scope role runs first and alone; only an in-scope verdict fans out to tech-lead and designer, then qa. A rejection costs one agent instead of four.", says:["should we build X?","spec this out","is this worth building"] },
+  { n:"/next", href:"../tools/linear/next/SKILL.md", t:"linear", p:1, e:"ro", does:"Recommends one scoped issue by default, or a bounded independent batch with repeated project filters. Checks candidate eligibility and dependency evidence; project-wide coverage warnings stay separate.", says:["what's next?","what should I work on"] },
+  { n:"/triage", href:"../roles/triage/SKILL.md", t:"roles", p:1, e:"ro", does:"Reports PR intent, scope, merge/CI and review/thread evidence. Optional project/label filters; branches and worktrees on request. Proposal only.", says:["triage the backlog","which branches can we delete"] },
+  { n:"product-manager", href:"../roles/product-manager.md", t:"roles", p:1, e:"tool", does:"One verdict, citing the exact line of the scope doc that justifies it. Defaults to OUT. Refuses to write specs, estimate, or soften a rejection.", says:["is this in scope?"] },
+  { n:"tech-lead", href:"../roles/tech-lead.md", t:"roles", p:1, e:"prompt", does:"Reuse-vs-build delta naming real files and symbols, the seam it touches, collisions with open PRs, an estimate in half-days. Refuses to estimate what it cannot name.", says:["how long would this take?","does this already exist?"] },
+  { n:"designer", href:"../roles/designer.md", t:"roles", p:1, e:"tool", does:"Which existing components render this, what data shape they need, what states it has. Refuses to invent a component when one exists; a spec conflict stops the run.", says:["which component renders this?"] },
+  { n:"qa", href:"../roles/qa.md", t:"roles", p:1, e:"tool", does:"Acceptance criteria that are runnable checks, plus the false-positive definition that stops a demo being mistaken for evidence.", says:["what would prove this works?"] },
+  { n:"/linear-roadmap", href:"../tools/linear/linear-roadmap/SKILL.md", t:"linear", p:1, e:"prompt", does:"Maps existing tickets or drafts a proposed project graph. Writes local typed JSON and Mermaid; a bundled validator checks event dependencies. No tracker writes or session launch.", says:["map this Linear project","prepare an orchestration roadmap"] },
+  { n:"/linear-feature-intake", href:"../tools/linear/linear-feature-intake/SKILL.md", t:"linear", p:1, e:null, does:"Turns a scope verdict into the right tracker records and nothing else. Searches for duplicates first; performs no scope assessment of its own.", says:["file this","turn this into tickets"] },
 
-  { n:"/dispatch-implementation", t:"linear", p:2, e:"prompt", does:"Starts one approved issue in one isolated branch and worktree. Only after that evidence exists, automatically moves the Linear issue to the contract's started status and reads it back before launching a plan-only executor.", says:["start this ticket","tackle ISSUE-123","dispatch this issue"] },
-  { n:"/investigate", t:"core", p:2, e:"hook", does:"Root-cause debugging under one rule: no fix before the cause is found. Three failed attempts stops the run. Every fix ships a test that failed before and passes after.", says:["why is this broken?","it worked yesterday","wtf"] },
-  { n:"/careful", t:"core", p:2, e:"hook", does:"Pre-checks every shell command. Recursive deletes rooted at / or $HOME and force-pushes to the default branch are denied outright; the rest of the destructive set asks first.", says:["be careful","we're touching prod"] },
-  { n:"/freeze", t:"core", p:2, e:"hook", does:"Locks edits to one directory for the session. Anything outside is blocked, not warned — including a symlink inside the boundary that points out of it.", says:["only edit this folder","lock the scope"] },
-  { n:"/unfreeze", t:"core", p:2, e:"hook", does:"Clears the boundary without ending the session, and reports what it was.", says:["unfreeze","allow all edits"] },
-  { n:"/explain-diff-html", t:"core", p:2, e:null, does:"Builds a self-contained interactive page teaching a change — background, mechanism, diagrams, and a five-question quiz. A bundled validator hard-gates the output.", says:["explain this diff","teach the team what changed"] },
+  { n:"/dispatch-implementation", href:"../tools/linear/dispatch-implementation/SKILL.md", t:"linear", p:2, e:"prompt", does:"Starts one approved issue in one isolated branch and worktree. Only after that evidence exists, automatically moves the Linear issue to the contract's started status and reads it back before launching a plan-only executor.", says:["start this ticket","tackle ISSUE-123","dispatch this issue"] },
+  { n:"/investigate", href:"../core/investigate/SKILL.md", t:"core", p:2, e:"prompt", does:"Root-cause debugging under one rule: no fix before the cause is found. Three failed attempts stops the run. Every fix ships a test that failed before and passes after.", says:["why is this broken?","it worked yesterday","wtf"] },
+  { n:"/careful", href:"../core/careful/SKILL.md", t:"core", p:2, e:"hook", does:"Pre-checks every shell command. Recursive deletes rooted at / or $HOME and force-pushes to the default branch are denied outright; the rest of the destructive set asks first.", says:["be careful","we're touching prod"] },
+  { n:"/freeze", href:"../core/freeze/SKILL.md", t:"core", p:2, e:"hook", does:"Restricts Edit and Write to one directory. Claude hooks block matching calls outside the boundary, including through symlinks; shell writes remain possible. The Codex pointer provides prompt-level guidance.", says:["only edit this folder","lock the scope"] },
+  { n:"/unfreeze", href:"../core/unfreeze/SKILL.md", t:"core", p:2, e:"prompt", does:"Clears the boundary without ending the session, and reports what it was.", says:["unfreeze","allow all edits"] },
+  { n:"/explain-diff-html", href:"../core/explain-diff-html/SKILL.md", t:"core", p:2, e:null, does:"Builds a self-contained interactive page teaching a change — background, mechanism, diagrams, and a five-question quiz. A bundled validator hard-gates the output.", says:["explain this diff","teach the team what changed"] },
 
-  { n:"/review-claude-pr", t:"gh", p:3, e:null, does:"The reviewer half: a defect-first pass posted as a P0–P3 comment review, marked with the head SHA so a round is never paid for twice.", says:["review PR #N","give me a defect review"] },
-  { n:"/review-comments", t:"gh", p:3, e:null, does:"The implementer half: finds genuinely unanswered threads across all three feedback surfaces, fixes the code, replies as the implementation agent, and posts the summary comment last.", says:["answer the review comments","address the feedback"] },
-  { n:"/pr-loop", t:"gh", p:3, e:null, does:"Runs both halves unattended until clean, blocked, or out of rounds. Bounded by a round cap and a repeat-finding detector that persists across invocations.", says:["drive the review until it's clean"] },
+  { n:"/review-claude-pr", href:"../tools/github/review-claude-pr/SKILL.md", t:"gh", p:3, e:null, does:"The reviewer half: a defect-first pass posted as a P0–P3 comment review and marked with the reviewed head SHA.", says:["review PR #N","give me a defect review"] },
+  { n:"/review-comments", href:"../tools/github/review-comments/SKILL.md", t:"gh", p:3, e:null, does:"The implementer half: finds genuinely unanswered threads across all three feedback surfaces, fixes the code, replies as the implementation agent, and posts the summary comment last.", says:["answer the review comments","address the feedback"] },
+  { n:"/pr-loop", href:"../tools/github/pr-loop/SKILL.md", t:"gh", p:3, e:null, does:"Coordinates reviewer and implementer with bounded rounds. CLEAN requires configured CI checks at the reviewed head; a repository without CI explicitly selects none. Merge requires human authorization.", says:["drive the review until it's clean"] },
 
-  { n:"/land", t:"core", p:4, e:null, does:"Dedicated branch, gates green, atomic commits, PR opened — with the concurrent-session guards: re-verify the branch and the staged set before every commit. Stops at the PR.", says:["land this","commit and push","open a PR"] },
+  { n:"/land", href:"../core/land/SKILL.md", t:"core", p:4, e:null, does:"Dedicated branch, gates green, atomic commits, PR opened — with the concurrent-session guards: re-verify the branch and the staged set before every commit. Stops at the PR.", says:["land this","commit and push","open a PR"] },
 
-  { n:"/update-stack", t:"core", p:5, e:"prompt", does:"Refreshes the recorded canonical checkout from main, reinstalls both host adapters and reports source/host/project evidence. Check-only mode is read-only; dirty or divergent sources stop updates.", says:["update kstack","reinstall kstack","refresh the shared skills"] },
-  { n:"/health", t:"core", p:5, e:"ro", does:"Runs the project's own gates, scores them, and reports the trend against the last run. Never edits, never fixes.", says:["how healthy is this codebase?","quality score"] },
-  { n:"/delivery-retro", t:"gh", p:5, e:"ro", does:"Was this period fruitful versus the previous equal period? Measures outcomes, flow, quality and focus — and refuses commits, lines and PR counts as scores.", says:["was this week fruitful?","what did we ship"] },
-  { n:"/session-titles", t:"gh", p:5, e:"ro", does:"Sweeps open agent sessions across both harnesses, resolves each to a branch, PR and issue key, and retitles them so the session list is scannable.", says:["what is each session working on?"] },
-  { n:"/pr-label-sweep", t:"gh", p:5, e:null, does:"Adds the milestone, area and client labels your rules call for to every open PR, each citing the tracker project, changed path or title keyword that fired it. Add-only; never creates a label.", says:["label my PRs","sweep PR labels"] },
-  { n:"/linear-steward", t:"linear", p:5, e:null, does:"Structural health of the tracker: unprojected, stale, GitHub-contradicted, duplicated, superseded, ungateable. Mutates nothing unless explicitly applied.", says:["audit the board","these statuses are wrong"] },
-  { n:"/linear-release-audit", t:"linear", p:5, e:"ro", does:"Audits a release against its gate criteria using tracker and GitHub evidence together. Headline finding: issues marked done with no acceptance evidence.", says:["is the release ready?","what's blocking the release"] },
-  { n:"/issue-graph", t:"linear", p:5, e:"prompt", does:"Opens an installed local roadmap viewer, checks its freshness, or refreshes one snapshot from indexed JSON and fresh Linear data. Preserves typed conditions and unverified checkpoints, saved views and notes.", says:["launch the issue graph","refresh the issue graph"] },
+  { n:"/health", href:"../core/health/SKILL.md", t:"core", p:5, e:"ro", does:"Runs the project's own gates, scores them, and reports the trend against the last run. Never edits, never fixes.", says:["how healthy is this codebase?","quality score"] },
+  { n:"/delivery-retro", href:"../tools/github/delivery-retro/SKILL.md", t:"gh", p:5, e:"ro", does:"Was this period fruitful versus the previous equal period? Measures outcomes, flow, quality and focus — and refuses commits, lines and PR counts as scores.", says:["was this week fruitful?","what did we ship"] },
+  { n:"/session-titles", href:"../tools/github/session-titles/SKILL.md", t:"gh", p:5, e:null, does:"Previews session titles with issue and PR references. Writes titles only with explicit apply; scheduled application needs an authorized desktop schedule.", says:["what is each session working on?"] },
+  { n:"/pr-label-sweep", href:"../tools/github/pr-label-sweep/SKILL.md", t:"gh", p:5, e:null, does:"Previews labels from configured tracker, path and title rules. Dry-run by default; explicit apply adds existing labels only, citing the evidence for each. Never removes or creates a label.", says:["label my PRs","sweep PR labels"] },
+  { n:"/linear-steward", href:"../tools/linear/linear-steward/SKILL.md", t:"linear", p:5, e:null, does:"Structural health of the tracker: unprojected, stale, GitHub-contradicted, duplicated, superseded, ungateable. Mutates nothing unless explicitly applied.", says:["audit the board","these statuses are wrong"] },
+  { n:"/linear-release-audit", href:"../tools/linear/linear-release-audit/SKILL.md", t:"linear", p:5, e:"ro", does:"Audits release gates using tracker and GitHub evidence. Read-only by default; explicit --apply can correct statuses and publish a status update after the required safeguards.", says:["is the release ready?","what's blocking the release"] },
+  { n:"/issue-graph", href:"../tools/linear/issue-graph/SKILL.md", t:"linear", p:5, e:"prompt", does:"Opens an installed local roadmap viewer, checks its freshness, or refreshes one snapshot from indexed JSON and fresh Linear data. Preserves typed conditions and unverified checkpoints, saved views and notes.", says:["launch the issue graph","refresh the issue graph"] },
+  { n:"/wave", href:"../tools/linear/wave/SKILL.md", t:"linear", p:2, e:"prompt", does:"Plans and builds one independent batch with a shared contract, human-approved plans, seam checks and bounded review. Claude Code runs the Workflow graph; Codex performs selection only.", says:["run one wave","plan a Linear batch","build the approved wave"] },
+  { n:"/summarize-change", href:"../core/summarize-change/SKILL.md", t:"core", p:2, e:"prompt", does:"Briefs a change by its intent and source, approach, constraints, departures from intent, sensitive ranges, gate results and the decision needed. --tight caps the output at 250 words.", says:["summarize this PR","brief me on this change"] },
+  { n:"/update-stack", href:"../core/update-stack/SKILL.md", t:"core", p:5, e:"prompt", does:"Updates the recorded shared checkout from main and reinstalls both hosts; --check audits the existing installation without changes. Dirty canonical checkouts stop the update.", says:["update kstack","reinstall kstack"] },
+  { n:"/sweep-schedules", href:"../tools/github/sweep-schedules/SKILL.md", t:"gh", p:5, e:"prompt", does:"Creates or updates a requested desktop schedule for title and label sweeps, every three hours by default. Reuses matching schedules; installation alone activates nothing.", says:["automate the sweeps","schedule title and label sweeps"] },
+  { n:"/follow-builders", href:"../tools/external/follow-builders/SKILL.md", t:"external", p:5, e:null, does:"Vendored AI-builder digest workflow. Needs Node, network and its documented setup. Delivery channels are chosen explicitly; read its own contract for current feed and delivery instructions.", says:["what are the AI builders saying","my AI digest"] },
 ];
 
 const PHASES = [
@@ -386,8 +404,11 @@ const PHASES = [
   { name:"Operate",  when:"after it ships" },
 ];
 
-const TIER_LABEL = { core:"core", roles:"roles", gh:"github", linear:"linear" };
+const TIER_LABEL = { core:"core", roles:"roles", gh:"github", linear:"linear", external:"external" };
 const E_LABEL = { hook:"hook", tool:"tool-list", prompt:"prompt", ro:"read-only" };
+
+const skillCount = SKILLS.filter(s => s.n.startsWith("/")).length;
+document.getElementById("catalog-count").textContent = `${skillCount} skills + ${SKILLS.length - skillCount} roles`;
 
 const host = document.getElementById("phases");
 PHASES.forEach((ph, i) => {
@@ -409,7 +430,7 @@ PHASES.forEach((ph, i) => {
     card.dataset.hay = (s.n + " " + s.does + " " + s.says.join(" ") + " " + TIER_LABEL[s.t]).toLowerCase();
     const badges = [`<span class="badge tool" style="border-color:var(--tier-c);color:var(--tier-c)">${TIER_LABEL[s.t]}</span>`];
     if (s.e) badges.push(`<span class="badge ${s.e}">${E_LABEL[s.e]}</span>`);
-    card.innerHTML = `<div class="card-top"><span class="name">${s.n}</span>${badges.join("")}</div>
+    card.innerHTML = `<div class="card-top"><a class="name" href="${s.href}">${s.n}</a>${badges.join("")}</div>
       <p class="does">${s.does}</p>
       <ul class="says">${s.says.map(x => `<li>${x}</li>`).join("")}</ul>`;
     grid.appendChild(card);
@@ -418,12 +439,17 @@ PHASES.forEach((ph, i) => {
 });
 
 const LADDER = [
-  { k:"(nothing)", d:"a fresh repo, no config", v:[["core","/stack"],["core","/investigate"],["core","/careful"],["core","/freeze"],["core","/unfreeze"],["core","/explain-diff-html"]] },
+  { k:"(nothing)", d:"a fresh repo, no config", v:[["core","/stack"],["core","/investigate"],["core","/careful"],["core","/freeze"],["core","/unfreeze"],["core","/explain-diff-html"],["core","/summarize-change"]] },
   { k:"gates.lint · gates.test", d:"your authoritative commands", v:[["core","/land"],["core","/health"]] },
   { k:"scope_doc", d:"what's in and out right now", v:[["roles","/spec"],["roles","/triage"],["roles","product-manager"],["roles","tech-lead"],["roles","designer"],["roles","qa"]] },
   { k:"identities.maintainer · identities.reviewer · identities.implementer", d:"who governs, reviews, and implements", v:[["gh","/review-claude-pr"],["gh","/review-comments"],["gh","/pr-loop"]] },
-  { k:"issue_prefix", d:"your tracker's key format", v:[["gh","/session-titles"],["gh","/delivery-retro"],["gh","/pr-label-sweep"]] },
-  { k:"workspace_contract", d:"your tracker's own rules", v:[["linear","/next"],["linear","/dispatch-implementation"],["linear","/linear-steward"],["linear","/linear-feature-intake"],["linear","/linear-release-audit"]] },
+  { k:"ci.checks · review_engines · review models", d:"CI selection and reviewer routing", v:[["gh","/pr-loop"]] },
+  { k:"wave settings", d:"selection, execution, review, test and contract limits", v:[["linear","/wave"]] },
+  { k:"pr_labels.rules · desktop tools", d:"label evidence and requested scheduling", v:[["gh","/pr-label-sweep"],["gh","/sweep-schedules"]] },
+  { k:"issue_graph.config", d:"installed viewer; refresh also needs indexed roadmap and Linear", v:[["linear","/issue-graph"]] },
+  { k:"Node + network", d:"vendored digest setup", v:[["external","/follow-builders"]] },
+  { k:"issue_prefix", d:"your tracker's key format", v:[["gh","/session-titles"],["gh","/pr-label-sweep"]] },
+  { k:"workspace_contract", d:"your tracker's own rules; enables the retro's optional tracker leg", v:[["gh","/delivery-retro"],["linear","/next"],["linear","/linear-roadmap"],["linear","/dispatch-implementation"],["linear","/linear-steward"],["linear","/linear-feature-intake"],["linear","/linear-release-audit"]] },
 ];
 document.getElementById("ladder").innerHTML = LADDER.map(r => `
   <div class="rung">
@@ -448,7 +474,7 @@ function apply() {
   document.querySelectorAll(".phase").forEach(sec => {
     sec.hidden = ![...sec.querySelectorAll(".card")].some(c => !c.hidden);
   });
-  countEl.textContent = shown === SKILLS.length ? `${shown} skills` : `${shown} of ${SKILLS.length}`;
+  countEl.textContent = shown === SKILLS.length ? `${shown} entries` : `${shown} of ${SKILLS.length} entries`;
   emptyEl.hidden = shown > 0;
 }
 q.addEventListener("input", apply);
@@ -458,3 +484,5 @@ chips.forEach(c => c.addEventListener("click", () => {
 }));
 apply();
 </script>
+</body>
+</html>

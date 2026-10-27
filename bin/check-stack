@@ -3,8 +3,8 @@
 
 Checks every skill (`*/SKILL.md` under router/, core/, roles/, tools/) and every
 role contract (`roles/*.md`) against CONVENTIONS.md, plus the shell scripts under
-any `bin/`, plus the bundled offline checks. Exits non-zero if
-anything fails. `--list` prints the catalog instead.
+any `bin/`, documentation catalogs/links, and offline workflow checks.
+Exits non-zero if anything fails. `--list` prints the catalog instead.
 Stdlib only; paths resolve against this file's repo, so run it from anywhere.
 """
 
@@ -312,6 +312,18 @@ def main(argv: list[str]) -> int:
         check_doc(path, r)
     scripts = check_scripts(r)
     pointers = check_codex_pointers(r)
+    documentation = REPO / "bin/check-docs"
+    out = subprocess.run([sys.executable, str(documentation)], capture_output=True, text=True)
+    print(out.stdout, end="")
+    if out.returncode:
+        r.fail("bin/check-docs", "documentation", out.stderr.strip() or "documentation checks failed")
+    out = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s", str(REPO / "bin/tests")],
+        capture_output=True, text=True,
+    )
+    print(out.stderr, end="")
+    if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+        r.fail("bin/tests", "harness", "documentation checker tests failed or none discovered")
     harness = REPO / "tools/linear/wave/tests/run.mjs"
     if harness.is_file():
         if shutil.which("node") is None:
