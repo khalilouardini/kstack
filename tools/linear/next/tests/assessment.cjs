@@ -11,6 +11,7 @@ function observations() {
     graph_source:{mode:'PUBLISHED', graph_sha:'a'.repeat(40)}});
   s.candidates = s.candidates.map((c,i) => ({...c, issue_uuid:'00000000-0000-0000-0000-00000000000'+i,
     project:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    lifecycle:{state:'STARTABLE',source:'tracker:status-and-contract',detail:'Active unstarted issue'},
     scope:{admission:ok('Owner admits followups within existing acceptance'), plan:ok('Bounded plan'),
       build:ok('Exact acceptance is authorized'), decisions:[]},
     native:{complete:true, source:'live:both-directions', blockers:[]}, foundation:ok('No unmerged foundation')}));
@@ -81,6 +82,105 @@ test('bounded main maintenance admission stays available without a source bypass
     e.report.delta={added_nodes:[{id:'repair'}],repairs:[{node_id:'repair',origin:'approved-unit'}]};
   }
   assert.equal(compile(s).output.selected_ids.length,3);
+});
+function multiProject() {
+  const s=observations();
+  s.candidates.forEach((c,i)=>c.project=String(i+1).repeat(8)+'-'+String(i+1).repeat(4)+'-'+
+    String(i+1).repeat(4)+'-'+String(i+1).repeat(4)+'-'+String(i+1).repeat(12));
+  s.graph_reports=s.graph_reports.flatMap(entry=>s.candidates.map((c,i)=>{
+    const copy=structuredClone(entry);
+    copy.report.candidates=[copy.report.candidates[i]];
+    copy.report.candidates[0].project_id=c.project;
+    return copy;
+  }));
+  s.graph_sources=Object.fromEntries(s.candidates.map(c=>[c.project,{mode:'PUBLISHED',graph_sha:s.main_sha}]));
+  delete s.graph_source;
+  s.accepted_graph_updates=[];
+  return s;
+}
+function accept(s,index,number,head) {
+  const project=s.candidates[index].project;
+  s.command.push('--accept-graph-update',String(number));
+  s.accepted_graph_updates.push({number,url:'https://github.example/repo/pull/'+number,state:'OPEN',base:'main',head_sha:head,reviewed_head_sha:head,
+    review_source:'review-at-head',validation_exit:0,coverage_exit:1,coverage_state:'UPDATE_REQUIRED',project_ids:[project]});
+  s.graph_sources[project]={mode:'ACCEPTED_UPDATE',pr_number:number,graph_sha:head};
+  for (const e of s.graph_reports) if (e.report.candidates[0].project_id===project) e.report.graph_sha=head;
+}
+test('mixed published and accepted graph reports use each project source', () => {
+  const s=multiProject(); accept(s,1,123,'b'.repeat(40));
+  assert.deepEqual(compile(s).output.selected_ids,['T-0','T-1','T-2']);
+  const b=s.graph_reports.find(e=>e.report.transition==='build' && e.report.candidates[0].identifier==='T-1');
+  b.report.graph_sha=s.main_sha;
+  assert.deepEqual(compile(s).output.selected_ids,['T-0','T-2']);
+  assert.deepEqual(compile(s).output.planning_ids,['T-1']);
+});
+test('two accepted graph heads must each match the invoked reviewed PR and project', () => {
+  const s=multiProject(); accept(s,0,123,'b'.repeat(40)); accept(s,1,124,'c'.repeat(40));
+  assert.deepEqual(compile(s).output.selected_ids,['T-0','T-1','T-2']);
+  const changes=[
+    x=>x.graph_sources[x.candidates[0].project].pr_number=999,
+    x=>x.accepted_graph_updates[0].reviewed_head_sha='d'.repeat(40),
+    x=>x.accepted_graph_updates[0].head_sha='d'.repeat(40),
+    x=>delete x.accepted_graph_updates[0].url,
+    x=>x.accepted_graph_updates[0].project_ids=[x.candidates[1].project],
+    x=>x.accepted_graph_updates[0].state='CLOSED',
+    x=>x.command.splice(x.command.indexOf('--accept-graph-update'),2),
+    x=>x.command.push('--accept-graph-update','0'),
+  ];
+  for (const change of changes) {const copy=structuredClone(s); change(copy); assert.throws(()=>compile(copy),/assessment:/);}
+});
+test('accepted project cannot silently use main or choose between overlapping heads', () => {
+  const s=multiProject(); accept(s,0,123,'b'.repeat(40));
+  const stale=structuredClone(s);
+  stale.graph_sources[stale.candidates[0].project]={mode:'PUBLISHED',graph_sha:stale.main_sha};
+  assert.throws(()=>compile(stale),/must use its accepted graph update/);
+  const overlap=structuredClone(s); accept(overlap,1,124,'c'.repeat(40));
+  overlap.accepted_graph_updates[1].project_ids.push(overlap.candidates[0].project);
+  assert.throws(()=>compile(overlap),/multiple accepted graph updates/);
+  const unrelated=structuredClone(s);
+  unrelated.accepted_graph_updates[0].project_ids=['ffffffff-ffff-ffff-ffff-ffffffffffff'];
+  assert.throws(()=>compile(unrelated),/does not affect an assessed project/);
+});
+test('an accepted graph can cover an assessed project with no candidate issues', () => {
+  const s=multiProject(); accept(s,0,123,'b'.repeat(40));
+  const empty='ffffffff-ffff-ffff-ffff-ffffffffffff';
+  s.assessed_project_ids=[...s.candidates.map(c=>c.project),empty];
+  s.command.push('--accept-graph-update','124');
+  s.accepted_graph_updates.push({number:124,url:'https://github.example/repo/pull/124',state:'OPEN',base:'main',
+    head_sha:'c'.repeat(40),reviewed_head_sha:'c'.repeat(40),review_source:'review-at-head',
+    validation_exit:0,coverage_exit:0,coverage_state:'CURRENT',project_ids:[empty]});
+  assert.deepEqual(compile(s).output.selected_ids,['T-0','T-1','T-2']);
+  s.assessed_project_ids.pop();assert.throws(()=>compile(s),/does not affect an assessed project/);
+});
+test('local graph sources cannot vary across projects', () => {
+  const s=multiProject(); s.command.push('--local-graph');
+  const pins={index_path:'/owner/orchestration/index.json',manifest_path:'orchestration/project.json',
+    index_digest:'sha256:'+'b'.repeat(64),manifest_digest:'sha256:'+'c'.repeat(64),source_revision:'f'.repeat(40)};
+  for (const c of s.candidates) s.graph_sources[c.project]={mode:'APPROVED_LOCAL',local_graph:structuredClone(pins)};
+  for (const e of s.graph_reports) {e.report.graph_sha=null;e.report.local_graph=structuredClone(pins);e.report.candidates[0].mode='APPROVED_LOCAL';}
+  assert.equal(compile(s).output.selected_ids.length,3);
+  s.graph_sources[s.candidates[1].project].local_graph.index_digest='sha256:'+'d'.repeat(64);
+  assert.throws(()=>compile(s),/same approved local graph/);
+});
+test('future read-only authorization remains visible without dispatch or status promotion', () => {
+  const s=observations();
+  for (const [i,id] of [[0,'OGUR-656'],[1,'OGUR-658']]) {
+    const c=s.candidates[i]; const old=c.issue_id; c.issue_id=id; c.active_release=false;
+    c.lifecycle={state:'READ_ONLY_ONLY',source:'live:Backlog + owner planning decision',
+      detail:'Future Backlog work; only read-only planning is authorized'};
+    c.scope.plan=ok('Owner explicitly authorizes future read-only planning');
+    c.scope.build={state:'UNSATISFIED',source:'original:future-scope',detail:'Implementation not admitted'};
+    for (const e of s.graph_reports) e.report.candidates.find(x=>x.identifier===old).identifier=id;
+    for (const pair of s.pairs) {if(pair.a===old)pair.a=id;if(pair.b===old)pair.b=id;}
+  }
+  const result=compile(s); assert.equal(result.input.lifecycle_contract,1);
+  assert.deepEqual(result.output.selected_ids,['T-2']);assert.deepEqual(result.output.planning_ids,[]);
+  assert.deepEqual(result.output.read_only_planning_ids,['OGUR-656','OGUR-658']);
+  for (const c of result.output.outcomes.filter(x=>x.issue_id.startsWith('OGUR-'))) {
+    assert.equal(c.plan.state,'ELIGIBLE');assert.equal(c.dispatch.state,'BLOCKED');
+    assert.equal(c.disposition,'READ_ONLY_PLANNING');assert.equal(c.build.state,'BLOCKED');
+  }
+  delete s.candidates[0].lifecycle;assert.throws(()=>compile(s),/lifecycle startability/);
 });
 console.log(count+' assessment tests passed');
 module.exports={observations};

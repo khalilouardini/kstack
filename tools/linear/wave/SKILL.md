@@ -145,7 +145,9 @@ Read `hosts/HOSTS.md`. Claude Code supplies the Workflow tool. On Codex, run
 A1 only: read `tools/linear/next/SKILL.md` and follow it top to bottom in parallel
 mode with the supplied milestone/project/count tokens and every
 `--accept-overlap <PR#>` and --accept-graph-update / --local-graph occurrences unchanged. PLAN_ONLY candidates
-appear in the separate planning queue. Render both queues, all exclusions and
+appear in the separate dispatchable planning queue when lifecycle permits a start.
+Authorized read-only planning is shown as advisory and never enters A4. Render
+all queues, exclusions and
 capacity counts, then say **the graph did not run**; no dispatch, tracker write,
 contract or build. A Codex build invocation refuses because approval cannot
 restore a missing tool.
@@ -158,7 +160,11 @@ New plans use version 2 selection. Read next's `references/selection.md`, collec
 its complete observation packet and run `next/bin/assess-candidates` first.
 Use its returned normalized input and assessment; never hand-author graph checks
 from project coverage or treat merge-only holds as start prerequisites.
-Pass `selection_version: 2` and `selection_snapshot` to Workflow. Match requested
+Pass `selection_version: 2` and `selection_snapshot` to Workflow. Preserve the
+compiler's lifecycle distinction: report read-only advisory IDs from the assessment
+without adding them to `planning_tracks` or launching dispatch. Unknown lifecycle
+holds a start; the selection report retains the cited observation.
+ Match requested
 N, command tokens, `wave.selection_limit` (default 12), main SHA and observation
 time to this invocation. A1 must return the helper's exact build and planning
 membership. Retain every outcome, warning and unfilled-slot explanation.

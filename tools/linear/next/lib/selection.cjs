@@ -7,6 +7,9 @@ function selectCandidates(input) {
   const states = ['SATISFIED','UNSATISFIED','UNKNOWN'];
   const checks = ['scope_plan','scope_build','native','plan_graph','build_graph','foundation'];
   const planChecks = ['scope_plan','native','plan_graph'];
+  if (input?.lifecycle_contract !== undefined && input.lifecycle_contract !== 1)
+    fail('unsupported lifecycle contract');
+  const lifecycleAware = input?.lifecycle_contract === 1;
   if (!input || input.schema_version !== 2 || input.complete !== true)
     fail('version 2 and a complete considered pool are required');
   if (!text(input.snapshot_id) || !/^[0-9a-f]{40}$/.test(input.source_revision || '') ||
@@ -27,6 +30,10 @@ function selectCandidates(input) {
         typeof c.active_release !== 'boolean') fail(c.issue_id + ': project, milestone and rank required');
     if (!c.ownership || !['ACTIVE','INACTIVE','UNKNOWN'].includes(c.ownership.state) ||
         !text(c.ownership.source)) fail(c.issue_id + ': cited ownership required');
+    if (lifecycleAware && (!c.lifecycle ||
+        !['STARTABLE','READ_ONLY_ONLY','UNKNOWN'].includes(c.lifecycle.state) ||
+        !text(c.lifecycle.source) || !text(c.lifecycle.detail)))
+      fail(c.issue_id + ': cited lifecycle startability required');
     for (const key of checks) {
       const check = c.checks?.[key];
       if (!check || !states.includes(check.state) || !text(check.source) || !text(check.detail))
@@ -45,11 +52,19 @@ function selectCandidates(input) {
         source:c.ownership.source,detail:c.ownership.state === 'ACTIVE' ? 'Resume existing work' : 'Verify writer ownership'};
       planReasons.push(r); buildReasons.push(r);
     }
+    const dispatchReasons = [...planReasons];
+    if (lifecycleAware && c.lifecycle.state !== 'STARTABLE') {
+      const r = {code:'LIFECYCLE',state:c.lifecycle.state === 'UNKNOWN' ? 'UNKNOWN' : 'UNSATISFIED',
+        source:c.lifecycle.source,detail:c.lifecycle.detail};
+      buildReasons.push(r); dispatchReasons.push(r);
+    }
     if (!c.file_scope?.length) buildReasons.push({code:'FILE_SCOPE',state:'UNKNOWN',
       source:input.snapshot_id,detail:'Read-only scope mapping required before implementation selection'});
     const state = rs => rs.some(r => r.state === 'UNSATISFIED') ? 'BLOCKED' : rs.length ? 'UNKNOWN' : 'ELIGIBLE';
     return {...c,plan:{state:state(planReasons),reasons:planReasons},
-      build:{state:state(buildReasons),reasons:buildReasons},warnings:[...c.external_overlaps]};
+      build:{state:state(buildReasons),reasons:buildReasons},
+      ...(lifecycleAware ? {dispatch:{state:state(dispatchReasons),reasons:dispatchReasons}} : {}),
+      warnings:[...c.external_overlaps]};
   }).sort((a,b) => Number(b.active_release)-Number(a.active_release) || a.priority-b.priority || compare(a.issue_id,b.issue_id));
   const pairs = new Map(), key = (a,b) => JSON.stringify([a,b].sort(compare));
   for (const p of input.pairs) {
@@ -98,24 +113,31 @@ function selectCandidates(input) {
   }
   const selected=best.map(i => pool[i].issue_id), optimal=pending.length===0;
   const upper=optimal ? best.length : Math.max(best.length,...pending.map(n => Math.min(target,n.chosen.length+n.remaining.length)));
-  const planning=candidates.filter(c => c.plan.state==='ELIGIBLE' && c.build.state!=='ELIGIBLE');
+  const planning=candidates.filter(c => c.plan.state==='ELIGIBLE' && c.build.state!=='ELIGIBLE' &&
+    (!lifecycleAware || c.dispatch.state==='ELIGIBLE'));
+  const advisory=lifecycleAware ? candidates.filter(c => c.plan.state==='ELIGIBLE' &&
+    c.lifecycle.state==='READ_ONLY_ONLY') : [];
   const planningIds=planning.slice(0,input.requested).map(c => c.issue_id);
   const outcomes=candidates.map(c => {
     let disposition=selected.includes(c.issue_id) ? 'SELECTED' :
       c.ownership.state==='ACTIVE' ? 'ACTIVE' : planningIds.includes(c.issue_id) ? 'PLANNING' :
-      planning.includes(c) ? 'PLANNING_QUEUED' : c.build.state==='ELIGIBLE' ? 'SEQUENCED' :
+      planning.includes(c) ? 'PLANNING_QUEUED' : advisory.includes(c) ? 'READ_ONLY_PLANNING' :
+      c.build.state==='ELIGIBLE' ? 'SEQUENCED' :
       c.plan.state==='BLOCKED' ? 'BLOCKED' : 'UNKNOWN';
     const constraints=selected.filter(id => id!==c.issue_id).map(id => pairs.get(key(id,c.issue_id)))
       .filter(p => p && p.relation!=='INDEPENDENT');
     const reason=disposition==='SEQUENCED' ? (constraints.length ? 'PAIR_CONSTRAINT' :
       selected.length===input.requested ? 'CAPACITY_OR_PRIORITY' : 'SEARCH_BUDGET') : disposition;
     return {issue_id:c.issue_id,project:c.project,milestone:c.milestone,disposition,reason,
-      plan:c.plan,build:c.build,constraints,warnings:c.warnings};
+      plan:c.plan,build:c.build,...(lifecycleAware ? {dispatch:c.dispatch,lifecycle:c.lifecycle} : {}),
+      constraints,warnings:c.warnings};
   });
   return {schema_version:2,snapshot_id:input.snapshot_id,command:input.command,source_revision:input.source_revision,
-    selected_ids:selected,planning_ids:planningIds,outcomes,
+    selected_ids:selected,planning_ids:planningIds,
+    ...(lifecycleAware ? {read_only_planning_ids:advisory.map(c=>c.issue_id)} : {}),outcomes,
     capacity:{requested:input.requested,limit,selected:selected.length,planning:planningIds.length,
       unfilled:input.requested-selected.length,eligible:pool.length,considered:candidates.length,
+      ...(lifecycleAware ? {read_only_planning:advisory.length} : {}),
       optimal,upper_bound:upper,search_visits:visited,
       reason:selected.length===input.requested ? 'FILLED' : !optimal ? 'SEARCH_BUDGET' :
         pool.length<input.requested ? 'INSUFFICIENT_BUILD_CANDIDATES' : 'PAIR_CONSTRAINTS'}};

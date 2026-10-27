@@ -60,6 +60,9 @@ Use a single-candidate packet (`requested: 1`, no pairs). Keep the original
 owner admission separate from unresolved named product decisions. Derive graph
 checks from candidate-specific plan/build reports at the explicit source pins;
 coverage gaps and merge-only conditions cannot become start blockers.
+Recheck its tracker lifecycle and workspace contract before any write; a plan-only
+authorization for future Backlog work permits an advisory brief but does not
+authorize a workspace or started status. Do not dispatch that advisory lane.
 Do not reinterpret stage eligibility merely because dispatch names one issue.
 Plan eligibility permits only planning; build still needs an approved exact plan,
 fresh build eligibility and existing lifecycle guards. Resume verified active

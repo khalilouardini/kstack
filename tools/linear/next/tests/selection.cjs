@@ -78,5 +78,21 @@ test('exhaustive oracle and input order invariance for small pools',()=>{
     s.candidates.reverse();s.pairs.reverse();assert.deepEqual(select(s).selected_ids,r.selected_ids);
   }
 });
+test('lifecycle limits dispatch and preserves read-only planning while legacy snapshots replay',()=>{
+  const s=snapshot();s.candidates[0].checks.scope_build.state='UNSATISFIED';
+  const legacy=select(s);
+  s.candidates.forEach((c,i)=>c.lifecycle={state:['READ_ONLY_ONLY','UNKNOWN','STARTABLE'][i],
+    source:'tracker and scope observation',detail:['Backlog: advisory planning only','Status unverified','Active and startable'][i]});
+  assert.deepEqual(select(s),legacy,'legacy checkpoint ignores new fields');
+  s.lifecycle_contract=1;
+  const r=select(s);assert.deepEqual(r.selected_ids,['T-2']);assert.deepEqual(r.planning_ids,[]);
+  assert.deepEqual(r.read_only_planning_ids,['T-0']);assert.equal(r.capacity.read_only_planning,1);
+  assert.equal(r.outcomes[0].plan.state,'ELIGIBLE');assert.equal(r.outcomes[0].dispatch.state,'BLOCKED');
+  assert.equal(r.outcomes[1].dispatch.state,'UNKNOWN');assert.equal(r.outcomes[1].build.state,'UNKNOWN');
+  s.candidates[2].checks.scope_build.state='UNSATISFIED';
+  assert.deepEqual(select(s).planning_ids,['T-2']);
+  s.candidates[2].lifecycle.state='MAYBE';assert.throws(()=>select(s),/startability/);
+  s.lifecycle_contract=2;assert.throws(()=>select(s),/unsupported lifecycle/);
+});
 console.log(count+' selection tests passed');
 module.exports={snapshot};

@@ -47,27 +47,55 @@ cannot recover a candidate that the collector incorrectly excluded.
 The packet has the selector metadata/ranking/pair fields below plus:
 
 - `main_sha` and `checked_at`: the freshly observed main and UTC timestamp used
-  by all admission reports. `graph_source` is `{mode: "PUBLISHED", graph_sha}`,
-  `{mode: "ACCEPTED_UPDATE", graph_sha}` (after exact-head review validation), or
-  `{mode: "APPROVED_LOCAL", local_graph}`. Local pins contain `index_path`,
+  by all admission reports. Supply `graph_sources` keyed by candidate project UUID:
+  each source is `{mode: "PUBLISHED", graph_sha}`,
+  `{mode: "ACCEPTED_UPDATE", pr_number, graph_sha}`, or
+  `{mode: "APPROVED_LOCAL", local_graph}`. A single `graph_source` is also accepted
+  when all projects share it. Mixed main and accepted PR sources, and multiple
+  accepted PR heads, can coexist. For every `--accept-graph-update <PR#>` supply
+  `accepted_graph_updates` containing the current verified `number`, `state`, `base`,
+  `url`, `head_sha`, `reviewed_head_sha`, `review_source`, `validation_exit`,
+  `coverage_exit`, `coverage_state` and `project_ids`. Each project source must
+  match the unique accepted PR affecting that project, its reviewed exact head
+  and project; overlapping accepted PRs for a project refuse. If an explicitly
+  assessed project has no candidates, supply `assessed_project_ids` as the full
+  verified project UUID list so its accepted PR can still be checked. Local mode
+  requires all projects to use the same canonical graph pins. Local pins contain `index_path`,
   `manifest_path`, `index_digest`, `manifest_digest`, `source_revision` from the
   canonical helper. Source must agree with exact command tokens.
 - `graph_reports: [{source: <absolute audit path>, report: <full helper JSON>}]`.
   The compiler matches issue UUID, identifier, project, transition and source pins,
   never the aggregate report state. Missing or duplicate matches are UNKNOWN.
-- Each candidate retains identity/rank/ownership/files/overlaps, adds `issue_uuid`,
-  and supplies `scope`, `native`, `foundation` instead of `checks`. Every check
+- Each candidate retains identity/rank/ownership/files/overlaps, adds `issue_uuid`
+  and `lifecycle`, and supplies `scope`, `native`, `foundation` instead of `checks`. Every check
   observation is `{state, source, detail}` using the three selector states below.
   `scope` contains `admission` (original authorization), `plan` and `build` (exact
   boundary applicability), and `decisions` (explicit empty list after checking).
   Each decision adds `id` and `stages` from plan/build/merge/release. A generic
   admission cannot override a pending named decision. Keep older exclusion and
   superseding decision sources together in the boundary rationale.
+- `lifecycle: {state, source, detail}` records fresh tracker status and the
+  workspace contract: `STARTABLE` when dispatch may start that issue,
+  `READ_ONLY_ONLY` when dispatch cannot start it but bounded read-only planning
+  is permissible, or `UNKNOWN` when startability cannot be established. Preserve
+  original owner planning authorization independently in `scope.plan`; do not
+  infer a start from generic future scope admission or from `active_release`.
+  A future Backlog item with explicitly authorized advisory planning belongs in
+  `READ_ONLY_ONLY`, not the dispatch queue. An active unstarted issue is STARTABLE
+  only when the contract and fresh tracker/ownership evidence support it.
 - `native: {complete: true, source, blockers: [<check observation>...]}` records
   both native relation directions and verified resolution of every blocker.
   Incomplete reads become UNKNOWN, never an empty unblocked set. `foundation`
   is the cited implementation foundation check. Project-less candidates require
   a cited `graph_exemption` observation; no implicit project exemption exists.
+
+The compiler marks its output `lifecycle_contract: 1` and requires a cited
+lifecycle observation for every candidate. The selector preserves plan eligibility
+independently of startability, adds a `dispatch` state, and exposes eligible
+`READ_ONLY_ONLY` candidates as `read_only_planning_ids` with a count. Those are
+advisory only: never create a worktree, change status or start an A4 planner for
+them. `UNKNOWN` lifecycle holds dispatch and implementation. Previously saved
+version 2 inputs without this marker retain their original semantics for replay.
 
 `select-candidates` remains a low-level pure solver and legacy checkpoint reader.
 Running it alone on hand-written booleans does not verify collection correctness.
@@ -141,7 +169,8 @@ and read their evidence, but flags do not change eligibility. Unknown external
 diffs warn; invalid explicit PR arguments still refuse. Keep all overlap evidence
 even when the selected set is empty or the summary exceeds one screen.
 
-Show separately: selected builds, eligible planning, queued planning, active work,
+Show separately: selected builds, dispatchable planning, authorized read-only
+planning, queued planning, active work,
 decisions/blockers and unknown evidence. Print requested, selected, planning and
 unfilled counts, with the reason and search bound. Native or plan-blocked work
 cannot enter planning. Unknown files can be mapped by a bounded read-only planner
@@ -161,7 +190,9 @@ planning tracks. The Workflow sandbox embeds the same pure helper; tests compare
 the embedded source with `lib/selection.cjs` so the policies cannot silently drift.
 
 RUN_A version 2 stores separate `tracks`/`plans` and
-`planning_tracks`/`planning_plans`, plus the assessment and its input. Only the
+`planning_tracks`/`planning_plans`, plus the assessment and its input.
+Read-only planning IDs remain visible in `selection_report` but never enter those
+tracks or create an A4 node. Only the
 first pair can enter approval. A planning-only run returns PLANNING_ONLY with no
 build command. Even explicit IDs cannot promote a planning member. On build,
 recompute the saved selection and verify membership, then run existing fresh

@@ -290,8 +290,11 @@ scope/lifecycle guards pass; it ends at a plan, with no code edits or PR. Name t
 unmet build event and source, and re-check it before any later implementation.
 READY_TO_BUILD gets the implementation kickoff after human plan approval.
 A graph result alone is not plan approval or semantic scope authorization.
-PLAN_ONLY and unknown-file-scope candidates with authorized planning go in the
-separate planning queue. They do not count as implementation-ready tracks.
+PLAN_ONLY and unknown-file-scope candidates with authorized planning enter the
+dispatchable planning queue only when lifecycle permits dispatch. Future Backlog
+work with owner-authorized read-only planning is shown separately as advisory; it
+never grants a worktree, status change or start. Unknown lifecycle is a hold.
+Neither category counts as an implementation-ready track.
 Wave version 2 preserves them in planning_tracks/planning_plans, never in its
 build approval set. Later merge conditions do not block planning or build unless
 a cited prerequisite actually targets those stages.
