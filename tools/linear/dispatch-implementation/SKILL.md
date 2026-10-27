@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.6.0
+version: 0.8.0
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -104,6 +104,35 @@ One issue means one issue. Never create an executor-only tracking row, and never
 a parent/meta issue when an implementation child is the independently mergeable unit.
 
 ## 2. Create or recover the isolated workspace
+
+### Prepared planning handoff
+
+When the current wave caller supplies a version 2 prepared handoff, reuse its
+immutable observations by exact revision/digest. This applies only to that
+invocation and does not grant a later cache bypass. Keep all §1 gates:
+
+1. Verify the source revision, canonical graph source/flags/pins and immutable
+   scope/decision-source digests against the handoff. Read full relevant source
+   sections when changed or unavailable; unchanged content can be reused from
+   the full original artifact. A quote match alone does not prove applicability.
+2. Fetch current candidate and relevant closure issue bodies/relations and
+   original mutable decision sources. Verify unchanged acceptance, native
+   blockers, project/milestone and stage-specific conditions. Re-run admission
+   from these fresh facts before writes, even if main has not moved. Retain old
+   and new observations. Changed/unknown relevant evidence returns STOPPED.
+3. Fetch main/accepted heads and check owner graph pins; planning requires the
+   caller's main/source pins before workspace/status writes. Recheck worktrees,
+   branches, PR ownership and lifecycle status. Resume verified active work;
+   never treat the handoff's earlier INACTIVE observation as current ownership.
+4. Reuse the assessed candidate/closure, exact scope, warnings and known status
+   vocabulary. Do not run /next, paginate the project, regenerate the graph or
+   launch another preparation/executor agent. If the scoped audit is incomplete,
+   return the precise missing input. Do not silently redo a broad collection.
+
+These are focused fresh checks, not a freshness exemption. The original full
+audit remains available by absolute locator and the node receives a clearly
+marked candidate projection. Dispatch's workspace/status ledger and read-back
+below are unchanged. Ordinary named dispatch still performs §1 in full.
 
 Prefer the issue's tracker-provided branch name. Otherwise derive a readable branch
 containing the issue identifier. Resolve the repository's default branch instead of
