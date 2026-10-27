@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.11.0
+version: 0.13.0
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -78,7 +78,8 @@ and review-comments. Host support below is unchanged.
 ## Local wave metadata stays local
 
 With an explicitly approved local graph, never open a separate PR for the wave
-run, its plan, shared-literal contract or bookkeeping. A2 still scans agreements;
+run, its plan, shared-literal contract or bookkeeping. The caller (or compatibility
+A2) still scans agreements;
 store them in `RUN_A.literals`, keep `RUN_A.contract` null and skip A3. Each A4
 plan receives those exact agreements. The human approves that snapshot with the
 plans; implementation and any required product regression tests belong in the
@@ -176,7 +177,8 @@ selection and approval. Legacy Run A records retain their old membership.
    next's **Accepted file overlaps** procedure. For --accept-graph-update,
    use the publication contract's exact-head graph-coverage procedure. Otherwise refuse and quote the
    value (or `<missing>`); do not report EMPTY. Deduplicate this read-only
-   preflight while preserving all selection tokens. `/next` checks again in A1.
+   preflight while preserving all selection tokens. Prepared plans reuse these
+   observations; compatibility `/next` checks again in A1.
    For build, accept `--approve`, repeated --accept-graph-update or one --local-graph; reject `--accept-overlap` as unknown. Reject other unknown flags,
    nonpositive N, absent build approval, or an approval list containing unknown/stopped issues. N defaults
    to `/next`'s documented 3; announce the resolved count. Resolve repo root and
@@ -275,7 +277,16 @@ selection and approval. Legacy Run A records retain their old membership.
    A3 rechecks before contract publication; pass the same explicit
    graph flags to composed land, dispatch, review-comments and B3 pr-loop invocations. These
    fields are transient args, not extra RUN_A/WAVE_REPORT schema keys.
-6. Call the Workflow tool with `scriptPath` equal to the physical
+6. For a new version 2 plan, finish selection and the shared-literal scan in the
+   caller using the evidence already collected above. Read next's
+   `references/selection.md`; run its shared helper and retain every outcome.
+   Construct `prepared_plan` as described in `references/preparation.md` and pass
+   it to Workflow. Do not start A1 to repeat /next or A2 to re-read the same pool.
+   A4 still checks live mutable candidate/closure and ownership evidence before
+   any workspace/status write. If preparation is incomplete, report the exact
+   missing evidence; do not call a repeated preparation path a completed fast run.
+   Existing callers without this handoff retain the original A1/A2 path.
+   Call the Workflow tool with `scriptPath` equal to the physical
    `workflow/wave.js` inside the resolved wave directory and the JSON `args`.
    Whether paths outside the session directory work through an installed symlink
    is unverified. If the tool rejects the path **before execution**, read that
@@ -302,7 +313,8 @@ B3 admission only observes. All are prompt-level.
 B4 reads this skill only for read-only final agreement verification described
 in `references/execution.md`; it never invokes a wave or fixes a ticket.
 
-Run A selects (A1), scans shared literals in issue descriptions and scopes (A2),
+Run A consumes the caller's prepared selection and literal scan for new plans.
+The compatibility path selects (A1) and scans shared literals (A2). It then,
 then, only for published graphs when necessary, prepares a contract PR (A3)
 before dispatch plans (A4). Local graphs follow **Local wave metadata stays local**.
 The contract is `<contract_dir>/<wave-id>.json`, a JSON list of `{literal, files}`,
@@ -406,7 +418,8 @@ With accepted-overlap flags, the unchanged Workflow records keep each track's
 overlaps in `PLAN.risks`. SELECT/RUN_A do not retain `/next`'s unused-PR or
 excluded-candidate overlap reports, including EMPTY runs; say so explicitly.
 Direct `/next` and Codex's A1-only output retain those reports.
-With N=3, Run A normally uses 6 agents (3+N with contract), or 5 without A3;
+With N=3, prepared Run A uses 3 planners, plus A3 only if a published contract
+is required. Compatibility Run A uses 6 agents (3+N with contract), or 5 without A3;
 Run B uses 11 (3N+2 with B2 and B4), or 10 without B2: one B1, one B3 admission and one B3
 review per project-linked track. Project-less tracks have no admission node.
 One final B4 node is included. Recovered PRs omit their B1 nodes.

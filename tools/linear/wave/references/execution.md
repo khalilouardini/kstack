@@ -1,5 +1,9 @@
 # Experimental streaming execution
 
+Selection startup is separate from build/review scheduling. New prepared Run A
+handoffs omit duplicate A1/A2 agents; see [preparation.md](preparation.md).
+This works in both legacy and streaming mode and preserves fresh dispatch checks.
+
 Set `wave.execution_mode: streaming` in the consuming stack config to opt in.
 The default remains `legacy`. Both modes preserve selected membership, explicit
 plan approval, fresh admission, review identity/round caps and human merge.

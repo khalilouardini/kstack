@@ -43,11 +43,13 @@ async function run(stage, mutate=()=>{}, source=executable) {
   if(args.recovery===null) args.recovery=args.plan_record.tracks.map(t=>({issue_id:t.issue_id,
     branch:t.branch,worktree:t.worktree,state:'ABSENT',checked_at:args.graph_publication?.checked_at || args.date+'T12:00:00Z',
     result:null,evidence:['Verified no open PR on this branch']}));
-  const calls=[],events=[],logs=[];let runningReview=0,maxReview=0;
+  const calls=[],events=[],logs=[];let runningReview=0,maxReview=0,runningPlan=0,maxPlan=0;
   const agent=async (prompt,opts)=>{
     calls.push({prompt,...opts});events.push('start '+opts.label);
     assert.ok(opts.schema);assert.ok(prompt.includes('D4 node rule:'));
     const isReview=opts.label.startsWith('B3');
+    const isPlan=opts.label.startsWith('A4');
+    if (isPlan) {runningPlan++;maxPlan=Math.max(maxPlan,runningPlan);}
     if (isReview) {runningReview++;maxReview=Math.max(maxReview,runningReview);}
     await new Promise(r=>setTimeout(r,f.delays?.[opts.label] ?? 2));
     assert.ok(Object.hasOwn(f.responses,opts.label),'unexpected call '+opts.label);
@@ -71,7 +73,7 @@ async function run(stage, mutate=()=>{}, source=executable) {
       if(args.plan_record.contract || ((args.graph_update_flags || []).includes('--local-graph') && args.plan_record.literals.length))value.seam={exit:0,table:tracks.flatMap(t=>args.plan_record.literals.flatMap(e=>e.files.map(file=>({literal:e.literal,branch:value.heads.find(h=>h.issue_id===t.issue_id).head_sha,file,state:'UNCHANGED',evidence:'Final head checked'})))),open_questions:[]};
     }
     if(value!==null) validate(value,opts.schema,opts.label);
-    if(isReview) runningReview--;events.push('end '+opts.label);return value;
+    if(isReview) runningReview--;if(isPlan) runningPlan--;events.push('end '+opts.label);return value;
   };
   const pipeline=async (items,...stages)=>Promise.all(items.map(async (item,index)=>{
     let prev=item;try {for(const stage of stages) prev=await stage(prev,item,index);return prev;}catch(e){logs.push('pipeline drop '+e);return null;}
@@ -80,7 +82,7 @@ async function run(stage, mutate=()=>{}, source=executable) {
   const phase=t=>{assert.ok(['Select','Plan','Build','Seams','Review'].includes(t));events.push('phase '+t);};
   const result=await new AsyncFunction('agent','pipeline','parallel','phase','log','args','budget',source)(agent,pipeline,parallel,phase,m=>logs.push(m),args,{});
   validate(result,schemas[stage==='plan'?'RUN_A':'WAVE_REPORT']);
-  return {result,calls,events,logs,maxReview};
+  return {result,calls,events,logs,maxReview,maxPlan};
 }
 const seamTable=f=>f.tracks.flatMap(t=>f.literals.flatMap(e=>e.files.map(file=>({literal:e.literal,branch:t.branch,file,state:'UNCHANGED',evidence:'unchanged'}))));
 const stopped=(f)=>{const b=f.responses['B1 build T-1'];b.state='STOPPED';b.pr=null;b.head_sha=null;b.stop_reason='gate failed';b.evidence=['test exit 1'];};
@@ -1211,6 +1213,70 @@ tests.push(async()=>{
   }
 });
 
+const preparedArgs=(f,a)=>{
+  localArgs(f,a);v2Args(f,a);
+  a.prepared_plan={snapshot_id:a.selection_snapshot.snapshot_id,source_revision:a.selection_snapshot.source_revision,
+    main_sha:a.graph_publication.main_sha,checked_at:a.graph_publication.checked_at,
+    selection:clone(f.responses['A1 select']),literals:clone(f.literals),
+    evidence:['/audit/original-observations.json','/audit/full-admission.json']};
+};
+cases.push({number:cases.length+1,name:'prepared selection omits duplicate agents and starts bounded concurrent planners'});
+tests.push(async()=>{
+  const r=await run('plan',preparedArgs);
+  assert.equal(r.result.state,'AWAITING_APPROVAL');
+  assert.deepEqual(r.calls.map(c=>c.label),['A4 plan T-1','A4 plan T-2','A4 plan T-3']);
+  assert.equal(r.maxPlan,3);
+  assert.ok(r.logs.some(l=>l.includes('preparation_reused')));
+  assert.ok(r.result.evidence.includes('/audit/full-admission.json'));
+  for(const c of r.calls) {
+    assert.match(c.prompt,/Do not rerun \/next, paginate the project, regenerate the roadmap/);
+    assert.match(c.prompt,/fresh candidate\/closure issue and decision/);
+    assert.match(c.prompt,/Changed or unavailable relevant evidence returns STOPPED before workspace\/status writes/);
+    assert.ok(!c.prompt.includes('A1 select'));
+  }
+  const queued=await run('plan',(f,a)=>{preparedArgs(f,a);a.wave.worker_concurrency=1;});
+  assert.equal(queued.maxPlan,1);assert.equal(queued.result.plans.length,3);
+});
+cases.push({number:cases.length+1,name:'prepared handoff validates pins, contracts, membership and admission before writes'});
+tests.push(async()=>{
+  for(const mutate of [
+    (f,a)=>a.prepared_plan.snapshot_id='other',
+    (f,a)=>a.prepared_plan.source_revision='b'.repeat(40),
+    (f,a)=>a.prepared_plan.main_sha='b'.repeat(40),
+    (f,a)=>a.prepared_plan.checked_at='2026-10-05T12:01:00Z',
+    (f,a)=>delete a.prepared_plan.literals,
+    (f,a)=>a.prepared_plan.evidence=[],
+    (f,a)=>a.prepared_plan.selection.tracks.pop(),
+    (f,a)=>a.prepared_plan.selection.tracks[0].file_scope=['other.py'],
+    (f,a)=>a.prepared_plan.selection.extra='unknown field',
+    (f,a)=>a.prepared_plan.literals[0].tracks.push('not-selected'),
+    (f,a)=>a.prepared_plan.literals[0].files.push('unassessed.py'),
+    (f,a)=>a.graph_admission[0].candidates[0].state='BLOCKED'
+  ]) {
+    const r=await run('plan',(f,a)=>{preparedArgs(f,a);mutate(f,a);});
+    assert.equal(r.result.state,'STOPPED');assert.equal(r.calls.length,0);
+  }
+});
+cases.push({number:cases.length+1,name:'prepared planning queue and published contracts retain existing checkpoints'});
+tests.push(async()=>{
+  const planning=await run('plan',(f,a)=>{
+    v2Planning(f,a,true);
+    a.prepared_plan={snapshot_id:a.selection_snapshot.snapshot_id,source_revision:a.selection_snapshot.source_revision,
+      main_sha:a.graph_publication.main_sha,checked_at:a.graph_publication.checked_at,
+      selection:clone(f.responses['A1 select']),literals:[],evidence:['/audit/all-planning.json']};
+  });
+  assert.equal(planning.result.state,'PLANNING_ONLY');assert.equal(planning.result.build_command,null);
+  assert.ok(planning.calls.every(c=>c.label.startsWith('A4')));
+  const published=await run('plan',(f,a)=>{
+    v2Args(f,a);a.prepared_plan={snapshot_id:a.selection_snapshot.snapshot_id,
+      source_revision:a.selection_snapshot.source_revision,main_sha:a.graph_publication.main_sha,
+      checked_at:a.graph_publication.checked_at,selection:clone(f.responses['A1 select']),
+      literals:clone(f.literals),evidence:['/audit/published.json']};
+  });
+  assert.equal(published.result.state,'AWAITING_APPROVAL');
+  assert.equal(published.calls[0].label,'A3 contract');
+  assert.ok(published.result.contract);
+});
 let failed=0;
 for(let i=0;i<tests.length;i++)try{await tests[i]();console.log(`PASS ${cases[i].number} ${cases[i].name}`);}catch(e){failed++;console.error(`FAIL ${cases[i].number} ${cases[i].name}: ${e.stack}`);}
 console.log(`${tests.length-failed}/${tests.length} wave cases passed`);

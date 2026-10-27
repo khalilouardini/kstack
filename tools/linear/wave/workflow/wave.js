@@ -2293,6 +2293,16 @@ other scope, dependency and approval gates still apply. Record these SHA pins in
 plan risks and execution evidence. Project-less tracks are exempt.\n`;
 
 const graphPrompt=graphContext();
+// Prepared caller records pass through the same closed record contracts as agents.
+const matchesSchema=(value,schema)=>{
+  const type=value===null?'null':Array.isArray(value)?'array':Number.isInteger(value)?'integer':typeof value;
+  if (!(Array.isArray(schema.type)?schema.type:[schema.type]).includes(type) ||
+      (schema.enum && !schema.enum.includes(value))) return false;
+  if (type==='object') return (schema.required || []).every(k=>Object.hasOwn(value,k)) &&
+    Object.keys(value).every(k=>Object.hasOwn(schema.properties,k) && matchesSchema(value[k],schema.properties[k]));
+  if (type==='array') return value.every(item=>matchesSchema(item,schema.items));
+  return true;
+};
 if (args.stage === 'plan') {
   const v2=args.selection_version!==1;
   let assessment=null;
@@ -2309,6 +2319,15 @@ if (args.stage === 'plan') {
       assessment=selectCandidates(snapshot);
     } catch(error) { return refuse(String(error.message)); }
   }
+  const prepared=args.prepared_plan;
+  if (prepared && (!v2 || prepared.snapshot_id!==args.selection_snapshot.snapshot_id ||
+      prepared.source_revision!==args.selection_snapshot.source_revision ||
+      prepared.main_sha!==publication.main_sha || prepared.checked_at!==publication.checked_at ||
+      !matchesSchema(prepared.selection,schemas.SELECT) ||
+      !matchesSchema({literals:prepared.literals},schemas.SCAN) ||
+      !Array.isArray(prepared.evidence) || !prepared.evidence.length ||
+      prepared.evidence.some(e=>typeof e!=='string' || !e.trim())))
+    return refuse('prepared plan: complete selection, literal scan, evidence and matching snapshot pins required');
 
   const accepted = new Map();
   const parsedOverlap=parsePrFlags(args.selection || [],'--accept-overlap');
@@ -2327,7 +2346,8 @@ if (args.stage === 'plan') {
     accepted.set(number,pr);
   }
   phase('Select');
-  const selected = await call('A1 select', `${graphPrompt}Project coverage warnings (evaluate candidates individually): ${JSON.stringify(coverageWarnings)}.
+  if (prepared) event('preparation_reused','caller selection and literal scan',{snapshot_id:prepared.snapshot_id});
+  const selected = prepared ? prepared.selection : await call('A1 select', `${graphPrompt}Project coverage warnings (evaluate candidates individually): ${JSON.stringify(coverageWarnings)}.
 ${read(args.paths.next, 'selection is read-only; no adaptation')}
 Run /next with argument tokens ${JSON.stringify(args.selection)} in parallel mode.
 Pass every token unchanged, including repeated --accept-overlap flags and values;
@@ -2348,7 +2368,7 @@ the script compares the string exactly and stops the run on any other value.`, s
   const record = {state:'STOPPED', run_id:args.run_id, wave_id:args.wave_id,
     tracks:selected?.tracks || [], plans:[], contract:null, literals:[],
     sequenced:selected?.sequenced || [], already_active:selected?.already_active || [],
-    build_command:null, stop_reason:null, evidence:[graphEvidence,admissionEvidence]};
+    build_command:null, stop_reason:null, evidence:[graphEvidence,admissionEvidence,...(prepared?.evidence || [])]};
   if (!selected) { record.stop_reason='A1 returned no record'; record.evidence.push(record.stop_reason); return record; }
   const planning=v2 ? selected.planning_tracks : [];
   if (v2) {
@@ -2384,11 +2404,16 @@ the script compares the string exactly and stops the run on any other value.`, s
   if (new Set(selected.tracks.map(t=>t.issue_id)).size !== selected.tracks.length) {
     record.stop_reason='A1 returned duplicate issue ids'; record.evidence.push(record.stop_reason); return record;
   }
-  const scan = selected.tracks.length ? await call('A2 shared-literal scan', `${read(args.paths.wave, 'scan only; do not dispatch or implement')}
+  const scan = prepared ? {literals:prepared.literals} : selected.tracks.length ? await call('A2 shared-literal scan', `${read(args.paths.wave, 'scan only; do not dispatch or implement')}
 Read every issue description and file scope in ${JSON.stringify(selected.tracks)}.
 List every literal two or more tracks must agree on: status tokens, schema fields,
 config keys, paths, marker comments. Return literals with files, participating ids, why.`, schemas.SCAN, 'Select') : {literals:[]};
   if (!scan) { record.stop_reason='A2 returned no record'; record.evidence.push(record.stop_reason); return record; }
+  const buildIds=new Set(selected.tracks.map(t=>t.issue_id));
+  if (scan.literals.some(l=>l.tracks.length<2 || new Set(l.tracks).size!==l.tracks.length ||
+      l.tracks.some(id=>!buildIds.has(id)) || !l.literal.trim() || !l.files.length ||
+      l.files.some(file=>!selected.tracks.some(t=>l.tracks.includes(t.issue_id) && t.file_scope.includes(file)))))
+    return refuse('shared literals must name selected build participants and their assessed files');
   record.literals=scan.literals;
   if (scan.literals.length && !localIndex) {
     if (!cfg.contract_dir) {
@@ -2450,7 +2475,16 @@ This track cannot enter this wave's build approval; a fresh selection is require
 ${JSON.stringify(assessment.outcomes.find(c=>c.issue_id===t.issue_id))}.
 Record overlaps as plan risks. Real dependencies still block. Before merge, rebase
 onto current default main, rerun relevant gates and review any changed head.\n` : '';
-    const p=await call(`A4 plan ${t.issue_id}`, `${graphContext(t,planningOnly?'plan':'build')}${stagePrompt}${integrationPrompt}${overlapPrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
+    const reusePrompt=prepared ? `Prepared planning handoff: snapshot ${prepared.snapshot_id}, source revision ${prepared.source_revision}.
+Evidence locators: ${JSON.stringify(prepared.evidence)}.
+Reuse this invocation's collected immutable content only after verifying its exact source pins.
+Do not rerun /next, paginate the project, regenerate the roadmap, or launch a preparation agent.
+Follow dispatch's Prepared planning handoff procedure: fresh candidate/closure issue and decision
+observations, main/graph pins, workspace ownership and status checks remain mandatory before writes.
+Changed or unavailable relevant evidence returns STOPPED before workspace/status writes.
+Read only this ticket's closure from full audit artifacts when additional detail is needed;
+do not load unrelated candidates. The context above is a projection, not a complete helper report.\n` : '';
+    const p=await call(`A4 plan ${t.issue_id}`, `${graphContext(t,planningOnly?'plan':'build')}${stagePrompt}${integrationPrompt}${overlapPrompt}${reusePrompt}${read(args.paths.dispatch, '--plan-only: sections 1–3 unchanged; section 4 plan in current agent, no executor launch')}
 Dispatch exact issue ${t.issue_id} with --plan-only ${graphFlags.join(' ')}. Proposed track: ${JSON.stringify(t)}.
 Contract: ${JSON.stringify(record.contract)}. Shared agreements: ${JSON.stringify(record.literals)}.
 ${localIndex ? 'Keep shared agreements in this approved plan handoff. Do not create a separate wave contract branch, test, commit or PR; include any required product tests in the ticket plan.' : ''}
