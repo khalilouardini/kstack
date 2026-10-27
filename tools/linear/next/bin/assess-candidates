@@ -1,0 +1,10 @@
+#!/usr/bin/env node
+// Read-only evidence compiler; writes JSON to stdout, never to the tracker.
+const fs = require('node:fs');
+try {
+  if (process.argv.length !== 3) throw new Error('usage: assess-candidates <observations.json>');
+  const packet = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  console.log(JSON.stringify(require('../lib/assessment.cjs')(packet), null, 2));
+} catch (error) {
+  console.error(String(error.message)); process.exitCode = 2;
+}

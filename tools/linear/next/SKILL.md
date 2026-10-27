@@ -1,6 +1,6 @@
 ---
 name: next
-version: 0.10.0
+version: 0.11.0
 description: Read Linear and recommend one scoped issue, or a bounded parallel batch with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. Explicit flags accept a reviewed pending PR or a local graph. Shared files warn; real dependencies constrain selection. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
@@ -74,7 +74,9 @@ For focused offline validation, use [references/validation.md](references/valida
 
 Read [references/selection.md](references/selection.md) before assessing candidates.
 It is the common stage contract for next, wave and dispatch. Collect the complete
-filtered pool, run its deterministic selector, and retain all exclusion reasons.
+filtered pool, compile its observation packet with `bin/assess-candidates`, run
+its deterministic selector, and retain all exclusion reasons. Do not hand-author
+the six checks or substitute a project coverage state for candidate admission.
 Use the returned IDs; priority is a tie-break after feasible cardinality.
 
 Shared file paths warn equally for candidates selected together and already-active
@@ -288,8 +290,11 @@ scope/lifecycle guards pass; it ends at a plan, with no code edits or PR. Name t
 unmet build event and source, and re-check it before any later implementation.
 READY_TO_BUILD gets the implementation kickoff after human plan approval.
 A graph result alone is not plan approval or semantic scope authorization.
-PLAN_ONLY and unknown-file-scope candidates with authorized planning go in the
-separate planning queue. They do not count as implementation-ready tracks.
+PLAN_ONLY and unknown-file-scope candidates with authorized planning enter the
+dispatchable planning queue only when lifecycle permits dispatch. Future Backlog
+work with owner-authorized read-only planning is shown separately as advisory; it
+never grants a worktree, status change or start. Unknown lifecycle is a hold.
+Neither category counts as an implementation-ready track.
 Wave version 2 preserves them in planning_tracks/planning_plans, never in its
 build approval set. Later merge conditions do not block planning or build unless
 a cited prerequisite actually targets those stages.

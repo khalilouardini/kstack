@@ -1005,6 +1005,22 @@ tests.push(async()=>{
   const build=await run('build',(_f,a)=>a.plan_record=r.result);
   assert.equal(build.result.state,'STOPPED');assert.equal(build.calls.length,0);
 });
+cases.push({number:cases.length+1,name:'lifecycle-aware advisory planning is retained without dispatch'});
+tests.push(async()=>{
+  const r=await run('plan',(f,a)=>{
+    v2Planning(f,a,true);a.selection_snapshot.lifecycle_contract=1;
+    const states=['STARTABLE','UNKNOWN','READ_ONLY_ONLY'];
+    a.selection_snapshot.candidates.forEach((c,i)=>c.lifecycle={state:states[i],
+      source:'tracker and owner decision',detail:'Observed lifecycle '+states[i]});
+    f.responses['A1 select'].planning_tracks=f.responses['A1 select'].planning_tracks.filter(t=>t.issue_id==='T-1');
+  });
+  assert.equal(r.result.state,'PLANNING_ONLY');
+  assert.deepEqual(r.calls.filter(c=>c.label.startsWith('A4')).map(c=>c.label),['A4 plan T-1']);
+  const report=JSON.parse(r.result.selection_report);
+  assert.deepEqual(report.read_only_planning_ids,['T-3']);assert.equal(report.capacity.read_only_planning,1);
+  assert.equal(report.outcomes.find(c=>c.issue_id==='T-2').dispatch.state,'UNKNOWN');
+  assert.equal(report.outcomes.find(c=>c.issue_id==='T-3').disposition,'READ_ONLY_PLANNING');
+});
 cases.push({number:cases.length+1,name:'assessment membership, evidence and pin validation precede writes'});
 tests.push(async()=>{
   for(const change of ['absent','incomplete','pins','count','membership','scope','plan_evidence']) {
