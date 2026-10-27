@@ -5,7 +5,7 @@ KStack has two independent dimensions:
 1. **Workflow phase** — when a skill is useful: decide, build, review, land, or
    operate.
 2. **Capability tier** — what the skill needs: local files, a scope contract,
-   GitHub, or Linear.
+   GitHub, Linear, or the vendored digest's Node runtime and network access.
 
 The [`/stack` router](../router/stack/SKILL.md) matches a request to one skill.
 It names the route and stops; the selected skill does the work.
@@ -32,7 +32,8 @@ flowchart TD
 ```
 
 Project skills take precedence because they know the consuming repository's
-domain. A project skill with the same name as a KStack skill shadows it.
+domain. This is kstack's routing policy: explicitly select the project contract
+when names collide. Codex can display both versions in its skill selector.
 
 ## The workflow map
 
@@ -58,9 +59,11 @@ flowchart LR
     subgraph build["2 · Build — while changing code"]
       direction TB
       dispatch["/dispatch-implementation"]
+      wave["/wave plan / build"]
       investigate["/investigate"]
       controls["/careful · /freeze · /unfreeze"]
       explain["/explain-diff-html"]
+      summarize["/summarize-change"]
     end
 
     subgraph review["3 · Review — once a PR exists"]
@@ -84,16 +87,18 @@ flowchart LR
       retro["/delivery-retro"]
       titles["/session-titles"]
       labels["/pr-label-sweep"]
+      schedules["/sweep-schedules"]
       steward["/linear-steward"]
       audit["/linear-release-audit"]
       issueGraph["/issue-graph"]
+      digest["/follow-builders"]
     end
 
     classDef route fill:#f6e6cf,stroke:#b8690c,color:#16292b
     classDef phase fill:#ddeeec,stroke:#1d6a63,color:#16292b
     classDef stopStyle fill:#f6dee5,stroke:#a04360,color:#16292b
     class router route
-    class spec,next,triage,intake,roadmap,roles,dispatch,investigate,controls,explain,produce,respond,loop,landSkill,updateStack,health,retro,titles,labels,steward,audit,issueGraph phase
+    class spec,next,triage,intake,roadmap,roles,dispatch,wave,investigate,controls,explain,summarize,produce,respond,loop,landSkill,updateStack,health,retro,titles,labels,schedules,steward,audit,issueGraph,digest phase
     class human stopStyle
 ```
 
@@ -114,11 +119,12 @@ flowchart TB
     config --> identities["GitHub identities + issue_prefix"]
     config --> workspace["workspace_contract"]
 
-    core --> coreSkills["router · investigate · careful<br/>freeze · unfreeze · explain-diff-html"]
+    core --> coreSkills["router · investigate · careful<br/>freeze · unfreeze · explain-diff-html<br/>summarize-change"]
     gates --> gatedCore["land · health"]
     scope --> roleSkills["spec · triage<br/>four role contracts"]
-    identities --> githubSkills["review skills · delivery-retro<br/>session-titles · pr-label-sweep"]
-    workspace --> linearSkills["next · dispatch-implementation<br/>feature-intake · linear-roadmap<br/>steward · release-audit · issue-graph"]
+    identities --> githubSkills["review skills · delivery-retro<br/>session-titles · pr-label-sweep<br/>sweep-schedules with desktop tools"]
+    workspace --> linearSkills["next · dispatch-implementation · wave<br/>feature-intake · linear-roadmap<br/>steward · release-audit · issue-graph refresh"]
+    runtime["Node + network"] --> externalSkills["follow-builders"]
 
     classDef source fill:#f6e6cf,stroke:#b8690c,color:#16292b
     classDef coreStyle fill:#ddeeec,stroke:#1d6a63,color:#16292b
@@ -135,17 +141,21 @@ flowchart TB
 | Tier | Core dependency | Skills |
 |---|---|---|
 | Router | Local files | [`/stack`](../router/stack/SKILL.md) |
-| Core | Git + local filesystem | [`/investigate`](../core/investigate/SKILL.md), [`/careful`](../core/careful/SKILL.md), [`/freeze`](../core/freeze/SKILL.md), [`/unfreeze`](../core/unfreeze/SKILL.md), [`/explain-diff-html`](../core/explain-diff-html/SKILL.md), [`/land`](../core/land/SKILL.md), [`/health`](../core/health/SKILL.md), [`/update-stack`](../core/update-stack/SKILL.md) |
+| Core | Git + local filesystem | [`/investigate`](../core/investigate/SKILL.md), [`/careful`](../core/careful/SKILL.md), [`/freeze`](../core/freeze/SKILL.md), [`/unfreeze`](../core/unfreeze/SKILL.md), [`/explain-diff-html`](../core/explain-diff-html/SKILL.md), [`/summarize-change`](../core/summarize-change/SKILL.md), [`/land`](../core/land/SKILL.md), [`/health`](../core/health/SKILL.md), [`/update-stack`](../core/update-stack/SKILL.md) |
 | Roles | `scope_doc` | [`/spec`](../roles/spec/SKILL.md), [`/triage`](../roles/triage/SKILL.md), [`product-manager`](../roles/product-manager.md), [`tech-lead`](../roles/tech-lead.md), [`designer`](../roles/designer.md), [`qa`](../roles/qa.md) |
-| GitHub | `gh` plus configured identities or issue prefix | [`/review-claude-pr`](../tools/github/review-claude-pr/SKILL.md), [`/review-comments`](../tools/github/review-comments/SKILL.md), [`/pr-loop`](../tools/github/pr-loop/SKILL.md), [`/delivery-retro`](../tools/github/delivery-retro/SKILL.md), [`/session-titles`](../tools/github/session-titles/SKILL.md), [`/pr-label-sweep`](../tools/github/pr-label-sweep/SKILL.md) |
-| Linear | Linear workspace + `workspace_contract` | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/wave`](../tools/linear/wave/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-roadmap`](../tools/linear/linear-roadmap/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md) |
+| GitHub | `gh`; review identities and CI policy where required; desktop tools for scheduling | [`/review-claude-pr`](../tools/github/review-claude-pr/SKILL.md), [`/review-comments`](../tools/github/review-comments/SKILL.md), [`/pr-loop`](../tools/github/pr-loop/SKILL.md), [`/delivery-retro`](../tools/github/delivery-retro/SKILL.md), [`/session-titles`](../tools/github/session-titles/SKILL.md), [`/pr-label-sweep`](../tools/github/pr-label-sweep/SKILL.md), [`/sweep-schedules`](../tools/github/sweep-schedules/SKILL.md) |
+| Linear | Tracker rules and scope; local viewer operations need no tracker | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/wave`](../tools/linear/wave/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-roadmap`](../tools/linear/linear-roadmap/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md), [`/issue-graph`](../tools/linear/issue-graph/SKILL.md) |
+| External | Node, network, and the vendored skill's dependencies | [`/follow-builders`](../tools/external/follow-builders/SKILL.md) |
 
 [`/issue-graph`](../tools/linear/issue-graph/SKILL.md) opens an existing local viewer
 without tracker access; refreshing it also needs fresh Linear reads. It projects
 the existing indexed roadmap without changing its scope or dependencies.
 
-Missing configuration is a supported state. A skill either asks for the missing
-judgment or refuses and names the exact key; it never silently invents a value.
+These tiers locate skills; they do not list every prerequisite. The
+[onboarding table](../project-template/ONBOARDING.md#which-keys-unlock-which-skills)
+maps configuration to capabilities. Required gates refuse when absent;
+review-model and wave limits use documented, announced defaults. Read-only
+triage retains UNKNOWN assessments for missing interpretation inputs.
 
 ## The decision cluster
 
@@ -178,11 +188,28 @@ flowchart TD
 ```
 
 `/linear-roadmap` consumes existing tickets or drafts proposed work; it validates
-a typed record and generates its Mermaid view without launching sessions.
+a local typed record and generates its Mermaid view without launching sessions.
+`--publish` explicitly opens or updates a graph PR; `--local-graph` on supported
+execution skills explicitly selects a validated local source while retaining
+scope, dependency, evidence, and human-decision requirements.
 See the root [orchestration contract](../ORCHESTRATION.md).
 
 `/next` and `/triage` are complements: `/next` looks forward at what to start;
 `/triage` looks backward at work already left open.
+
+The single-role path answers one question. Establish the scope verdict before
+asking `tech-lead` to estimate; `product-manager` can answer the scope question
+alone. A new idea requiring the full pipeline starts with `/spec`.
+
+`/next` recommends one issue by default, or a bounded independent batch with
+`--parallel` and repeated `--project` filters. `/triage` defaults to PRs and
+supports a project union intersected with labels; it includes intent,
+current-head CI/review evidence, unresolved threads, and merge lanes.
+Both preserve scope boundaries and create no execution permission.
+
+Project-wide graph coverage warnings do not automatically block an independently
+verified mapped candidate. Candidate eligibility and bounded maintenance
+reconciliation follow the [publication contract](../tools/linear/linear-roadmap/references/publication-gate.md).
 
 ## The review cluster
 
@@ -205,9 +232,32 @@ flowchart LR
     class human humanStyle
 ```
 
-The split preserves two identities: the reviewer publishes findings, while the
-bot fixes code and answers existing feedback. `/pr-loop` orchestrates both but
-is bounded by a round cap and repeat-finding detection.
+The implementation session keeps fixes; the opposite engine reviews under a
+separate verified account. `/pr-loop` resolves the route from authorship
+evidence and is bounded by a round cap and repeat-finding detection. Claude
+implementation with Codex review is the default, but the route can reverse.
+
+`CLEAN` requires the configured CI checks at the reviewed head as well as the
+review result. `ci.checks: none` is an explicit, reported exception for a
+repository without CI. A later push invalidates the earlier head's evidence.
+The optional `/pr-loop --merge` path requires human authorization and its merge
+gates; `/land` always stops at the PR.
+
+## Briefings and recurring work
+
+Use `/summarize-change` for a briefing in the chat: intent and its source,
+approach, relevant constraints, departures from intent, sensitive ranges,
+blast radius, and the decision needed. `--tight` retains the investigation but
+caps the emitted briefing at 250 words. `/explain-diff-html` creates a durable
+teaching page; `/delivery-retro` compares periods of work.
+
+Manual session-title and PR-label sweeps default to dry-run. `/sweep-schedules`
+creates or updates a desktop schedule only when requested; installing a skill
+does not activate it. `/follow-builders` is a vendored digest workflow with its
+own setup and explicitly chosen delivery channels.
+
+`/linear-release-audit` is read-only by default. Its explicit `--apply` mode
+can correct tracker statuses and publish a status update after its safeguards.
 
 ## The constraints that shape KStack
 
@@ -223,4 +273,14 @@ is bounded by a round cap and repeat-finding detection.
 For exact routing phrases and tie-break rules, read the canonical
 [`/stack` contract](../router/stack/SKILL.md).
 
-`/wave` composes selection → shared contract → human-approved plans → build → seam check → bounded review. Claude Code runs the graph; Codex runs selection only. Humans approve plans and merge PRs.
+Read [host support](../hosts/HOSTS.md) before interpreting enforcement labels:
+the investigation rule is prompt-level; optional freeze hooks are separate.
+Kstack's Codex pointers do not register its guards, even though current Codex
+supports separately configured hooks.
+
+`/wave` selects work, records shared agreements, and requires human-approved
+plans. Legacy execution checks seams before review; opt-in streaming can overlap
+builds and reviews and checks agreements against the final reviewed heads. Local
+graph waves keep agreements in the approved handoff rather than a separate
+contract PR. Claude Code runs the graph; Codex selects only. Humans approve plans
+and merge PRs.

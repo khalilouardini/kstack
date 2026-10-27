@@ -27,8 +27,10 @@ step 3. Install is per machine, not per project — a second project needs only
 steps 2 onward.
 
 Read [`../hosts/HOSTS.md`](../hosts/HOSTS.md) before trusting any enforcement
-claim on a host other than `claude`. The short version: Codex does not run
-`PreToolUse` hooks, so `careful` and `freeze` are prompt-level there.
+claim on a host other than `claude`. Kstack's Codex pointers register no guards,
+so `careful` and `freeze` are prompt-level in this integration. Check that the
+host discovers the generated pointers; current Codex discovery paths and hook
+support are documented in the host notes.
 
 ## 2. Write `.agents/stack.yml`
 
@@ -45,12 +47,13 @@ skills that need it and leaves the rest working.
 
 | You configure | You get |
 |---|---|
-| nothing — no `stack.yml` at all | `/stack`, `/careful`, `/freeze`, `/unfreeze`, `/investigate`, `/explain-diff-html`. These need no project config. |
+| nothing — no `stack.yml` at all | `/stack`, `/careful`, `/freeze`, `/unfreeze`, `/investigate`, `/explain-diff-html`; `/summarize-change` also briefs a local branch or range, with available intent evidence. |
 | `gates.lint` + `gates.test` | `/land` (gates before commit) and `/health` (scores your own checks). Both **refuse** without them — a gate that defaults open is not a gate. |
 | `gates.test_full` | `/health --full`, and `/land`'s full-suite path. |
 | `scope_doc` | the four role contracts, `/spec`, `/triage`, and `/next` gating. Without it they ask for the path and still refuse to invent a verdict. |
-| `identities.maintainer` + `identities.reviewer` + `identities.implementer` | The GitHub review cluster. Codex normally fills reviewer and Claude implementer; unattended `/pr-loop` requires all three roles. |
+| `identities.maintainer` + `identities.reviewer` + `identities.implementer` | The GitHub review cluster. `/pr-loop` requires all three, resolves authorship, and assigns the opposite engine to review; the Claude-implementation/Codex-review route is the default. |
 | `ci.checks` | `/pr-loop`'s `CLEAN` verdict: which PR checks must be green at the reviewed head (`required`, `all`, or `none`). `/pr-loop` refuses without it. |
+| `review_model` + `claude_review_model` + `review_engines` | `/pr-loop` resolves the reviewer engine and pins its model and effort. Missing settings use the documented, announced defaults in the template. |
 | `review_gate.skill_path` + `review_gate.scope` | stack review skills defer to your project's own review gate on the paths it claims. |
 | `workspace_contract` | `/dispatch-implementation`, `/linear-steward`, `/linear-feature-intake`, `/linear-release-audit` need the tracker's status and mutation rules. Without it they refuse writes. |
 | `issue_prefix` | `/session-titles` labels by issue key, and `/next` resolves issue references. |
@@ -58,9 +61,18 @@ skills that need it and leaves the rest working.
 | `protected_branches` | `/triage` stops proposing CLOSE on branches that carry unextracted work. |
 | `role_appendix_dir` | roles answer with your traps, factories, and component inventory instead of asking for them. |
 | `spec_output_dir` | `/spec` writes where you want instead of asking. |
+| `wave.max_review_rounds` + `wave.review_concurrency` + `wave.contract_dir` | `/wave` bounds review and stores shared contracts; rounds/concurrency have announced defaults. Published-graph waves need a contract directory for shared literals; local-graph waves retain them in the approved handoff. Claude Code executes the Workflow graph; Codex selects only. |
+| `wave.selection_limit` + `wave.execution_mode` + `wave.worker_concurrency` + `wave.test_concurrency` | Set selection capacity, opt into experimental streaming, and bound worker and local-test concurrency separately. See the template and `/wave` for defaults and pilot conditions. |
+| `pr_labels.rules` | `/pr-label-sweep` proposes labels from existing repository labels. Apply is explicit. `/sweep-schedules` can schedule the sweeps when desktop session tools and label rules are available. |
 
 Read the table as a sequence: `gates` first (they cost one line each and unlock
 the two skills you run most), then `scope_doc`, then identities, then the rest.
+
+For `/pr-loop`, use `ci.checks: required` when the base branch defines required
+checks, `all` when it has CI but no required checks, and `none` only when it has
+no CI. Configure local tests according to the project's own instructions;
+`CLEAN` includes the configured CI result at the reviewed head, while `none`
+is reported explicitly. This does not grant merge permission.
 
 ## 3. Create the role adapters
 
@@ -148,56 +160,30 @@ degradation** — the role says so in its output — never a silent one.
 Never add project detail by editing a contract in the stack. That is the one
 change that breaks every other consuming project at once.
 
-## 5. Paste this into the project's `CLAUDE.md`
+## 5. Add a routing pointer to the project instructions
 
 Routing should be ambient at session start, not something the agent has to go
-looking for. Append:
+looking for. Add the following to `CLAUDE.md` for Claude Code or `AGENTS.md`
+for Codex, replacing `<stack-root>` with the absolute installed path:
 
 ```markdown
 ## Skill routing
 
-When a request matches a skill, invoke it rather than answering ad-hoc. When in
-doubt, invoke the skill — a false positive costs one skill read; a false
-negative costs a workflow's checklists and gates.
-
-Decide, before code exists:
-- "should we build X" / "is this in scope" / "spec this" → `/spec`
-- "what should I work on next" → `/next`
-- "triage the backlog" / "which of these open PRs still matter" → `/triage`
-- one narrow question — scope only, how long, which component, what proves it →
-  dispatch `product-manager` / `tech-lead` / `designer` / `qa` alone
-- a decision already made, needing a record → `/linear-feature-intake`
-
-Build:
-- "start this ticket" / "tackle ISSUE-123" / "dispatch this issue" → `/dispatch-implementation`
-- "why is this broken" / a stack trace / "it worked yesterday" → `/investigate`
-- touching production or anything shared and destructive → `/careful`
-- "only edit this folder" → `/freeze`; clear it with `/unfreeze`
-- "explain this diff to the team" → `/explain-diff-html`
-
-Review:
-- produce a review of a bot-authored PR → `/review-claude-pr`
-- answer review comments that already exist → `/review-comments`
-- drive review rounds unattended → `/pr-loop`
-
-Land and operate:
-- "land this" / "commit and push" / "open a PR" → `/land`
-- "health check" / "quality score" → `/health`
-- "was this week fruitful" → `/delivery-retro`
-- "what is each session working on" → `/session-titles`
-- "run title and PR-label sweeps every few hours" → `/sweep-schedules`
-  (desktop scheduler; defaults to three hours, requires label rules and session tools)
-- audit or repair the tracker → `/linear-steward`
-- audit a release against its gate criteria → `/linear-release-audit`
-- unsure which of the above → `/stack`
+Read `<stack-root>/router/stack/SKILL.md` and apply its routing rules.
+Matching project rules below take precedence. If the same skill name exists
+in this project and the stack, read the project contract explicitly.
+On a host without slash invocation, read the selected canonical SKILL.md.
 
 <!-- Add this repo's own domain skills here — they are not in the stack. -->
 
-Project skills shadow stack skills; domain-specific loops stay in this repo.
+Domain-specific loops stay in this repo. If a required canonical file cannot
+be read, report the missing path instead of substituting a remembered procedure.
 ```
 
-Keep that last line. It is what stops a session from assuming the stack version
-ran when a local skill of the same name shadowed it.
+The router is the shared routing table. This pointer picks up roadmap, wave,
+briefing, viewer, and sweep routes without maintaining a second catalog.
+Codex can expose duplicate skill names; project precedence is the routing
+instruction above, not a promise that the host hides the stack version.
 
 ## 6. What does not move to the stack
 
@@ -249,10 +235,13 @@ land and implementer review workflows verify selected work and its dependency
 closure; unrelated missing tickets do not freeze mapped candidates. At most three
 missing in-scope maintenance units may use a local reconciliation record containing
 main SHA, live issue evidence and exact delta. Scope/dependency/release/human-gate
-changes require reviewed publication. An explicit --accept-graph-update uses a
-validated reviewed pending graph for one invocation; build requires the flag again.
+changes normally require reviewed publication; the explicit approved local graph
+path below validates its local source and retains the original authorizations.
+An explicit --accept-graph-update uses a validated reviewed pending graph for one
+invocation; build requires the flag again.
 Legacy graphs still need cited closure audits and reviewed mapping repairs.
-See the canonical publication-gate contract in the physical KStack checkout.
+See the [canonical publication-gate contract](../tools/linear/linear-roadmap/references/publication-gate.md)
+in the physical kstack checkout for the exact reconciliation and pending-PR rules.
 
 Use `/linear-roadmap <project>` for local JSON, orchestration Markdown and scope
 updates; add `--publish` explicitly to open or update the graph PR. Updating the
@@ -277,7 +266,9 @@ the persistent-session controller remains an experimental integration requiremen
 ## Verify, then delete the old copies
 
 ```bash
-bin/check-stack          # schema, frontmatter, and cross-host drift
+python3 <stack-root>/bin/check-stack  # run the stack's own gate
+<stack-root>/bin/install --dry-run
+<stack-root>/bin/install --host codex --dry-run
 ```
 
 Then run one skill per tier you configured — one core skill, `/spec` or

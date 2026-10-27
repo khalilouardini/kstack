@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+Refresh installation, host support, onboarding, workflow examples, and both skill
+maps against the current catalog (28 skills and four roles from the canonical
+directories). Document Codex's current hook/symlink support separately from
+kstack's pointer integration, reviewed-head CI semantics, project-filtered
+triage, and OGUR's CI-first full-suite policy. Link HTML cards to their canonical
+contracts and add the missing skills and external tier. `bin/check-docs`, run
+by `bin/check-stack`, checks overview parity, the displayed version, and local
+Markdown/HTML links and anchors; offline regression cases cover those checks.
+
 `session-titles` 0.4.0: a session whose title is only keys (`<PREFIX>-490`, or
 a bare `<PREFIX>-490 / PR#580`) gets a one-line description from its PR title,
 else its tracker issue title, and is no longer counted as already correct.

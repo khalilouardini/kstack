@@ -54,8 +54,10 @@ workspace_contract: docs/product/linear-workspace-contract.md
 issue_prefix: OGUR
 gates:
   lint: make lint
-  test: make test-fast
-  test_full: make test
+  test: null                  # fill with the project's changed-test command
+  test_full: null             # full-suite authority is GitHub CI
+ci:
+  checks: null                # resolve the project's current required/all policy
 review_gate:
   skill_path: .claude/skills/review-engine/SKILL.md
   scope: ogur/engine/**
@@ -68,6 +70,19 @@ protected_branches:
 role_appendix_dir: .agents/appendices
 spec_output_dir: docs/product/specs
 ```
+
+The test policy follows the current OGUR instructions: run `make lint` and the
+test files changed by the branch locally, push, and read GitHub CI's
+`lint + tests` job for the full-suite result. Do not use `make test`,
+`make test-fast`, or `pytest -n auto tests/` to certify green locally. A local
+full run is only for reproducing a CI failure, with `make test-fast` limited to
+at most four workers. Concurrent full runs on the shared 16 GB machine can swap it.
+
+This is a migration example, not a replacement for OGUR's current
+`.agents/stack.yml`. Resolve the actual changed-test command and CI check mode
+from that project's instructions before configuring them. Leaving `gates.test`
+and `ci.checks` null deliberately prevents gated workflows from claiming success
+without a concrete command and CI policy.
 
 3. Move the project-specific halves of the four role contracts into
    `.agents/appendices/{tech-lead,designer,qa}.md`. These carry what the

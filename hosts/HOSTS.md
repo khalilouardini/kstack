@@ -1,18 +1,18 @@
 # Hosts — what differs between `claude` and `codex`
 
-Two hosts run this stack. This file is the only place the differences are
-written down; skills and adapters point here instead of restating them.
+Two hosts run this stack. This file describes the integration provided by this
+checkout's installer and adapters; a host may support features beyond it.
 
 | | `claude` (Claude Code) | `codex` (Codex CLI) |
 |---|---|---|
-| Install path | `~/.claude/skills/<name>` | `~/.codex/skills/<name>/SKILL.md` |
+| Installer output | `~/.claude/skills/<name>` | `${CODEX_HOME:-~/.codex}/skills/<name>/SKILL.md` |
 | Mechanism | **symlink** per skill → the canonical directory in this repo | **generated pointer file** per skill |
 | Body of the skill | read through the symlink; edits are live | never copied; the pointer sends the agent to the canonical path |
-| `hooks:` frontmatter | honored — registers `PreToolUse` | **not read** |
-| Enforcement of `careful` / `freeze` | hook-enforced | **prompt-level only** |
+| Kstack hook registration | skill frontmatter registers `PreToolUse` | installer writes no hook configuration |
+| Enforcement of `careful` / `freeze` | hook-enforced | **prompt-level in this integration** |
 | Tool vocabulary in prose | named tools (`Read`, `Bash`, …) resolve | name the capability, not the tool |
 | Workflow tool | Claude Code only; `/wave` runs the graph | absent; `/wave plan` runs A1 selection only and says the graph did not run; build refuses |
-| Regeneration needed after an edit | no, except frontmatter for the codex copy | yes, whenever frontmatter changes |
+| Regeneration needed after an edit | no | yes, whenever frontmatter changes; body edits remain live |
 
 ## Install
 
@@ -32,9 +32,17 @@ canonical file at its absolute path and follow it top to bottom. That is the
 whole file. Regenerate after changing a skill's **frontmatter**; the body needs
 no regeneration because it was never duplicated.
 
-Symlink-vs-pointer is the only structural difference in install. It exists
-because Codex resolves skills from its own directory and does not follow the
-same layout, not because the two hosts need different content.
+The pointer layout is this installer's existing choice. Current
+[Codex skill documentation](https://learn.chatgpt.com/docs/build-skills) lists
+`.agents/skills` for repository discovery and `~/.agents/skills` for user skills,
+and supports symlinked skill folders. Check the host's skill selector after
+installation: writing a pointer under `~/.codex/skills` does not prove that every
+host version discovers it. If needed, expose the generated directories through a
+supported discovery location, preserving existing skills. Changing the installer
+destination is a separate implementation change.
+
+Project skills take precedence under kstack's routing policy. Codex can display
+duplicate names, so explicitly select or read the project contract when both exist.
 
 ## Refresh after a merge
 
@@ -86,15 +94,18 @@ decision. That is how `core/careful` blocks `rm -rf /` and how `core/freeze`
 blocks an `Edit` outside the boundary. Neither depends on the model choosing to
 comply.
 
-**Codex has no `PreToolUse` hook mechanism, and the `hooks:` block is not read.**
-On that host both skills degrade to **prompt-level**: their tables become a
-checklist the agent is asked to follow, and nothing checks that it did.
+Current [Codex hook documentation](https://learn.chatgpt.com/docs/hooks) includes
+`PreToolUse` configured through `hooks.json`, config tables, or plugins. Kstack's
+Codex installer only writes pointers and registers none of those hook sources.
+Both skills therefore remain **prompt-level in this integration** unless a
+separate, verified adapter installs equivalent guards. Host support alone is not
+evidence that a particular guard is installed. References checked 27 October 2026.
 
 Consequences, stated so nobody has to infer them:
 
-1. **Every skill that claims hook enforcement must be read as advisory on
-   `codex`.** Today that is `core/careful` and `core/freeze`; the same applies to
-   anything added later with a `hooks:` block.
+1. **The generated Codex pointers do not install kstack's guards.** Today that
+   affects `core/careful` and `core/freeze`. Check any separately configured
+   integration before claiming hook enforcement.
 2. **Change what you claim, not just what you do.** On `claude`: "the command was
    blocked by the guard." On `codex`: "I checked it against the careful list" —
    which is a different, weaker sentence, and the honest one.
@@ -108,8 +119,9 @@ Consequences, stated so nobody has to infer them:
    before claiming a role cannot write on that host. Do not assume hooks and
    tool lists degrade together; they are independent.
 
-There is no workaround that restores enforcement on a host without hooks. The
-correct response is the accurate claim, not a louder prompt.
+The investigation rule is prompt-level on both hosts. Its optional freeze
+boundary is a separate guard. Do not label the whole debugging procedure as
+hook-enforced because one optional step can register a hook.
 
 ## Tool names and phrasing
 
@@ -141,11 +153,11 @@ somebody runs it there.
 | `name` | yes | yes | invocation name; must match the directory name |
 | `description` | yes — loaded every session | yes | the routing surface. 1024-byte cap, target ≤500 (CONVENTIONS §3) |
 | `version` | not read by the harness | not read by the harness | read by humans and by `bin/check-stack`. See below |
-| `hooks:` | yes — registers `PreToolUse` | **no** | the enforcement gap above |
+| `hooks:` | yes — registers `PreToolUse` | not copied into kstack pointers | use an actual host hook configuration to register guards |
 | `tools:` (role adapters) | yes — enforced allowlist | verify on the host | not a skill field; role adapters only |
 
-Anything else in frontmatter is ignored by both. Adding a field because another
-harness's docs mention it produces a file that looks configured and is not.
+This table covers fields kstack uses, not every field either host supports.
+Verify additional host-specific metadata against that host's current schema.
 
 ## Adapters never restate procedure
 
@@ -204,7 +216,7 @@ Two rules that keep the detector working:
 A host is a five-field tuple: install path, linking mechanism, frontmatter
 fields honored, hook support, tool vocabulary. Write those five down in the
 table at the top of this file **before** writing an installer branch, and write
-down what degrades — for any host without `PreToolUse`, that is at minimum
+down what degrades — without a verified hook adapter, that is at minimum
 `core/careful` and `core/freeze` dropping to prompt-level.
 
 A host whose degradations are undocumented will be claimed as equivalent to

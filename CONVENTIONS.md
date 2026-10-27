@@ -32,7 +32,9 @@ tier does not get this latitude; it belongs in that tier. Any skill using the
 exception must say in its own text what it does when the tool is absent. Project-specific
 skills never live here — they stay in the consuming project's repo
 (`.claude/skills/` + `.agents/skills/`), and project-level skills shadow
-stack-level skills of the same name.
+stack-level skills of the same name under the router's policy. This is an
+instruction to select the project contract, not a promise that every host hides
+duplicate skill names; Codex can display both.
 
 Skill vs script boundary: session-interactive judgment → skill; batch or
 deterministic transformation → plain script under `bin/`.
@@ -86,6 +88,14 @@ spec_output_dir: <path|null>
 pr_labels:                      # pr-label-sweep only
   rules: []                     # each: label + any of linear_project, linear_label,
                                 # paths (fnmatch), text (regex); a rule fires on ANY match
+wave:
+  selection_limit: 12            # batch-size bound; independent of process limits
+  execution_mode: legacy         # streaming is an explicit experimental opt-in
+  worker_concurrency: 3          # planners and ticket controllers
+  test_concurrency: 1            # cooperative host-wide local-test permits
+  max_review_rounds: 3           # announced default when missing/null
+  review_concurrency: 1          # announced default when missing/null
+  contract_dir: <path|null>      # required for shared literals in published-graph waves
 ```
 
 `issue_graph.config` points to the JSON viewer binding described in
@@ -95,8 +105,8 @@ the installation and workspace mapping when this key is unset. Opening and
 inspecting an existing viewer need no tracker access; refresh needs fresh Linear
 reads and the indexed roadmap.
 
-`review_model` and `claude_review_model` default rather than refuse, and the
-reason is the asymmetry: an unset gate command silently passes a check that
+`review_model` and `claude_review_model` use announced defaults rather than
+refusing. The reason is the asymmetry: an unset gate command silently passes a check that
 never ran, while an unset review model can safely use a documented, pinned
 default rather than inheriting the host's interactive setting. Refusing there
 would cost more than defaulting. The default is `gpt-6.1-sol`/`high`. On the
@@ -183,7 +193,7 @@ continue to refuse when absent.
 - **One canonical file.** A skill or role is defined once, here. Hosts and
   projects point at it; they never restate the procedure (drift is invisible
   until harnesses disagree).
-- Composition by reference: "Read `<path>` with the Read tool and follow it
+- Composition by reference: "Read `<path>` and follow it
   top to bottom, skipping sections `[...]`. If unreadable, say so and stop."
 - Project adaptation goes in the project's `role_appendix_dir`, not by editing
   the canonical contract. A role contract states exactly where its appendix is
@@ -212,3 +222,19 @@ constraint this stack preserves is something empowered to decline.
 compatibility promise. One `CHANGELOG.md` line per meaningful change; the entry
 describes the shipped system, never the branch's internal history, and every
 number names its source.
+
+## 8. Documentation maintenance
+
+Keep the README catalog, Markdown skill map, and HTML map aligned with the
+canonical skill directories and four role contracts. Add a discovery entry when
+adding a skill; link to its procedure instead of copying it. The onboarding
+instructions point to the router so new routes have one owner.
+
+`python3 bin/check-docs` verifies catalog coverage, canonical HTML card links,
+the HTML header version against `VERSION`, inline Markdown links/images, and
+HTML link attributes, including anchors outside fenced examples. It skips
+vendored documents and does not fetch external URLs or prove the semantics of shell commands, CI gates,
+host restrictions, or Mermaid diagrams. `python3 bin/check-stack` includes this
+check and its regression cases alongside the skill, script, and workflow gates.
+Review operational claims against their owning contract and verify changing
+host capabilities against current official documentation.
