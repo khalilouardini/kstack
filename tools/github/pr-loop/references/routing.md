@@ -152,8 +152,8 @@ model login or installed model CLI, only verified GitHub evidence. Codex uses `e
 Both inherit host permissions. No sandbox bypass, auto-approval permission mode,
 or fallback engine is selected. A denied required operation or unavailable required
 flag means BLOCKED; establish permissions through the normal host flow before retrying.
-A denied optional runtime probe (a browser, a GUI app, Computer Use) is named in the
-review instead and does not block it (review-claude-pr §2, Optional runtime probes);
+A denied optional runtime probe (any other check: a browser, a GUI app, Computer Use,
+`ps`) is named in the review instead and does not block it (review-claude-pr §2);
 the runner still blocks a Claude round whose JSON envelope records any denial.
 Unsupported models are caught by the CLI's checked exit, not silently substituted.
 Because stdin is closed and permission prompts have no interactive host, required

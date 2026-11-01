@@ -212,8 +212,9 @@ class RunnerTests(unittest.TestCase):
         self.assertIn('A denied required step (identity, GitHub reads or review submission, '
                       'the diff, gates.test or the project proof gate), absent evidence or a '
                       'moved head means BLOCKED.', prompt)
-        self.assertIn('A denied optional runtime probe (a browser, a GUI app, Computer Use) is '
-                      'not BLOCKED', prompt)
+        self.assertIn('Any other check is an optional runtime probe (a browser, a GUI app, '
+                      'Computer Use, a process listing such as ps); a denied one is not BLOCKED',
+                      prompt)
         self.assertIn('never request, retry around or work around a denial', prompt)
         self.assertNotIn('denial, absent evidence or moved head means BLOCKED', prompt)
 

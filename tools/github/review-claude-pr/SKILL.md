@@ -196,8 +196,9 @@ formatting/style nits.
 ### Optional runtime probes
 
 The review rests on the diff, the code it touches, `gates.test` and the project
-proof gate. A browser, a GUI app or Computer Use is an optional runtime probe: use
-one only when the host already permits it. Never ask for, retry around or work
+proof gate. Any other check is an optional runtime probe: a browser, a GUI app,
+Computer Use, a process listing (`ps`) to watch a slow gate, and the like. Use one
+only when the host already permits it. Never ask for, retry around or work
 around a denial: no second browser binary, no switch to Computer Use, no change to
 permissions, the sandbox or approval settings.
 
