@@ -1,6 +1,6 @@
 ---
 name: review-claude-pr
-version: 0.4.0
+version: 0.5.0
 description: Review an open agent-built PR (Codex- or Claude-attributed, including maintainer-opened PRs) and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
@@ -192,6 +192,29 @@ security, performance, or meaningful maintainability, has a concrete affected
 path, and is something the author would likely fix. Do not flag intentional
 behavior changes, pre-existing defects, broad architectural preferences, or
 formatting/style nits.
+
+### Optional runtime probes
+
+The review rests on the diff, the code it touches, `gates.test` and the project
+proof gate. Any other check is an optional runtime probe: a browser, a GUI app,
+Computer Use, a process listing (`ps`) to watch a slow gate, and the like. Use one
+only when the host already permits it. Never ask for, retry around or work
+around a denial: no second browser binary, no switch to Computer Use, no change to
+permissions, the sandbox or approval settings.
+
+A denied optional probe does not block the review:
+
+- name the probe and what it would have checked in the review summary;
+- post a suspicion that needed it as a non-blocking question, never as a finding;
+- finish and submit the review.
+
+A denied required step (the reviewer identity check, GitHub reads, the review
+submission, the diff, `gates.test`, or the project proof gate) still stops the
+review without posting; under run-review the final report is `{"status":"BLOCKED"}`.
+
+This rule is prompt-level. Under run-review the runner still blocks a Claude round
+whose JSON envelope records any tool denial (`../pr-loop/references/routing.md`),
+so it takes effect for Codex reviewers and for standalone reviews.
 
 ### Project proof gate
 

@@ -203,6 +203,27 @@ class RunnerTests(unittest.TestCase):
         self.assert_blocked(result, report)
         self.assertIn('Claude tool permission denied: Bash', report['reason'])
 
+    def assert_probe_rule_in_prompt(self, implementation, reviewer, flag):
+        result, report, state = self.invoke(implementation)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        launch = next(c for c in state['calls'] if c['name'] == reviewer and flag in c['args'])
+        prompt = launch['args'][-1]
+        # Required steps still block; a denied optional probe is stated, not BLOCKED.
+        self.assertIn('A denied required step (identity, GitHub reads or review submission, '
+                      'the diff, gates.test or the project proof gate), absent evidence or a '
+                      'moved head means BLOCKED.', prompt)
+        self.assertIn('Any other check is an optional runtime probe (a browser, a GUI app, '
+                      'Computer Use, a process listing such as ps); a denied one is not BLOCKED',
+                      prompt)
+        self.assertIn('never request, retry around or work around a denial', prompt)
+        self.assertNotIn('denial, absent evidence or moved head means BLOCKED', prompt)
+
+    def test_codex_prompt_separates_required_steps_from_optional_probes(self):
+        self.assert_probe_rule_in_prompt('Claude', 'codex', '-o')
+
+    def test_claude_prompt_separates_required_steps_from_optional_probes(self):
+        self.assert_probe_rule_in_prompt('Codex', 'claude', '--print')
+
     def test_error_envelope_blocks(self):
         result, report, _ = self.invoke(mode='error-envelope')
         self.assert_blocked(result, report)
