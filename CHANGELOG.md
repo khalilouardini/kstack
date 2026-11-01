@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+`review-claude-pr` 0.5.0 and `pr-loop` 0.10.1: a denied optional runtime probe
+(a browser, a GUI app, Computer Use) no longer blocks a review. The reviewer names
+the probe and what it would have checked, posts the suspicion as a non-blocking
+question, and submits; it never retries around the denial. A denied required step
+(identity, GitHub reads or submission, the diff, `gates.test`, the proof gate) still
+blocks, and the runner still blocks a Claude round that records any denial. Source:
+ogur PR #663, where three Codex reviews blocked on a headless Chrome launch
+(`kill EPERM`) and posted nothing.
+
 `session-titles` 0.4.0: a session whose title is only keys (`<PREFIX>-490`, or
 a bare `<PREFIX>-490 / PR#580`) gets a one-line description from its PR title,
 else its tracker issue title, and is no longer counted as already correct.
