@@ -1,6 +1,6 @@
 ---
 name: pr-label-sweep
-version: 0.3.0
+version: 0.4.0
 description: Sweep open GitHub PRs and add the labels the consuming repo's rules call for — from the linked tracker issue's project and labels, the changed paths, and client keywords in the title and branch — each label citing the evidence that fired it. Dry-run by default; add-only; never creates a repo label. Use when asked to "label my PRs", "tag the open PRs", "sweep PR labels", or "/pr-label-sweep [--apply] [--pr N]". (kstack)
 ---
 
@@ -65,6 +65,25 @@ area and client labels on their own. Tracker rules (`linear_project`,
 session. When it is not, skip those matchers, keep the rest, and say so in the
 report — degraded, not refused (CONVENTIONS.md §1).
 
+## The script
+
+`bin/pr_label_sweep.py` runs §1 to §5 without judgment, for a sweep of every open
+PR. It makes every `gh` call itself, so an unattended run needs one allow rule, and
+it reads no path from the user's home.
+
+```bash
+python3 bin/pr_label_sweep.py --repo-dir "$REPO" keys
+python3 bin/pr_label_sweep.py --repo-dir "$REPO" plan  --tracker-file "$FILE"
+python3 bin/pr_label_sweep.py --repo-dir "$REPO" apply --tracker-file "$FILE"
+```
+
+`keys` prints the §2 issue keys. Look each one up with the tracker MCP and write the
+results to `--tracker-file`; the script's docstring gives the file's shape. `plan` is
+the §4 dry run. `apply` prints the same table and then does §5. It needs `ruby` to
+read `.agents/stack.yml`, and it has no `--pr`: for one PR, follow §1 to §5 by hand.
+`tools/github/pr-label-sweep/tests/test_issue_key.py` tests its §2 rule offline, and
+`bin/check-stack` runs that file.
+
 ## 1. Enumerate PRs
 
 ```bash
@@ -124,8 +143,8 @@ In steps 1 to 3 a key has no letter, digit or hyphen directly before it and no
 letter or digit directly after it, so a project id (`P-<PREFIX>-18`) and a file
 stamp (`<PREFIX>-20261022T120513Z`) are not keys. Step 4 has no such limit, because
 branch names join words with hyphens (`fix-<PREFIX>-412`). Steps 2 and 3 skip HTML
-comments and fenced code blocks. `tools/github/session-titles/SKILL.md` §2 repeats
-this rule; change both together.
+comments and fenced code blocks. `bin/pr_label_sweep.py` implements this rule and
+`tools/github/session-titles/SKILL.md` §2 repeats it; change all three together.
 
 The words are Linear's magic words (`linear.app/docs/gitlab`) plus `refs`. Linear
 itself links a PR by its title, its branch, or a magic word and issue ID in its
