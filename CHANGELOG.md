@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+`pr-label-sweep` 0.4.0: the skill now ships `bin/pr_label_sweep.py`, the
+deterministic half of the sweep (`keys`, `plan`, `apply`). `bin/check-stack` runs
+`tools/github/pr-label-sweep/tests/test_issue_key.py`, 56 offline tests of the issue
+key rule on synthetic PR text (source: `python3 -m unittest discover -s
+tools/github/pr-label-sweep/tests`). The script reads no path from the user's home,
+so a `--tracker-file` value with an unexpanded `~` no longer resolves. A fenced code
+block now closes only on a matching fence, and a `Scope` section that opens with a
+numbered list takes its key from the first item.
+
 `pr-label-sweep` 0.3.0 and `session-titles` 0.5.0: a PR's issue key comes from its
 title, then a body line that opens with a link word and the key (`Fixes <KEY>`,
 `Part of <KEY>`, `Linear: <KEY>`), then the first sentence under a `Scope` heading,
