@@ -167,6 +167,44 @@ class Precedence(unittest.TestCase):
         self.assertEqual(key(body=CITATIONS, branch=self.BRANCH_WITH_KEY), "ACME-14")
 
 
+class Fences(unittest.TestCase):
+    """A fence closes only on its own character, at its length or longer, with no text after it."""
+
+    def test_a_shorter_fence_inside_a_longer_fence_stays_fenced(self):
+        body = "````markdown\n```text\nFixes ACME-50\n```\n````\n"
+        self.assertEqual(key(body=body, branch="chore/acme-51-release"), "ACME-51")
+
+    def test_a_tilde_fence_inside_a_backtick_fence_stays_fenced(self):
+        self.assertIsNone(key(body="```\n~~~\nFixes ACME-52\n~~~\n```\n"))
+
+    def test_a_backtick_fence_inside_a_tilde_fence_stays_fenced(self):
+        self.assertIsNone(key(body="~~~\n```\nFixes ACME-53\n```\n~~~\n"))
+
+    def test_a_fence_line_with_text_after_it_does_not_close(self):
+        self.assertIsNone(key(body="```\n```text\nFixes ACME-54\n```\n"))
+
+    def test_a_longer_fence_closes_a_shorter_one(self):
+        self.assertEqual(key(body="```\n`````\nFixes ACME-55\n"), "ACME-55")
+
+    def test_a_link_line_after_the_closing_fence_counts(self):
+        self.assertEqual(key(body="````\n```\n````\nFixes ACME-56\n"), "ACME-56")
+
+    def test_a_line_of_inline_code_does_not_open_a_fence(self):
+        self.assertEqual(key(body="``` x ```\nFixes ACME-57\n"), "ACME-57")
+
+    def test_a_tilde_fence_may_hold_backticks_in_its_text(self):
+        self.assertIsNone(key(body="~~~ `x`\nFixes ACME-58\n~~~\n"))
+
+    def test_an_unclosed_fence_runs_to_the_end_of_the_body(self):
+        self.assertIsNone(key(body="```\nFixes ACME-59\n"))
+
+    def test_a_fence_may_be_indented_three_spaces(self):
+        self.assertIsNone(key(body="   ```\nFixes ACME-60\n   ```\n"))
+
+    def test_a_fence_indented_four_spaces_does_not_open(self):
+        self.assertEqual(key(body="    ```\nFixes ACME-61\n"), "ACME-61")
+
+
 class KeyPositions(unittest.TestCase):
     """The rest of the section 2 text."""
 
@@ -203,6 +241,16 @@ class KeyPositions(unittest.TestCase):
     def test_a_scope_section_opening_with_a_list_uses_its_first_item(self):
         self.assertEqual(key(body="## Scope\n\n- ACME-30 is the work\n- ACME-31 is not\n"), "ACME-30")
         self.assertIsNone(key(body="## Scope\n\n- The work\n- ACME-31 is not\n"))
+
+    def test_a_scope_section_opening_with_a_numbered_list_uses_its_first_item(self):
+        for marker in ("1.", "1)", "12."):
+            with self.subTest(marker=marker):
+                body = f"## Scope\n\n{marker} ACME-30 is the work\n2. ACME-31 is not\n"
+                self.assertEqual(key(body=body), "ACME-30")
+        self.assertIsNone(key(body="## Scope\n\n1. The work\n2. ACME-31 is not\n"))
+
+    def test_the_first_sentence_of_a_numbered_item_still_ends_at_its_period(self):
+        self.assertIsNone(key(body="## Scope\n\n1. The work lands. ACME-31 follows.\n"))
 
     def test_a_scope_heading_inside_a_fence_does_not_count(self):
         self.assertIsNone(key(body="```\n## Scope\n\nACME-32 is the work.\n```\n"))

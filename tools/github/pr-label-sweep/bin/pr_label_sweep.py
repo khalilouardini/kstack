@@ -44,6 +44,8 @@ LINK_WORDS = (
 LINK_LABELS = "linear|issue|ticket"
 HEADING = re.compile(r"^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$")
 LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s")
+# A backtick fence's trailing text holds no backtick: ``` x ``` is inline code.
+FENCE = re.compile(r" {0,3}(`{3,}(?=[^`]*$)|~{3,})(.*)$")
 
 
 def gh(args, cwd):
@@ -75,13 +77,20 @@ def first_key(prefix_re, *fields):
 
 
 def body_lines(body):
-    """A PR body's lines, without HTML comments and fenced code blocks."""
+    """A PR body's lines, without HTML comments and fenced code blocks.
+
+    A fence closes only on its own character, at its opening length or longer, with
+    no text after it. An unclosed fence runs to the end of the body."""
     text = re.sub(r"<!--.*?-->", "", (body or "").replace("\r", ""), flags=re.DOTALL)
-    lines, fenced = [], False
+    lines, fence = [], None
     for line in text.split("\n"):
-        if re.match(r" {0,3}(```|~~~)", line):
-            fenced = not fenced
-        elif not fenced:
+        m = FENCE.match(line)
+        if fence:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not m.group(2).strip():
+                fence = None
+        elif m:
+            fence = m.group(1)
+        else:
             lines.append(line)
     return lines
 
@@ -99,7 +108,8 @@ def scope_sentence(lines):
         if HEADING.match(line) or (block and (not line.strip() or LIST_ITEM.match(line))):
             break
         if line.strip():
-            block.append(line.strip())
+            # A list marker is not a sentence: the period in "1." ends nothing.
+            block.append(LIST_ITEM.sub("", line).strip())
     text = " ".join(block)
     end = re.search(r"[.!?][*_`)\]]*(?:\s|$)", text)
     return text[:end.end()] if end else text
