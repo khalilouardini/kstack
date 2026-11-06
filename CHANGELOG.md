@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+`pr-label-sweep` 0.3.0 and `session-titles` 0.5.0: a PR's issue key comes from its
+title, then a body line that opens with a link word and the key (`Fixes <KEY>`,
+`Part of <KEY>`, `Linear: <KEY>`), then the first sentence under a `Scope` heading,
+then its branch. Any other body key gives no tracker signal, and a project id such
+as `P-<PREFIX>-18` is not a key. `session-titles` no longer reads back the
+`<KEY> / PR#<N>` prefix an earlier sweep wrote. Source: the 307 khalilouardini/ogur
+PRs with a title key on 2026-11-06, where the first body key anywhere matched the
+title key 265 of 302 times, a link line 170 of 170, and a `Scope` first sentence 5
+of 6.
+
 `review-claude-pr` 0.5.0 and `pr-loop` 0.10.1: a denied optional runtime probe
 (any check beyond the required steps: a browser, a GUI app, Computer Use, `ps`) no
 longer blocks a review. The reviewer names
