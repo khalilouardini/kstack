@@ -1,6 +1,6 @@
 ---
 name: session-titles
-version: 0.4.0
+version: 0.5.0
 description: Sweep open agent sessions (Claude Code and Codex), resolve the GitHub PR and issue key each one is working on, and prefix each session title so the session list is scannable at a glance. Dry-run by default; nothing is renamed until --apply. Use when asked to "label my sessions", "what is each session working on?", "retitle the agent sessions", or "/session-titles [--apply] [--include-archived]". (kstack)
 ---
 
@@ -135,7 +135,7 @@ repo's main checkout (not a path listed as a separate worktree by
 `branch --show-current` — whatever is checked out *now*, not what the session
 worked on. In that case:
 - Codex, and Claude rows with no `prNumber`: skip the branch lookup; resolve
-  only from the session's current title (issue-key rule 3 below).
+  only from the session's current title (issue-key rule 5 below).
 - Claude rows whose `prNumber` equals the PR of the checkout's current branch and
   that carry no `branch` field: the app may have derived it the same way. List
   them in a separate **ambiguous** section of the dry-run with the PR title next
@@ -177,13 +177,45 @@ session was for, and a stale title is worst right after merge, not before. Take
 `<PREFIX>-\d+` case-insensitively, in this priority order — first match wins, do
 not merge conflicting keys:
 
-1. Against the PR title/body just fetched.
-2. Against `$BRANCH`.
-3. Against the session's *current* title. This covers hand-typed sessions where
-   the key was written by a human and nothing else carries it.
+1. **PR title** just fetched: the first key.
+2. **PR body, link line:** the first line that opens with a link word directly
+   followed by the key.
+3. **PR body, `Scope` section:** the first key in the first sentence under the
+   first heading named `Scope` (any heading level, case-insensitive). When the
+   section opens with a list, the sentence comes from its first item.
+4. **`$BRANCH`:** the first key.
+5. **The session's *current* title.** This covers hand-typed sessions where the
+   key was written by a human and nothing else carries it. First skip a leading
+   `<PREFIX>-\d+ / PR#<N>` whose `<N>` is the PR resolved above and whose separators
+   are exactly ` / `, the form §3 writes: an earlier sweep wrote it, and reading it
+   back would keep a key rules 1 to 4 no longer find.
+
+Any other key in the PR body is a citation and does not count.
+
+Link words, case-insensitive: `close`, `closes`, `closed`, `closing`, `fix`,
+`fixes`, `fixed`, `fixing`, `resolve`, `resolves`, `resolved`, `resolving`,
+`complete`, `completes`, `completed`, `completing`, `implement`, `implements`,
+`implemented`, `implementing`, `ref`, `refs`, `references`, `part of`,
+`contributes to`, `towards`, `updates`, and the labels `Linear:`, `Issue:` and
+`Ticket:`, which need their colon. A list marker and bold or italic markers may
+come before the word. A colon, those markers, `[`, `(` or a backtick may come
+between the word and the key: `Fixes <KEY>`, `- **Part of** [<KEY>](url)`,
+`Linear: <KEY>`.
+
+In rules 1 to 3 a key has no letter, digit or hyphen directly before it and no
+letter or digit directly after it, so a project id (`P-<PREFIX>-18`) and a file
+stamp (`<PREFIX>-20261022T120513Z`) are not keys. Rules 4 and 5 have no such limit.
+Rules 2 and 3 skip HTML comments and fenced code blocks. Rules 1 to 4 repeat
+`tools/github/pr-label-sweep/SKILL.md` §2, which gives the reason and the
+measurements; change both together.
 
 > **Worked example (OGUR).** `issue_prefix: OGUR` made the regex `OGUR-\d+`, and
-> rule 3 was what caught Codex sessions titled `"Review PR #241 for OGUR-64"`.
+> rule 5 was what caught Codex sessions titled `"Review PR #241 for OGUR-64"`.
+>
+> **Worked example (OGUR, 2026-11-06).** PR #773's only body keys are citations, so
+> it resolves to no key. A session that an earlier sweep had titled
+> `OGUR-741 / PR#773 / Release` would become `PR#773 / Release`, because rule 5 skips
+> that prefix.
 
 Do not call the issue tracker's MCP tools (`list_issues` / `get_issue` or their
 equivalents) to *discover* the key — only use them to validate one already found
