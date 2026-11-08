@@ -7,7 +7,8 @@ unmerged branch. The historical skill name review-claude-pr is retained.
 
 ## Resolve once, verify again at each head
 
-`identities.reviewer` and `identities.implementer` name the default accounts.
+`identities.reviewer` and `identities.implementer`, after the host-local check
+with `bin/resolve-identities` (CONVENTIONS.md §2), name the default accounts.
 `review_engines.reviewer` / `review_engines.implementer` map them to engines,
 respectively `codex` / `claude` when missing or null. Require both engines,
 distinct accounts, and a separate maintainer. Never guess engines from login

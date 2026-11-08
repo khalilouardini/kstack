@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+`bin/resolve-identities` is new: `${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/identities.yml`
+replaces the tracked `identities` block on one machine, so a second person runs the
+review skills under their own accounts without changing a tracked file. `land` 0.7.0,
+`triage` 0.4.0, `pr-loop` 0.11.0, `review-claude-pr` 0.6.0, `review-comments` 0.7.0,
+`wave` 0.12.0, `dispatch-implementation` 0.6.1 and `linear-roadmap` 0.7.1 check for that
+file; with none they use the block as before. The script does not read
+`.agents/stack.yml`. `bin/check-stack` runs its tests in
+`bin/tests/test_resolve_identities.py`.
+
 `pr-label-sweep` 0.4.0: the skill now ships `bin/pr_label_sweep.py`, the
 deterministic half of the sweep (`keys`, `plan`, `apply`). `bin/check-stack` runs
 `tools/github/pr-label-sweep/tests/test_issue_key.py`, 56 offline tests of the issue

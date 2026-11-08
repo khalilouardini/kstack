@@ -1,6 +1,6 @@
 ---
 name: review-comments
-version: 0.6.0
+version: 0.7.0
 description: Find unanswered PR feedback, make the warranted code fixes, and reply under the configured implementer identity using a per-command token that never switches global gh state. Use when asked to "answer the review comments", "reply to the review", "address the PR feedback", or "/review-comments [PR#]". (kstack)
 ---
 
@@ -39,7 +39,16 @@ local/PR graph sources. No graph publication or extra tracker writes are granted
 ## Configuration — read `.agents/stack.yml` first
 
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
-`CONVENTIONS.md` §2) before doing anything else:
+`CONVENTIONS.md` §2) before doing anything else. A host-local file can replace the `identities` block on this machine, so when
+`project` is set, run this with its value before using any `identities.*` login:
+
+```bash
+python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --project "<project>"
+```
+
+It prints `null` when this machine has no such file: use the block. It prints a
+JSON object when it does: those logins replace the block, and the report states its
+`source`. Non-zero exit → **refuse**, quoting its message.
 
 - **`identities.maintainer`** — the human maintainer's gh login and fallback
   reply identity. Missing or null → **refuse**, naming `identities.maintainer`.

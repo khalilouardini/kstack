@@ -1,6 +1,6 @@
 ---
 name: triage
-version: 0.3.1
+version: 0.4.0
 description: Score open work against scope and report PR intent, merge/CI, review-loop evidence and unresolved threads. Default PR-only; optional repeated project and label filters. Read-only proposal; never reviews, merges or closes. Use when asked to "triage the backlog", "clean up the open PRs", "which branches can we delete?", or "/triage [prs|branches|worktrees|all] [--project <name-or-ID>]... [--label <name>]...". (kstack)
 ---
 
@@ -58,8 +58,13 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   **ask the user** where to write it; do not guess a docs path.
 - **`identities.maintainer`, `identities.reviewer`, `identities.implementer`,
   `ci.checks`** — read for
-  status interpretation using the referenced review/CI contracts. Missing keys
-  make the affected assessment **UNKNOWN**, naming the key; they do not turn
+  status interpretation using the referenced review/CI contracts. A host-local
+  file can replace the `identities` block on this machine, so when `project` is
+  set, run `python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --project "<project>"`
+  with its value. `null` means no such file: use the block. A JSON object replaces
+  the block, and the proposal states its `source`. Missing keys
+  make the affected assessment **UNKNOWN**, naming the key, and a non-zero exit
+  does the same, quoting its message; they do not turn
   zero findings into clearance or stop unrelated scope scoring. This is the
   explicit **Triage reporting exception** in CONVENTIONS.md §2, not pr-loop's
   configuration refusal policy; it authorizes no gate or external action.

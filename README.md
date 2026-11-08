@@ -136,7 +136,9 @@ half-day estimate, refuses to estimate what it cannot name),
 The reviewer (Codex by default) and implementer (Claude by default) use separate
 machine identities, while the human maintainer retains governance and merge
 authority. That three-way split is why no single skill does both halves or
-merges on its own.
+merges on its own. A second person runs these skills on the same repository under
+their own accounts with a host-local `identities.yml`
+([CONVENTIONS.md §2](CONVENTIONS.md)).
 
 ### Land and operate
 
