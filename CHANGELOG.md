@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+`pr-loop` 0.11.1: the first-review path trigger matches `review_model.escalate_paths`
+through `bin/first-matching-path` (Python `fnmatch`), so bash and zsh get the same
+answer. Under zsh the old loop matched no path, so a first review on a high-risk path
+ran `review_model.slug` instead of `review_model.escalated_slug`, and its `read -r
+path` emptied `PATH`. Each `ESCALATE_PATHS` glob is now rendered in single quotes,
+because unquoted, the shell expands it against the checkout, and zsh stops with `no
+matches found` when no file matches. The ledger key reads `FINDING_PATH`, because under zsh `FPATH` is the
+function search path and a path-less finding keyed on it instead of `-`. A failed
+`bin/prior-review-count` now blocks the round: its empty result selected the base model
+under bash and counted as a first review under zsh. Source: the review of khalilouardini/kstack#57 on 2026-11-08, launched by hand after the zsh loop
+matched nothing. `tools/github/pr-loop/tests/test_shell_snippets.py` runs both
+snippets as `SKILL.md` prints them, under each shell.
+
 `bin/resolve-identities` is new: `${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/identities.yml`
 replaces the tracked `identities` block on one machine, so a second person runs the
 review skills under their own accounts without changing a tracked file. `land` 0.7.0,

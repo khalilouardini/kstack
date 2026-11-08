@@ -1,6 +1,7 @@
 """Deterministic boundaries for the prompt-driven loop. Stdlib, no shell eval."""
 import argparse
 from contextlib import nullcontext
+import fnmatch
 import hashlib
 import sys
 import json
@@ -435,6 +436,28 @@ def prior_count_main():
         print(prior_review_count(reviews, args.reviewer, args.engine))
     except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError, TimeoutError) as exc:
         parser.exit(2, 'BLOCKED: ' + str(exc) + '\n')
+
+
+def first_matching_path(paths, globs):
+    """First path any glob matches under fnmatch, where `*` also crosses `/`."""
+    for path in paths:
+        if any(fnmatch.fnmatchcase(path, glob) for glob in globs):
+            return path
+    return None
+
+
+def first_match_main():
+    parser = argparse.ArgumentParser(description='Print the first changed path an fnmatch glob matches')
+    parser.add_argument('--paths', required=True, help='file with one changed path per line')
+    parser.add_argument('globs', nargs='*')
+    args = parser.parse_args()
+    try:
+        paths = Path(args.paths).read_text(encoding='utf-8').split('\n')
+    except (OSError, ValueError) as exc:
+        parser.exit(2, 'BLOCKED: ' + str(exc) + '\n')
+    match = first_matching_path(filter(None, paths), args.globs)
+    if match is not None:
+        print(match)
 
 
 def review_main():
