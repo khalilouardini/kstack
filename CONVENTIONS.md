@@ -119,6 +119,11 @@ or an invalid login exits 2 naming the file and the key, and no block is assembl
 from both sources. A second person uses this file to run the review skills on the
 same repository under their own accounts without changing a tracked file.
 
+In `.agents/stack.yml` the resolver reads `project` and `identities` with plain or
+quoted keys and values, as an indented block or a one-line flow mapping. Stdlib
+Python has no YAML parser, so any other form of those two keys (an anchor, an alias,
+a multi-line flow mapping) exits 2 naming the line rather than being misread.
+
 Skills call the command by prompt, so a session that skips it uses the tracked
 logins; `gh auth token --user` then exits 1 for an account this machine does not
 hold, before anything posts. Reviews and answered threads belong to the account

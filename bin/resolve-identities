@@ -8,8 +8,9 @@ replaces the whole block (CONVENTIONS.md section 2). A login that is null in
 stack.yml prints as null, and each skill applies its own missing-key policy.
 
 Exits 2 with a message on stderr, and prints nothing on stdout, for a missing
-stack.yml, an unsafe `project` value or an invalid host file. Stdlib only. It
-reads files and writes nothing.
+stack.yml, an unsafe `project` value, a YAML form in `project` or `identities` that
+this script does not read, or an invalid host file. Stdlib only. It reads files and
+writes nothing.
 """
 
 import argparse
@@ -22,9 +23,12 @@ from pathlib import Path
 ROLES = ("maintainer", "reviewer", "implementer")
 # The same login form as resolve() in tools/github/pr-loop/lib/review_runtime.py.
 LOGIN = re.compile(r"[\w-]+(?:\[bot\])?")
-PROJECT = re.compile(r"[A-Za-z0-9][\w.-]*")
-KEY = re.compile(r"([A-Za-z_][\w-]*):(?:\s+(.*))?")
+KEY = re.compile(r"""(?:"([^"\\]+)"\s*:\s*|'([^']+)'\s*:\s*|([A-Za-z_][\w-]*)\s*:(?:\s+|$))(.*)""")
 NULLS = {"", "~", "null", "Null", "NULL"}
+# Anchors, aliases, tags, block scalars, flow collections and reserved characters.
+UNSUPPORTED_VALUE = tuple("&*!|>{[%@`")
+# A whole-document flow mapping, a complex key, a merge key, or content on a `---` line.
+UNSUPPORTED_TOP_LEVEL = re.compile(r"[{?]|<<|---\s+[^#\s]")
 STACK_SOURCE = ".agents/stack.yml"
 
 
@@ -32,16 +36,65 @@ class Refused(ValueError):
     pass
 
 
+def key_value(text):
+    """Split `key: value`, with the key plain or quoted; None when it is not a pair."""
+    match = KEY.fullmatch(text)
+    return (match[1] or match[2] or match[3], match[4]) if match else None
+
+
+def has_no_value(raw):
+    raw = raw.strip()
+    return not raw or raw.startswith("#")
+
+
 def scalar(raw):
-    """A plain or quoted YAML scalar without its trailing comment; None for null."""
-    raw = (raw or "").strip()
+    """A plain or quoted YAML scalar without its trailing comment; None for null or empty."""
+    raw = raw.strip()
     if raw[:1] in ('"', "'"):
         end = raw.find(raw[0], 1)
         if end < 0:
             raise Refused(f"unterminated quote in {raw!r}")
-        return raw[1:end]
+        if not has_no_value(raw[end + 1:]):
+            raise Refused(f"unsupported value {raw!r}")
+        return raw[1:end] or None
     value = re.split(r"(?:^|\s)#", raw, maxsplit=1)[0].strip()
+    if value.startswith(UNSUPPORTED_VALUE):
+        raise Refused(f"unsupported value {value!r}")
     return None if value in NULLS else value
+
+
+def flow_mapping(raw):
+    """Read a one-line `{key: value, ...}` of scalars."""
+    items, item, quote = [], "", None
+    for index, char in enumerate(raw[1:], 1):
+        if quote:
+            quote = None if char == quote else quote
+        elif char in "\"'":
+            quote = char
+        elif char in "{[":
+            raise Refused(f"nested collection in {raw!r}")
+        elif char == ",":
+            items.append(item)
+            item = ""
+            continue
+        elif char == "}":
+            if not has_no_value(raw[index + 1:]):
+                raise Refused(f"unsupported value {raw!r}")
+            break
+        item += char
+    else:
+        raise Refused(f"a flow mapping must close on its own line: {raw!r}")
+    values = {}
+    for entry in (text.strip() for text in items + [item]):
+        if not entry:
+            continue
+        pair = key_value(entry)
+        if pair is None:
+            raise Refused(f"unsupported entry {entry!r}")
+        if pair[0] in values:
+            raise Refused(f"duplicate key identities.{pair[0]}")
+        values[pair[0]] = scalar(pair[1])
+    return values
 
 
 def read_text(path):
@@ -56,25 +109,57 @@ def read_stack(repo):
     path = Path(repo) / STACK_SOURCE
     if not path.is_file():
         raise Refused(f"missing {path}")
-    project, logins, inside, child_indent = None, {}, False, None
     try:
-        for line in read_text(path).splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            indent = len(line) - len(line.lstrip(" "))
-            match = KEY.fullmatch(stripped)
-            if indent == 0:
-                inside = bool(match) and match[1] == "identities"
-                child_indent = None
-                if match and match[1] == "project":
-                    project = scalar(match[2])
-            elif inside and match:
-                child_indent = indent if child_indent is None else child_indent
-                if indent == child_indent and match[1] in ROLES:
-                    logins[match[1]] = scalar(match[2])
+        return parse_stack(read_text(path))
     except Refused as exc:
         raise Refused(f"{path}: {exc}") from exc
+
+
+def parse_stack(text):
+    """Read `project` and `identities` from the YAML forms this script supports.
+
+    Stdlib Python has no YAML parser. Any other form in those two keys refuses,
+    because reading it wrongly would select the wrong accounts with no error.
+    """
+    project, logins, seen, section, child_indent = None, {}, set(), None, None
+    for number, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        pair = key_value(stripped)
+        try:
+            if indent == 0:
+                section, child_indent = None, None
+                if pair is None:
+                    if UNSUPPORTED_TOP_LEVEL.match(stripped):
+                        raise Refused(f"unsupported top-level form {stripped!r}")
+                    continue
+                key, raw = pair
+                if key not in ("project", "identities"):
+                    continue
+                if key in seen:
+                    raise Refused(f"duplicate key {key}")
+                seen.add(key)
+                if has_no_value(raw):
+                    section = key
+                elif key == "project":
+                    project = scalar(raw)
+                elif raw.strip().startswith("{"):
+                    logins = flow_mapping(raw.strip())
+                elif scalar(raw) is not None:
+                    raise Refused(f"identities must be a mapping, found {raw.strip()!r}")
+            elif section == "project":
+                raise Refused("project must have its value on the same line")
+            elif section == "identities":
+                child_indent = indent if child_indent is None else child_indent
+                if pair is None or indent != child_indent:
+                    raise Refused(f"unsupported form in identities: {stripped!r}")
+                if pair[0] in logins:
+                    raise Refused(f"duplicate key identities.{pair[0]}")
+                logins[pair[0]] = scalar(pair[1])
+        except Refused as exc:
+            raise Refused(f"line {number}: {exc}") from exc
     return project, {role: logins.get(role) for role in ROLES}
 
 
@@ -85,16 +170,16 @@ def read_host(path):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        match = KEY.fullmatch(line.rstrip())
-        if not match:
+        pair = key_value(line.rstrip())
+        if pair is None:
             raise Refused(f'{path}:{number}: expected an unindented "<role>: <login>" line')
-        key = match[1]
+        key, raw = pair
         if key not in ROLES:
             raise Refused(f"{path}:{number}: unknown key {key}; expected {', '.join(ROLES)}")
         if key in values:
             raise Refused(f"{path}:{number}: duplicate key {key}")
         try:
-            values[key] = scalar(match[2])
+            values[key] = scalar(raw)
         except Refused as exc:
             raise Refused(f"{path}:{number}: {exc}") from exc
     for role in ROLES:
@@ -112,7 +197,7 @@ def resolve(repo, environ=None):
     project, tracked = read_stack(repo)
     if project is None:
         return dict(tracked, source=STACK_SOURCE)
-    if not PROJECT.fullmatch(project):
+    if project in (".", "..") or re.search(r"[/\\\0]", project):
         raise Refused(f"{Path(repo) / STACK_SOURCE}: project {project!r} cannot name a state directory")
     state = environ.get("KSTACK_STATE") or str(Path(environ.get("HOME") or Path.home()) / ".kstack")
     host = Path(state) / "projects" / project / "identities.yml"

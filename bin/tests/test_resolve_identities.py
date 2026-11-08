@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,42 @@ protected_branches:
   - maintainer: not-this-one
 """
 HOST = "maintainer: owner-b\nreviewer: review-bot-b\nimplementer: build-bot-b\n"
+PROJECT_FORMS = {
+    "plain": "project: acme\n",
+    "double-quoted key": '"project": acme\n',
+    "single-quoted key": "'project': acme\n",
+    "space before the colon": "project : acme\n",
+    "double-quoted value": 'project: "acme"\n',
+    "single-quoted value and comment": "project: 'acme'  # slug\n",
+}
+IDENTITIES_FORMS = {
+    "block": "identities:\n  maintainer: owner-a\n  reviewer: review-bot-a\n  implementer: build-bot-a\n",
+    "quoted keys in a block": ('identities:\n  "maintainer": owner-a\n'
+                               "  'reviewer': review-bot-a\n  implementer : build-bot-a\n"),
+    "flow": "identities: {maintainer: owner-a, reviewer: review-bot-a, implementer: build-bot-a}\n",
+    "flow with quotes, a trailing comma and a comment": (
+        'identities: {"maintainer": "owner-a", \'reviewer\': \'review-bot-a\', implementer: build-bot-a,}  # logins\n'),
+    "flow in JSON spacing": '"identities": {"maintainer":"owner-a","reviewer":"review-bot-a","implementer":"build-bot-a"}\n',
+}
+UNSUPPORTED_FORMS = {
+    "identities alias": "project: acme\nidentities: *ids\n",
+    "identities anchor": "project: acme\nidentities: &ids\n  maintainer: owner-a\n",
+    "identities scalar": "project: acme\nidentities: owner-a\n",
+    "multi-line flow": "project: acme\nidentities: {maintainer: owner-a,\n  reviewer: review-bot-a}\n",
+    "nested flow": "project: acme\nidentities: {maintainer: {login: owner-a}}\n",
+    "text after a flow mapping": "project: acme\nidentities: {maintainer: owner-a} extra\n",
+    "login on the next line": "project: acme\nidentities:\n  maintainer:\n    owner-a\n",
+    "login alias": "project: acme\nidentities:\n  maintainer: *owner\n",
+    "merge key": "project: acme\nidentities:\n  <<: *ids\n",
+    "sequence": "project: acme\nidentities:\n  - maintainer: owner-a\n",
+    "text after a quoted login": "project: acme\nidentities:\n  maintainer: 'owner-a' b\n",
+    "duplicate login": "project: acme\nidentities:\n  maintainer: owner-a\n  maintainer: owner-b\n",
+    "duplicate project": "project: acme\nproject: other\n",
+    "project on the next line": "project:\n  acme\n",
+    "project anchor": "project: &slug acme\n",
+    "whole-document flow": "{project: acme}\n",
+    "top-level merge key": "<<: *defaults\nproject: acme\n",
+}
 
 
 class ResolveIdentities(unittest.TestCase):
@@ -137,8 +174,10 @@ class ResolveIdentities(unittest.TestCase):
         self.assert_refused(".agents/stack.yml")
 
     def test_project_that_escapes_the_state_directory_refuses(self):
-        self.write_stack(STACK.replace("project: acme", "project: ../../elsewhere"))
-        self.assert_refused("cannot name a state directory")
+        for project in ("../../elsewhere", "..", ".", "a/b", "a\\b"):
+            with self.subTest(project):
+                self.write_stack(STACK.replace("project: acme", f"project: {project}"))
+                self.assert_refused("cannot name a state directory")
 
     def test_no_project_uses_the_tracked_block(self):
         self.write_stack(STACK.replace("project: acme", "project: null"))
@@ -157,17 +196,57 @@ class ResolveIdentities(unittest.TestCase):
         self.assertEqual((result["maintainer"], result["reviewer"], result["implementer"]),
                          (None, None, None))
 
-    def test_project_template_identities_parse_as_all_null(self):
-        template = (REPO / "project-template" / "stack.yml").read_text()
-        self.assertIn("project: <slug>", template)
-        self.write_stack(template.replace("project: <slug>", "project: acme"))
-        result = self.resolved()
-        self.assertEqual((result["maintainer"], result["reviewer"], result["implementer"]),
-                         (None, None, None))
-
-    def test_unfilled_template_project_refuses(self):
+    def test_unfilled_template_returns_tracked_nulls(self):
         self.write_stack((REPO / "project-template" / "stack.yml").read_text())
-        self.assert_refused("project '<slug>'")
+        self.assertEqual(self.resolved(), {
+            "maintainer": None, "reviewer": None, "implementer": None, "source": ".agents/stack.yml"})
+
+    def test_this_repository_stack_file_parses(self):
+        self.write_stack((REPO / ".agents" / "stack.yml").read_text())
+        result = self.resolved()
+        self.assertTrue(result["maintainer"] and result["reviewer"] and result["implementer"])
+
+    def test_every_identities_form_returns_the_tracked_logins(self):
+        for name, identities in IDENTITIES_FORMS.items():
+            with self.subTest(name):
+                self.write_stack("project: acme\n" + identities)
+                result = self.resolved()
+                self.assertEqual((result["maintainer"], result["reviewer"], result["implementer"]),
+                                 ("owner-a", "review-bot-a", "build-bot-a"))
+
+    def test_every_project_form_finds_the_host_file(self):
+        host = self.write_host(HOST)
+        for name, project in PROJECT_FORMS.items():
+            with self.subTest(name):
+                self.write_stack(project + IDENTITIES_FORMS["block"])
+                self.assertEqual(self.resolved()["source"], str(host))
+
+    def test_empty_identities_forms_return_nulls(self):
+        for identities in ("identities: {}\n", "identities: null\n", "identities:  # none\n"):
+            with self.subTest(identities):
+                self.write_stack("project: acme\n" + identities)
+                result = self.resolved()
+                self.assertEqual((result["maintainer"], result["reviewer"], result["implementer"]),
+                                 (None, None, None))
+
+    @unittest.skipUnless(shutil.which("ruby"), "ruby is the YAML parser this test compares against")
+    def test_supported_forms_match_a_yaml_parser(self):
+        program = 'require "yaml"; require "json"; puts JSON.dump(YAML.safe_load(ARGF.read))'
+        for identities in IDENTITIES_FORMS.values():
+            for project in PROJECT_FORMS.values():
+                text = project + identities
+                parsed = json.loads(subprocess.run(["ruby", "-e", program], input=text, text=True,
+                                                   capture_output=True, check=True).stdout)
+                self.write_stack(text)
+                result = self.resolved()
+                self.assertEqual(parsed["project"], "acme")
+                self.assertEqual(parsed["identities"], {role: result[role] for role in parsed["identities"]})
+
+    def test_forms_outside_the_supported_set_refuse(self):
+        for name, text in UNSUPPORTED_FORMS.items():
+            with self.subTest(name):
+                self.write_stack(text)
+                self.assert_refused(".agents/stack.yml", "line ")
 
     def test_resolved_logins_are_accepted_by_the_review_route(self):
         sys.path.insert(0, str(REPO / "tools" / "github" / "pr-loop" / "lib"))
