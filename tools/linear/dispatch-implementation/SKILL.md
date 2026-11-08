@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.6.0
+version: 0.6.1
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -182,7 +182,8 @@ can drift from the approved plan.
 The implementation session owns code and tests, not tracker truth beyond evidence it
 has actually produced.
 
-- It opens a PR only as `identities.maintainer`, through `/land` or with that
+- It opens a PR only as `identities.maintainer`, read through
+  `bin/resolve-identities` (CONVENTIONS.md §2), through `/land` or with that
   account's verified token bound via `GH_TOKEN` — never as the implementer or
   reviewer account, and never by relying on the active global `gh` account.
 - If it opens a PR and the workspace contract defines a review status for that

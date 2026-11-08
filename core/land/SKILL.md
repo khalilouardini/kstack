@@ -1,6 +1,6 @@
 ---
 name: land
-version: 0.6.2
+version: 0.7.0
 description: Land an agent session's work safely — dedicated branch, concurrent-session guards re-run before every commit, the repo's own lint and test gates from .agents/stack.yml, atomic commits, then one PR. Stops at the PR; merging is a human decision. Use when asked to "land this", "commit and push", "open a PR", "ship it", or "/land". (kstack)
 ---
 
@@ -42,7 +42,16 @@ local/PR graph sources. No graph publication or extra tracker writes are granted
 ## Configuration — read `.agents/stack.yml` first
 
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
-`CONVENTIONS.md` §2).
+`CONVENTIONS.md` §2). Read `identities.*` through `bin/resolve-identities`, never
+directly from the file, because a host-local file can replace the block on this
+machine:
+
+```bash
+python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --repo "$(git rev-parse --show-toplevel)"
+```
+
+Non-zero exit → **refuse**, quoting its message. When `source` is not
+`.agents/stack.yml`, state it in the report.
 
 - **`gates.lint`** — missing or null → **refuse**, naming `gates.lint`.
 - **`gates.test`** — missing or null → **refuse**, naming `gates.test`. Use

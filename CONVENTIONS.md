@@ -15,7 +15,7 @@ tools/linear/<skill>/   — skills that need a Linear workspace
 tools/external/<skill>/ — vendored third-party skills; frontmatter names the upstream commit
 hosts/            — host adapter notes + Codex pointer generation
 project-template/ — what a consuming project provides (stack.yml + onboarding)
-bin/              — install, check-stack
+bin/              — install, check-stack, resolve-identities
 docs/             — migration guides, deep dives
 ```
 
@@ -95,6 +95,37 @@ the installation and workspace mapping when this key is unset. Opening and
 inspecting an existing viewer need no tracker access; refresh needs fresh Linear
 reads and the indexed roadmap.
 
+**Host-local identities.** Anywhere a skill says `identities.*`, it means the
+login this command prints for this machine, not the tracked block as written:
+
+```bash
+python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --repo "$(git rev-parse --show-toplevel)"
+```
+
+It prints one JSON object: `maintainer`, `reviewer`, `implementer` and `source`.
+With no `${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/identities.yml`, the
+logins are the tracked block's, nulls included, `source` is `.agents/stack.yml`, and
+the missing-key policy below applies. With that file, its logins replace the whole
+block on this machine and `source` is its path. The file is three flat lines:
+
+```yaml
+maintainer: <gh-login>
+reviewer: <gh-login>
+implementer: <gh-login>
+```
+
+All three are required: a missing or null role, an unknown key, an indented line
+or an invalid login exits 2 naming the file and the key, and no block is assembled
+from both sources. A second person uses this file to run the review skills on the
+same repository under their own accounts without changing a tracked file.
+
+Skills call the command by prompt, so a session that skips it uses the tracked
+logins; `gh auth token --user` then exits 1 for an account this machine does not
+hold, before anything posts. Reviews and answered threads belong to the account
+that wrote them and the loop ledger to the machine, so run one PR's review loop
+from one machine. Another machine's review does not satisfy `/triage` or `/pr-loop`
+here, because each checks the review's author against its own `identities.reviewer`.
+
 `review_model` and `claude_review_model` default rather than refuse, and the
 reason is the asymmetry: an unset gate command silently passes a check that
 never ran, while an unset review model can safely use a documented, pinned
@@ -164,8 +195,8 @@ continue to refuse when absent.
   `cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P` so they work through the
   `~/.claude/skills/<name>` symlinks the installer creates.
 - Persistent state lives under `${KSTACK_STATE:-$HOME/.kstack}` (freeze
-  boundary, per-project health history at `projects/<slug>/`), never inside a
-  consuming repo.
+  boundary, per-project health history and host-local `identities.yml` at
+  `projects/<slug>/`), never inside a consuming repo.
 - Frontmatter: `name`, `version` (semver-ish, bump on behavior change — it is
   the cross-host drift detector), `description`.
 - Description formula, in order: one sentence of what it does; `Use when asked

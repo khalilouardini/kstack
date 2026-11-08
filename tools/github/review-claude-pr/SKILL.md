@@ -1,6 +1,6 @@
 ---
 name: review-claude-pr
-version: 0.5.0
+version: 0.6.0
 description: Review an open agent-built PR (Codex- or Claude-attributed, including maintainer-opened PRs) and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
@@ -31,7 +31,16 @@ implementation edits, and structural admission does not grant human approval.
 ## Configuration — read `.agents/stack.yml` first
 
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
-`CONVENTIONS.md` §2) before anything else:
+`CONVENTIONS.md` §2) before anything else. Read `identities.*` through
+`bin/resolve-identities`, never directly from the file, because a host-local file
+can replace the block on this machine:
+
+```bash
+python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --repo "$(git rev-parse --show-toplevel)"
+```
+
+Non-zero exit → **refuse**, quoting its message. When `source` is not
+`.agents/stack.yml`, state it in the report.
 
 - **`identities.maintainer`** — required for verified bootstrap reads and role resolution.
 - **`identities.reviewer`** — the review-agent gh login, normally Codex, that

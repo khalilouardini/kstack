@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""resolve-identities — the GitHub logins kstack skills use on this machine.
+
+Prints one JSON object with maintainer, reviewer, implementer and source. The
+logins come from the `identities` block of <repo>/.agents/stack.yml, unless this
+host has ${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/identities.yml, which
+replaces the whole block (CONVENTIONS.md section 2). A login that is null in
+stack.yml prints as null, and each skill applies its own missing-key policy.
+
+Exits 2 with a message on stderr, and prints nothing on stdout, for a missing
+stack.yml, an unsafe `project` value or an invalid host file. Stdlib only. It
+reads files and writes nothing.
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+ROLES = ("maintainer", "reviewer", "implementer")
+# The same login form as resolve() in tools/github/pr-loop/lib/review_runtime.py.
+LOGIN = re.compile(r"[\w-]+(?:\[bot\])?")
+PROJECT = re.compile(r"[A-Za-z0-9][\w.-]*")
+KEY = re.compile(r"([A-Za-z_][\w-]*):(?:\s+(.*))?")
+NULLS = {"", "~", "null", "Null", "NULL"}
+STACK_SOURCE = ".agents/stack.yml"
+
+
+class Refused(ValueError):
+    pass
+
+
+def scalar(raw):
+    """A plain or quoted YAML scalar without its trailing comment; None for null."""
+    raw = (raw or "").strip()
+    if raw[:1] in ('"', "'"):
+        end = raw.find(raw[0], 1)
+        if end < 0:
+            raise Refused(f"unterminated quote in {raw!r}")
+        return raw[1:end]
+    value = re.split(r"(?:^|\s)#", raw, maxsplit=1)[0].strip()
+    return None if value in NULLS else value
+
+
+def read_text(path):
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise Refused(f"cannot read {path}: {exc}") from exc
+
+
+def read_stack(repo):
+    """Return (project, tracked logins) from the consuming repo's stack.yml."""
+    path = Path(repo) / STACK_SOURCE
+    if not path.is_file():
+        raise Refused(f"missing {path}")
+    project, logins, inside, child_indent = None, {}, False, None
+    try:
+        for line in read_text(path).splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            match = KEY.fullmatch(stripped)
+            if indent == 0:
+                inside = bool(match) and match[1] == "identities"
+                child_indent = None
+                if match and match[1] == "project":
+                    project = scalar(match[2])
+            elif inside and match:
+                child_indent = indent if child_indent is None else child_indent
+                if indent == child_indent and match[1] in ROLES:
+                    logins[match[1]] = scalar(match[2])
+    except Refused as exc:
+        raise Refused(f"{path}: {exc}") from exc
+    return project, {role: logins.get(role) for role in ROLES}
+
+
+def read_host(path):
+    """Return the three logins from a host file; every failure names the file."""
+    values = {}
+    for number, line in enumerate(read_text(path).splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = KEY.fullmatch(line.rstrip())
+        if not match:
+            raise Refused(f'{path}:{number}: expected an unindented "<role>: <login>" line')
+        key = match[1]
+        if key not in ROLES:
+            raise Refused(f"{path}:{number}: unknown key {key}; expected {', '.join(ROLES)}")
+        if key in values:
+            raise Refused(f"{path}:{number}: duplicate key {key}")
+        try:
+            values[key] = scalar(match[2])
+        except Refused as exc:
+            raise Refused(f"{path}:{number}: {exc}") from exc
+    for role in ROLES:
+        value = values.get(role)
+        if value is None:
+            raise Refused(f"{path}: identities.{role} is missing or null; "
+                          "this file replaces the whole block")
+        if not LOGIN.fullmatch(value):
+            raise Refused(f"{path}: identities.{role} is not a GitHub login: {value!r}")
+    return values
+
+
+def resolve(repo, environ=None):
+    environ = os.environ if environ is None else environ
+    project, tracked = read_stack(repo)
+    if project is None:
+        return dict(tracked, source=STACK_SOURCE)
+    if not PROJECT.fullmatch(project):
+        raise Refused(f"{Path(repo) / STACK_SOURCE}: project {project!r} cannot name a state directory")
+    state = environ.get("KSTACK_STATE") or str(Path(environ.get("HOME") or Path.home()) / ".kstack")
+    host = Path(state) / "projects" / project / "identities.yml"
+    if not os.path.lexists(host):
+        return dict(tracked, source=STACK_SOURCE)
+    return dict(read_host(host), source=str(host))
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Print the GitHub logins kstack skills use on this machine.")
+    parser.add_argument("--repo", default=".", help="consuming repository root (default: current directory)")
+    args = parser.parse_args()
+    try:
+        print(json.dumps(resolve(args.repo)))
+    except Refused as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+
+
+if __name__ == "__main__":
+    main()
