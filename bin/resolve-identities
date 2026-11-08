@@ -26,9 +26,12 @@ LOGIN = re.compile(r"[\w-]+(?:\[bot\])?")
 KEY = re.compile(r"""(?:"([^"\\]+)"\s*:\s*|'([^']+)'\s*:\s*|([A-Za-z_][\w-]*)\s*:(?:\s+|$))(.*)""")
 NULLS = {"", "~", "null", "Null", "NULL"}
 # Anchors, aliases, tags, block scalars, flow collections and reserved characters.
-UNSUPPORTED_VALUE = tuple("&*!|>{[%@`")
-# A whole-document flow mapping, a complex key, a merge key, or content on a `---` line.
-UNSUPPORTED_TOP_LEVEL = re.compile(r"[{?]|<<|---\s+[^#\s]")
+UNSUPPORTED_VALUE = (*"&*!|>{}[]%@`,", "- ", "? ", ": ")
+DOCUMENT_MARKER = re.compile(r"(?:---|\.\.\.)(?:\s+#.*)?")
+# Top-level lines that cannot be `project` or `identities`: a sequence entry of the
+# key above, the closer of another key's flow collection, or a plain key, which has
+# no escapes. Any other line that is not a key this script reads refuses.
+OTHER_TOP_LEVEL = re.compile(r"""-(?:\s|$)|[\]}]|[^\s"'&*!|>{}\[\]%@`#,?:<-][^#"']*?\s*:(?:\s|$)""")
 STACK_SOURCE = ".agents/stack.yml"
 
 
@@ -54,11 +57,11 @@ def scalar(raw):
         end = raw.find(raw[0], 1)
         if end < 0:
             raise Refused(f"unterminated quote in {raw!r}")
-        if not has_no_value(raw[end + 1:]):
+        if not has_no_value(raw[end + 1:]) or (raw[0] == '"' and "\\" in raw[1:end]):
             raise Refused(f"unsupported value {raw!r}")
         return raw[1:end] or None
     value = re.split(r"(?:^|\s)#", raw, maxsplit=1)[0].strip()
-    if value.startswith(UNSUPPORTED_VALUE):
+    if value.startswith(UNSUPPORTED_VALUE) or re.search(r":(?:\s|$)", value):
         raise Refused(f"unsupported value {value!r}")
     return None if value in NULLS else value
 
@@ -99,7 +102,7 @@ def flow_mapping(raw):
 
 def read_text(path):
     try:
-        return Path(path).read_text(encoding="utf-8")
+        return Path(path).read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError) as exc:
         raise Refused(f"cannot read {path}: {exc}") from exc
 
@@ -118,21 +121,29 @@ def read_stack(repo):
 def parse_stack(text):
     """Read `project` and `identities` from the YAML forms this script supports.
 
-    Stdlib Python has no YAML parser. Any other form in those two keys refuses,
-    because reading it wrongly would select the wrong accounts with no error.
+    Stdlib Python has no YAML parser. Any other form in those two keys, and any
+    top-level line that could hide them, refuses, because reading it wrongly would
+    select the wrong accounts with no error.
     """
-    project, logins, seen, section, child_indent = None, {}, set(), None, None
+    project, logins, seen, section, child_indent, root = None, {}, set(), None, None, None
     for number, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped or stripped.startswith("#") or (root is None and stripped.startswith("%")):
             continue
         indent = len(line) - len(line.lstrip(" "))
         pair = key_value(stripped)
         try:
-            if indent == 0:
+            if indent == 0 and DOCUMENT_MARKER.fullmatch(stripped):
+                if root is not None:
+                    raise Refused("only one YAML document is supported")
+                continue
+            root = indent if root is None else root
+            if indent < root:
+                raise Refused(f"less indented than the first key: {stripped!r}")
+            if indent == root:
                 section, child_indent = None, None
                 if pair is None:
-                    if UNSUPPORTED_TOP_LEVEL.match(stripped):
+                    if not OTHER_TOP_LEVEL.match(stripped):
                         raise Refused(f"unsupported top-level form {stripped!r}")
                     continue
                 key, raw = pair
@@ -141,17 +152,18 @@ def parse_stack(text):
                 if key in seen:
                     raise Refused(f"duplicate key {key}")
                 seen.add(key)
-                if has_no_value(raw):
-                    section = key
-                elif key == "project":
+                section = "value"
+                if key == "project":
                     project = scalar(raw)
+                elif has_no_value(raw):
+                    section = "block"
                 elif raw.strip().startswith("{"):
                     logins = flow_mapping(raw.strip())
                 elif scalar(raw) is not None:
                     raise Refused(f"identities must be a mapping, found {raw.strip()!r}")
-            elif section == "project":
-                raise Refused("project must have its value on the same line")
-            elif section == "identities":
+            elif section == "value":
+                raise Refused(f"keep the value on one line: {stripped!r}")
+            elif section == "block":
                 child_indent = indent if child_indent is None else child_indent
                 if pair is None or indent != child_indent:
                     raise Refused(f"unsupported form in identities: {stripped!r}")

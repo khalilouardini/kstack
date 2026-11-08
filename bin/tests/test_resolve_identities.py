@@ -61,6 +61,31 @@ UNSUPPORTED_FORMS = {
     "project anchor": "project: &slug acme\n",
     "whole-document flow": "{project: acme}\n",
     "top-level merge key": "<<: *defaults\nproject: acme\n",
+    "escaped project key": '"pro\\u006aect": acme\n',
+    "escaped identities key": '"identit\\u0069es": {maintainer: owner-a}\nproject: acme\n',
+    "single-quoted key with an escaped quote": "'pro''ject': acme\n",
+    "complex key": "? project\n: acme\n",
+    "tagged key": "!!str project: acme\n",
+    "anchored key": "&slug project: acme\n",
+    "escaped project value": 'project: "ac\\u006de"\n',
+    "escaped login": 'project: acme\nidentities:\n  maintainer: "owner\\u002da"\n',
+    "project continued on the next line": "project: acme\n  more\n",
+    "flow mapping continued on the next line": "project: acme\nidentities: {maintainer: owner-a}\n  reviewer: x\n",
+    "colon inside a plain value": "project: acme: x\n",
+    "line less indented than the first key": "  project: acme\nidentities: {}\n",
+    "second document": "project: acme\n---\nidentities: {}\n",
+    "content on the marker line": "--- {project: acme}\n",
+    "stray text at the top level": "project: acme\nstray text\n",
+}
+# Lines the resolver must skip, because they cannot name `project` or `identities`.
+OTHER_KEYS = {
+    "plain keys": "gates:\n  lint: make lint\ndotted.key: x\nkey with spaces: y\n1: z\n",
+    "sequence at the key's indent": "protected_branches:\n- main\n- demo/*\n",
+    "quoted command": 'gates:\n  test: "pytest -k \\"not slow\\""\n',
+    "flow value on several lines": "paths: [\n  a,\n  b,\n]\nmap: {\n  a: 1,\n}\n",
+    "nested keys with the same names": "other:\n  project: wrong\n  identities:\n    maintainer: wrong\n",
+    "block scalar": "notes: |\n  project: wrong\n  identities: wrong\n",
+    "escaped quoted value": 'other: "a\\tb"\n',
 }
 
 
@@ -220,6 +245,38 @@ class ResolveIdentities(unittest.TestCase):
             with self.subTest(name):
                 self.write_stack(project + IDENTITIES_FORMS["block"])
                 self.assertEqual(self.resolved()["source"], str(host))
+
+    def test_document_framing_does_not_change_the_result(self):
+        host = self.write_host(HOST)
+        body = PROJECT_FORMS["plain"] + IDENTITIES_FORMS["block"]
+        indented = "".join(f"  {line}\n" for line in body.splitlines())
+        framings = {"marker": "---\n" + body, "marker and comment": "--- # stack\n" + body,
+                    "directive": "%YAML 1.1\n---\n" + body, "whole document indented": indented,
+                    "marker before an indented document": "---\n" + indented}
+        for name, text in framings.items():
+            with self.subTest(name):
+                self.write_stack(text)
+                self.assertEqual(self.resolved()["source"], str(host))
+
+    def test_byte_order_mark_does_not_hide_the_first_key(self):
+        host = self.write_host(HOST)
+        (self.repo / ".agents" / "stack.yml").write_bytes(
+            b"\xef\xbb\xbf" + (PROJECT_FORMS["plain"] + IDENTITIES_FORMS["block"]).encode())
+        self.assertEqual(self.resolved()["source"], str(host))
+
+    def test_other_keys_are_skipped_in_any_position(self):
+        host = self.write_host(HOST)
+        body = PROJECT_FORMS["plain"] + IDENTITIES_FORMS["block"]
+        for name, other in OTHER_KEYS.items():
+            for text in (other + body, body + other):
+                with self.subTest(name, text=text):
+                    self.write_stack(text)
+                    self.assertEqual(self.resolved()["source"], str(host))
+                    (host.parent / "off").write_text(host.read_text())
+                    host.unlink()
+                    result = self.resolved()
+                    self.assertEqual((result["maintainer"], result["source"]), ("owner-a", ".agents/stack.yml"))
+                    (host.parent / "off").rename(host)
 
     def test_empty_identities_forms_return_nulls(self):
         for identities in ("identities: {}\n", "identities: null\n", "identities:  # none\n"):

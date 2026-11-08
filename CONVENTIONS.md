@@ -122,7 +122,8 @@ same repository under their own accounts without changing a tracked file.
 In `.agents/stack.yml` the resolver reads `project` and `identities` with plain or
 quoted keys and values, as an indented block or a one-line flow mapping. Stdlib
 Python has no YAML parser, so any other form of those two keys (an anchor, an alias,
-a multi-line flow mapping) exits 2 naming the line rather than being misread.
+a multi-line flow mapping), and any top-level line that could hide them (an escaped
+key, a second document), exits 2 naming the line rather than being misread.
 
 Skills call the command by prompt, so a session that skips it uses the tracked
 logins; `gh auth token --user` then exits 1 for an account this machine does not
