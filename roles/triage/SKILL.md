@@ -58,11 +58,11 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
   **ask the user** where to write it; do not guess a docs path.
 - **`identities.maintainer`, `identities.reviewer`, `identities.implementer`,
   `ci.checks`** — read for
-  status interpretation using the referenced review/CI contracts. Read the
-  identities through `bin/resolve-identities`, never directly from the file,
-  because a host-local file can replace the block on this machine:
-  `python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --repo "$(git rev-parse --show-toplevel)"`.
-  When `source` is not `.agents/stack.yml`, state it in the proposal. Missing keys
+  status interpretation using the referenced review/CI contracts. A host-local
+  file can replace the `identities` block on this machine, so when `project` is
+  set, run `python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --project "<project>"`
+  with its value. `null` means no such file: use the block. A JSON object replaces
+  the block, and the proposal states its `source`. Missing keys
   make the affected assessment **UNKNOWN**, naming the key, and a non-zero exit
   does the same, quoting its message; they do not turn
   zero findings into clearance or stop unrelated scope scoring. This is the

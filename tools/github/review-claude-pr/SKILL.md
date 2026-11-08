@@ -31,16 +31,16 @@ implementation edits, and structural admission does not grant human approval.
 ## Configuration — read `.agents/stack.yml` first
 
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
-`CONVENTIONS.md` §2) before anything else. Read `identities.*` through
-`bin/resolve-identities`, never directly from the file, because a host-local file
-can replace the block on this machine:
+`CONVENTIONS.md` §2) before anything else. A host-local file can replace the `identities` block on this machine, so when
+`project` is set, run this with its value before using any `identities.*` login:
 
 ```bash
-python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --repo "$(git rev-parse --show-toplevel)"
+python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --project "<project>"
 ```
 
-Non-zero exit → **refuse**, quoting its message. When `source` is not
-`.agents/stack.yml`, state it in the report.
+It prints `null` when this machine has no such file: use the block. It prints a
+JSON object when it does: those logins replace the block, and the report states its
+`source`. Non-zero exit → **refuse**, quoting its message.
 
 - **`identities.maintainer`** — required for verified bootstrap reads and role resolution.
 - **`identities.reviewer`** — the review-agent gh login, normally Codex, that

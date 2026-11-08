@@ -135,12 +135,12 @@ Read every composed procedure by physical path, never copy its rules here.
   absolute paths and symlink escape before launching the graph.
 - `gates.lint`, `gates.test`, `ci.checks`, `identities.maintainer`,
   `identities.reviewer`, `identities.implementer`: missing/null → refuse naming
-  the exact key before graph execution. Read the identities through
-  `bin/resolve-identities`, never directly from the file, because a host-local file
-  can replace the block on this machine:
-  `python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --repo "$(git rev-parse --show-toplevel)"`.
-  Non-zero exit → refuse, quoting its message. When `source` is not
-  `.agents/stack.yml`, state it in the report. Pass review settings and workspace contracts through unchanged.
+  the exact key before graph execution. A host-local file can replace
+  the `identities` block on this machine, so when `project` is set, run
+  `python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --project "<project>"`
+  with its value. `null` means no such file: use the block. A JSON object replaces
+  the block, and the report states its `source`. Non-zero exit → refuse, quoting its
+  message. Pass review settings and workspace contracts through unchanged.
   `scope_doc` and `workspace_contract` must be readable for plan/build; named
   procedures own their remaining configuration and status checks.
 
@@ -195,8 +195,8 @@ selection and approval. Legacy Run A records retain their old membership.
 3. Build JSON `args`: `stage`, `repo_root` (absolute physical path), `default_branch` (fetched
    remote-tracking ref), `gates`, `identities`, `wave`, full `stack_config`, `paths`,
    `date` (caller-supplied ISO date), unique `wave_id` and invocation `run_id`.
-   `identities` holds the three resolved logins, and `stack_config.identities` is set
-   to the same three, so the graph's agents see one set of logins.
+   `identities` holds the three logins for this machine, and `stack_config.identities`
+   is set to the same three, so the graph's agents see one set of logins.
    Scripts have no filesystem access and cannot acquire the time. Pass gate
    commands and physical paths explicitly; never include tokens or secrets in args.
    Pass these settings rather than asking the script to infer

@@ -95,18 +95,19 @@ the installation and workspace mapping when this key is unset. Opening and
 inspecting an existing viewer need no tracker access; refresh needs fresh Linear
 reads and the indexed roadmap.
 
-**Host-local identities.** Anywhere a skill says `identities.*`, it means the
-login this command prints for this machine, not the tracked block as written:
+**Host-local identities.** Anywhere a skill says `identities.*`, it means the login
+for this machine: the tracked block, unless
+`${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/identities.yml` exists. With
+`project` set, a skill checks with its value:
 
 ```bash
-python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --repo "$(git rev-parse --show-toplevel)"
+python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --project "<project>"
 ```
 
-It prints one JSON object: `maintainer`, `reviewer`, `implementer` and `source`.
-With no `${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/identities.yml`, the
-logins are the tracked block's, nulls included, `source` is `.agents/stack.yml`, and
-the missing-key policy below applies. With that file, its logins replace the whole
-block on this machine and `source` is its path. The file is three flat lines:
+It prints `null` when the file does not exist, so the block and the missing-key policy
+below apply unchanged. When the file exists, it prints `maintainer`, `reviewer`,
+`implementer` and `source` as JSON, and those logins replace the whole block. The file
+is three flat lines:
 
 ```yaml
 maintainer: <gh-login>
@@ -114,21 +115,17 @@ reviewer: <gh-login>
 implementer: <gh-login>
 ```
 
-All three are required: a missing or null role, an unknown key, an indented line
-or an invalid login exits 2 naming the file and the key, and no block is assembled
-from both sources. A second person uses this file to run the review skills on the
-same repository under their own accounts without changing a tracked file.
+All three are required: a missing or null role, an unknown or duplicate key, an
+indented line or an invalid login exits 2 naming the file, and no block is assembled
+from both sources. A second person uses this file to run the review skills on the same
+repository under their own accounts without changing a tracked file. The script reads
+only this file, never `.agents/stack.yml`: stdlib Python has no YAML parser, and a
+hand-written one reads some valid YAML wrongly and selects the wrong accounts.
 
-In `.agents/stack.yml` the resolver reads `project` and `identities` with plain or
-quoted keys and values, as an indented block or a one-line flow mapping. Stdlib
-Python has no YAML parser, so any other form of those two keys (an anchor, an alias,
-a multi-line flow mapping), and any top-level line that could hide them (an escaped
-key, a second document), exits 2 naming the line rather than being misread.
-
-Skills call the command by prompt, so a session that skips it uses the tracked
-logins; `gh auth token --user` then exits 1 for an account this machine does not
-hold, before anything posts. Reviews and answered threads belong to the account
-that wrote them and the loop ledger to the machine, so run one PR's review loop
+Skills call the command by prompt, so a session that skips it, or passes the wrong
+`project`, uses the tracked logins; `gh auth token --user` then exits 1 for an account
+this machine does not hold, before anything posts. Reviews and answered threads belong
+to the account that wrote them and the loop ledger to the machine, so run one PR's review loop
 from one machine. Another machine's review does not satisfy `/triage` or `/pr-loop`
 here, because each checks the review's author against its own `identities.reviewer`.
 

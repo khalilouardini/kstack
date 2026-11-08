@@ -182,7 +182,7 @@ can drift from the approved plan.
 The implementation session owns code and tests, not tracker truth beyond evidence it
 has actually produced.
 
-- It opens a PR only as `identities.maintainer`, read through
+- It opens a PR only as `identities.maintainer`, after the host-local check with
   `bin/resolve-identities` (CONVENTIONS.md §2), through `/land` or with that
   account's verified token bound via `GH_TOKEN` — never as the implementer or
   reviewer account, and never by relying on the active global `gh` account.

@@ -42,16 +42,16 @@ local/PR graph sources. No graph publication or extra tracker writes are granted
 ## Configuration — read `.agents/stack.yml` first
 
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
-`CONVENTIONS.md` §2). Read `identities.*` through `bin/resolve-identities`, never
-directly from the file, because a host-local file can replace the block on this
-machine:
+`CONVENTIONS.md` §2). A host-local file can replace the `identities` block on this machine, so when
+`project` is set, run this with its value before using any `identities.*` login:
 
 ```bash
-python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --repo "$(git rev-parse --show-toplevel)"
+python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --project "<project>"
 ```
 
-Non-zero exit → **refuse**, quoting its message. When `source` is not
-`.agents/stack.yml`, state it in the report.
+It prints `null` when this machine has no such file: use the block. It prints a
+JSON object when it does: those logins replace the block, and the report states its
+`source`. Non-zero exit → **refuse**, quoting its message.
 
 - **`gates.lint`** — missing or null → **refuse**, naming `gates.lint`.
 - **`gates.test`** — missing or null → **refuse**, naming `gates.test`. Use
