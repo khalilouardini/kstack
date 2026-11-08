@@ -389,6 +389,17 @@ def main(argv: list[str]) -> int:
         if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
             r.fail("tools/linear/issue-graph/tests", "harness", "viewer tests failed or none discovered")
 
+    identity_tests = REPO / "bin/tests"
+    if identity_tests.is_dir():
+        out = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(identity_tests)],
+            capture_output=True, text=True,
+        )
+        print(out.stdout, end="")
+        print(out.stderr, end="")
+        if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+            r.fail("bin/tests", "harness", "resolve-identities tests failed or none discovered")
+
     update_tests = REPO / "core/update-stack/tests"
     if update_tests.is_dir():
         out = subprocess.run(

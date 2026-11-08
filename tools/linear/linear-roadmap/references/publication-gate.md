@@ -165,7 +165,8 @@ New scope, dependency changes, release/acceptance changes, human-gate changes,
 repairs outside the bounds above, or incomplete authorization require a reviewed
 graph update before affected execution. Prepare an isolated branch from fresh
 main, reconcile live sources, update manifest/index and rendered views together,
-run validation and repository gates, and open the PR as `identities.maintainer`.
+run validation and repository gates, and open the PR as `identities.maintainer`,
+after the host-local check with `bin/resolve-identities` (CONVENTIONS.md §2).
 Scope changes additionally need the authorized owner's explicit scope decision.
 A graph-only PR is exempt from its own execution gate so it can repair it; a
 mixed implementation PR may use only verified existing scope/local reconciliation.

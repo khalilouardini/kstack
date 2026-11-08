@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.10.2
+version: 0.11.1
 description: Drive an independent Codex↔Claude review/fix loop on one PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. The implementation session keeps fixes; the other engine reviews with verified GitHub identity and head evidence. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#>". (kstack)
 ---
 
@@ -60,7 +60,16 @@ local/PR graph sources. No graph publication or extra tracker writes are granted
 ## Configuration — read `.agents/stack.yml` first
 
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
-`CONVENTIONS.md` §2) before preflight:
+`CONVENTIONS.md` §2) before preflight. A host-local file can replace the `identities` block on this machine, so when
+`project` is set, run this with its value before using any `identities.*` login:
+
+```bash
+python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --project "<project>"
+```
+
+It prints `null` when this machine has no such file: use the block. It prints a
+JSON object when it does: those logins replace the block, and the final report states its
+`source`. Non-zero exit → **refuse**, quoting its message.
 
 - **`identities.maintainer`** — the human maintainer's gh login. This account
   opens every PR, governs the repository, and is the only account that ever
