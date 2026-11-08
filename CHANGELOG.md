@@ -9,8 +9,9 @@ ran `review_model.slug` instead of `review_model.escalated_slug`, and its `read 
 path` emptied `PATH`. Each `ESCALATE_PATHS` glob is now rendered in single quotes,
 because unquoted, the shell expands it against the checkout, and zsh stops with `no
 matches found` when no file matches. The ledger key reads `FINDING_PATH`, because under zsh `FPATH` is the
-function search path and a path-less finding keyed on it instead of `-`. Source: the
-review of khalilouardini/kstack#57 on 2026-11-08, launched by hand after the zsh loop
+function search path and a path-less finding keyed on it instead of `-`. A failed
+`bin/prior-review-count` now blocks the round: its empty result selected the base model
+under bash and counted as a first review under zsh. Source: the review of khalilouardini/kstack#57 on 2026-11-08, launched by hand after the zsh loop
 matched nothing. `tools/github/pr-loop/tests/test_shell_snippets.py` runs both
 snippets as `SKILL.md` prints them, under each shell.
 

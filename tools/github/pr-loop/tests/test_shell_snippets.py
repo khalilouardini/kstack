@@ -75,9 +75,9 @@ class FirstReviewTriggerTests(ShellCase):
         self.scratch.mkdir()
         self.path = str(fake) + os.pathsep + os.environ['PATH']
 
-    def trigger(self, argv, globs, paths, reviews=(), stack_root=STACK_ROOT):
+    def trigger(self, argv, globs, paths, reviews_json='[[]]'):
         script = assignments(
-            STACK_ROOT=stack_root, SCRATCH=self.scratch, PR=16, OWNER_REPO='example/repo',
+            STACK_ROOT=STACK_ROOT, SCRATCH=self.scratch, PR=16, OWNER_REPO='example/repo',
             REVIEWER='review-bot', MAINTAINER_TOKEN='fixture', BASE_MODEL='base-model',
             BASE_EFFORT='high', ESCALATED_MODEL='deep-model', ESCALATED_EFFORT='max',
             ESCALATE_ABOVE='', ESCALATE_FILES='', MODEL_PINNED='false', EFFORT_PINNED='false',
@@ -87,7 +87,7 @@ class FirstReviewTriggerTests(ShellCase):
         script += 'printf "%s\\n" "$MATCHED_PATH" "$MODEL" "$EFFORT"\n'
         script += 'command -v sort >/dev/null && echo path-intact\n'
         env = dict(os.environ, PATH=self.path, FAKE_PATHS='\n'.join(paths),
-                   FAKE_REVIEWS=json.dumps([list(reviews)]))
+                   FAKE_REVIEWS=reviews_json)
         return subprocess.run([*argv, '-c', script], cwd=self.root, env=env,
                               capture_output=True, text=True)
 
@@ -114,14 +114,21 @@ class FirstReviewTriggerTests(ShellCase):
     @each_shell
     def test_follow_up_head_keeps_the_base_model_on_a_matching_path(self, argv):
         result = self.trigger(argv, ['bin/**'], ['bin/check-stack'],
-                              reviews=[review('codex', 'review-bot')])
+                              reviews_json=json.dumps([[review('codex', 'review-bot')]]))
         self.assert_route(result, 'bin/check-stack', 'base-model', 'high')
 
     @each_shell
-    def test_failed_match_blocks_instead_of_selecting_the_base_model(self, argv):
-        result = self.trigger(argv, ['bin/**'], ['bin/check-stack'],
-                              stack_root=self.root / 'no-such-checkout')
+    def test_failed_match_blocks_instead_of_selecting_a_model(self, argv):
+        (self.scratch / 'changed-paths.txt').mkdir(exist_ok=True)
+        result = self.trigger(argv, ['bin/**'], ['bin/check-stack'])
         self.assertEqual((result.returncode, result.stdout), (2, ''), result.stderr)
+        self.assertIn('BLOCKED', result.stderr)
+
+    @each_shell
+    def test_failed_count_blocks_instead_of_selecting_a_model(self, argv):
+        result = self.trigger(argv, ['bin/**'], ['bin/check-stack'], reviews_json='not json')
+        self.assertEqual((result.returncode, result.stdout), (2, ''), result.stderr)
+        self.assertIn('BLOCKED', result.stderr)
 
     def test_preflight_renders_each_glob_in_single_quotes(self):
         line = re.search(r'^ESCALATE_PATHS=\(.*$', fence('ESCALATED_MODEL='), re.M).group()

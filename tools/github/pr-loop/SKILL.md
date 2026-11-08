@@ -437,7 +437,7 @@ review marker, after which an automatic Astra escalation must expire:
 GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate --slurp \
   "repos/$OWNER_REPO/pulls/$PR/reviews" > "$SCRATCH/prior-reviews.json"
 PRIOR_REVIEW_COUNT=$(python3 "$STACK_ROOT/tools/github/pr-loop/bin/prior-review-count" \
-  --reviews "$SCRATCH/prior-reviews.json" --reviewer "$REVIEWER" --engine codex)
+  --reviews "$SCRATCH/prior-reviews.json" --reviewer "$REVIEWER" --engine codex) || exit 2
 SIZE=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json additions,deletions \
   --jq '.additions + .deletions')
 GH_TOKEN="$MAINTAINER_TOKEN" gh pr diff "$PR" --name-only > "$SCRATCH/changed-paths-raw.txt"
@@ -458,8 +458,9 @@ if [ "$EFFORT_PINNED" = true ]; then EFFORT="$PINNED_EFFORT"; fi
 
 `bin/first-matching-path` applies Python `fnmatch` (`CONVENTIONS.md` §2), not
 substring or regex matching, so `*` also crosses `/` and bash and zsh get the same
-answer. It prints the first matching path for the routing report, and an unreadable
-path list exits 2, which blocks the round. Size thresholds are raw GitHub counts if a project opts
+answer. It prints the first matching path for the routing report. A failed prior-review
+count or an unreadable path list exits 2, which blocks the round: an empty count selects
+the base model under bash and counts as a first review under zsh. Size thresholds are raw GitHub counts if a project opts
 in; generated files and fixtures are not filtered from those optional counts.
 On a follow-up head, even a high-risk path uses the base model unless the
 invocation explicitly pins `--model gpt-6-astra`. This prevents an automatic
