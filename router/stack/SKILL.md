@@ -208,7 +208,8 @@ Two properties worth preserving when you choose:
 ## What this table does not know
 
 - **Project skills shadow stack skills of the same name.** If the consuming repo
-  defines `<name>` locally, its version is what runs. This table names the stack
+  defines `<name>` locally, select and read that contract explicitly; Codex may
+  display both names. This table names the stack
   skill; the project's may behave differently.
 - **The project's own domain skills are not listed here at all** — eval
   harnesses, data-pipeline loops, product-specific review gates. They stay in

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+Refresh installation, host support, onboarding, workflow examples, and both skill
+maps against the current catalog (28 skills and four roles from the canonical
+directories). Document Codex's current hook/symlink support separately from
+kstack's pointer integration, reviewed-head CI semantics, project-filtered
+triage, and OGUR's CI-first full-suite policy. Link HTML cards to their canonical
+contracts and add the missing skills and external tier. `bin/check-docs`, run
+by `bin/check-stack`, checks overview parity, the displayed version, and local
+Markdown/HTML links and anchors; offline regression cases cover those checks.
+
 `pr-loop` 0.11.1: the first-review path trigger matches `review_model.escalate_paths`
 through `bin/first-matching-path` (Python `fnmatch`), so bash and zsh get the same
 answer. Under zsh the old loop matched no path, so a first review on a high-risk path
