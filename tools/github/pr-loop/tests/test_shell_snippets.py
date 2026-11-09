@@ -14,6 +14,7 @@ import unittest
 from test_route import review, rt
 
 SKILL = Path(__file__).resolve().parents[1] / 'SKILL.md'
+REVIEW_SKILL = SKILL.parents[1] / 'review-claude-pr' / 'SKILL.md'
 BIN = SKILL.parent / 'bin'
 STACK_ROOT = Path(__file__).resolve().parents[4]
 SHELLS = {'bash': ['bash', '--noprofile', '--norc'], 'zsh': ['zsh', '-f']}
@@ -31,9 +32,9 @@ else:
 '''
 
 
-def fence(marker):
+def fence(marker, skill=SKILL):
     """The one fenced bash block in SKILL.md that contains marker."""
-    blocks = re.findall(r'^```bash\n(.*?)^```$', SKILL.read_text(), re.M | re.S)
+    blocks = re.findall(r'^```bash\n(.*?)^```$', skill.read_text(), re.M | re.S)
     found = [block for block in blocks if marker in block]
     if len(found) != 1:
         raise AssertionError(f'{len(found)} bash blocks in SKILL.md contain {marker!r}')
@@ -62,6 +63,81 @@ class ShellCase(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name) / 'path with spaces'
         self.root.mkdir()
+
+
+class DisposableCheckoutTests(ShellCase):
+    """review-claude-pr's checkout commands, from a linked worktree whose shared .git is
+    read-only, as under a Codex sandbox. The worktree sits on the base commit, so a copy of
+    the current checkout instead of the reviewed head fails the content check."""
+
+    def setUp(self):
+        super().setUp()
+        if os.geteuid() == 0:
+            self.skipTest('root ignores a read-only .git')
+        main = self.root / 'main'
+        self.worktree = self.root / 'worktree'
+        identity = ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid']
+
+        def git(*args, cwd=self.worktree):
+            return subprocess.run(['git', *identity, *args], cwd=cwd, check=True,
+                                  capture_output=True, text=True).stdout.strip()
+
+        main.mkdir()
+        git('init', '-q', cwd=main)
+        (main / 'file').write_text('base\n')
+        git('add', 'file', cwd=main)
+        git('commit', '-qm', 'base', cwd=main)
+        git('worktree', 'add', '-q', '-b', 'pr', str(self.worktree), cwd=main)
+        (self.worktree / 'file').write_text('head\n')
+        git('commit', '-qam', 'head')
+        self.head = git('rev-parse', 'HEAD')
+        git('checkout', '-q', '--detach', 'HEAD~1')
+        self.set_read_only(main / '.git', True)
+        self.addCleanup(self.set_read_only, main / '.git', False)
+
+    @staticmethod
+    def set_read_only(git_dir, read_only):
+        directory_mode, file_mode = (0o555, 0o444) if read_only else (0o755, 0o644)
+        os.chmod(git_dir, directory_mode)
+        for parent, directories, files in os.walk(git_dir):
+            for name in directories:
+                os.chmod(Path(parent) / name, directory_mode)
+            for name in files:
+                os.chmod(Path(parent) / name, file_mode)
+
+    def run_printed_command(self, argv, marker):
+        script = assignments(REVIEW_HEAD=self.head) + fence(marker, REVIEW_SKILL)
+        script += 'printf "%s\\n" "$REVIEW_COPY"\n'
+        result = subprocess.run([*argv, '-c', script], cwd=self.worktree,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        copy = Path(result.stdout.strip())
+        self.addCleanup(shutil.rmtree, copy, ignore_errors=True)
+        self.assertEqual((copy / 'file').read_text(), 'head\n')
+        return copy
+
+    def test_git_worktree_add_is_refused(self):
+        result = subprocess.run(['git', 'worktree', 'add', '--detach', str(self.root / 'denied'),
+                                 'HEAD'], cwd=self.worktree, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('.git/worktrees', result.stderr)
+
+    @each_shell
+    def test_shared_clone_reaches_the_reviewed_head(self, argv):
+        copy = self.run_printed_command(argv, 'clone --quiet --shared')
+        head = subprocess.run(['git', '-C', str(copy), 'rev-parse', 'HEAD'], check=True,
+                              capture_output=True, text=True).stdout.strip()
+        self.assertEqual(head, self.head)
+
+    @each_shell
+    def test_archive_reaches_the_reviewed_head(self, argv):
+        copy = self.run_printed_command(argv, 'git archive')
+        self.assertFalse((copy / '.git').exists())
+
+    def test_skill_offers_no_disposable_worktree(self):
+        text = REVIEW_SKILL.read_text()
+        self.assertIn('Never run `git worktree add`', text)
+        self.assertEqual(re.findall(r'disposable\s+(?:detached\s+)?worktree', text), [])
 
 
 class FirstReviewTriggerTests(ShellCase):

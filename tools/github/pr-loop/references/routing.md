@@ -161,7 +161,9 @@ Because stdin is closed and permission prompts have no interactive host, require
 GitHub reads/posting and proof commands must already be permitted by the host.
 A denial is a rollout blocker: approve the concrete operation through the normal
 Claude permission flow before retrying. Never add a broad allowlist or bypass
-permissions to turn a blocked run green.
+permissions to turn a blocked run green. Do not add `.git` to Codex's `writable_roots`
+or offer that as a fix: sandboxed code could then write `.git/hooks`, which Git runs
+outside the sandbox.
 
 ## Submitted evidence and reuse
 

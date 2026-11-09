@@ -224,6 +224,20 @@ class RunnerTests(unittest.TestCase):
     def test_claude_prompt_separates_required_steps_from_optional_probes(self):
         self.assert_probe_rule_in_prompt('Codex', 'claude', '--print')
 
+    def assert_checkout_rule_in_prompt(self, implementation, reviewer, flag):
+        result, report, state = self.invoke(implementation)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        launch = next(c for c in state['calls'] if c['name'] == reviewer and flag in c['args'])
+        self.assertIn('Make any disposable checkout with git clone --shared --no-checkout or '
+                      'git archive in a temporary directory, never git worktree add',
+                      launch['args'][-1])
+
+    def test_codex_prompt_forbids_git_worktree_add(self):
+        self.assert_checkout_rule_in_prompt('Claude', 'codex', '-o')
+
+    def test_claude_prompt_forbids_git_worktree_add(self):
+        self.assert_checkout_rule_in_prompt('Codex', 'claude', '--print')
+
     def test_error_envelope_blocks(self):
         result, report, _ = self.invoke(mode='error-envelope')
         self.assert_blocked(result, report)

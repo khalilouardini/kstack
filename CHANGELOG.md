@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+`review-claude-pr` 0.7.0 and `pr-loop` 0.11.2: a reviewer makes a disposable checkout
+with `git clone --shared --no-checkout` or `git archive`, never `git worktree add`.
+The `run-review` prompt and §2 of the skill both say so. `git worktree add` writes a
+record into the shared `.git`, outside a Codex reviewer's sandbox, and the prompt
+forbids working around a denial, so one denied command ended the round with no review.
+`references/routing.md` records why `.git` must not become a Codex writable root:
+sandboxed code could write `.git/hooks`, which Git runs outside the sandbox. Source:
+ogur PR #790 (head `8edf6dbd`) and ogur PR #772 (head `26d92761`); on one machine, 1 of
+209 review runs in October and November began with that command.
+`tools/github/pr-loop/tests/test_shell_snippets.py` runs both printed commands from a
+linked worktree whose shared `.git` is read-only.
+
 Refresh installation, host support, onboarding, workflow examples, and both skill
 maps against the current catalog (28 skills and four roles from the canonical
 directories). Document Codex's current hook/symlink support separately from

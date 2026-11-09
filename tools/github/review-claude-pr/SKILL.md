@@ -1,6 +1,6 @@
 ---
 name: review-claude-pr
-version: 0.6.0
+version: 0.7.0
 description: Review an open agent-built PR (Codex- or Claude-attributed, including maintainer-opened PRs) and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
@@ -54,7 +54,7 @@ JSON object when it does: those logins replace the block, and the report states 
   there is no project proof gate; run the general review and say so in the
   report. Configured → apply the proof gate exactly as §2 describes.
 - **`gates.test`** — the command that runs the repo's tests, used only for
-  read-only proof runs inside a disposable worktree. Null → the proof step
+  read-only proof runs inside a disposable checkout (§2). Null → the proof step
   **refuses**, naming `gates.test`; the review still posts, with every finding
   that would have needed a run downgraded to a labeled non-blocking question.
   Never guess a test invocation.
@@ -83,7 +83,7 @@ the post-submit verification checks after the fact. Treat them as hard rules.
 
 - Make no repository edits. Do not implement fixes, commit, push, resolve
   threads, merge, approve, dismiss, or edit the PR description. Temporary proof
-  artifacts may live only in a disposable worktree or temporary directory and
+  artifacts may live only in a disposable checkout or temporary directory and
   must be removed.
 - After standalone bootstrap, use `$REVIEWER` for every GitHub read and write. Resolve its stored credential
   once with `gh auth token --user "$REVIEWER"`, pass it only through `GH_TOKEN` on
@@ -181,8 +181,26 @@ git diff --find-renames "$MERGE_BASE" "$REVIEW_HEAD"
 ```
 
 If the PR head is not checked out, inspect it with Git plumbing (`git show`,
-`git grep`, and `git diff`) or use a disposable detached worktree. Do not alter
+`git grep`, and `git diff`) or use a disposable checkout. Do not alter
 the user's current worktree.
+
+Make every disposable checkout, including one for a proof run, with one of these
+commands. The clone keeps Git data; the archive holds files only.
+
+```bash
+REVIEW_COPY=$(mktemp -d)
+git clone --quiet --shared --no-checkout "$(git rev-parse --show-toplevel)" "$REVIEW_COPY"
+git -C "$REVIEW_COPY" checkout --quiet --detach "$REVIEW_HEAD"
+```
+
+```bash
+REVIEW_COPY=$(mktemp -d)
+git archive "$REVIEW_HEAD" | tar -x -C "$REVIEW_COPY"
+```
+
+Never run `git worktree add` for this. It writes a record into the repository's
+shared `.git`, which a Codex sandbox denies, and the review then stops without
+posting.
 
 For every changed path:
 
@@ -254,7 +272,7 @@ Applying the project proof gate adds its proof requirement to the general review
 - Post defects on gated paths only when backed by a failing test, verifier
   rejection, schema error, or demonstrated invariant violation.
 - Keep proof-only test files outside the repository or in the disposable
-  worktree, and remove them after collecting the output.
+  checkout, and remove them after collecting the output.
 - Downgrade unproven suspicions on gated paths to clearly labeled non-blocking
   questions; do not phrase them as defects or use them alone to request changes.
 
