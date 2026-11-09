@@ -7,7 +7,8 @@ unmerged branch. The historical skill name review-claude-pr is retained.
 
 ## Resolve once, verify again at each head
 
-`identities.reviewer` and `identities.implementer` name the default accounts.
+`identities.reviewer` and `identities.implementer`, after the host-local check
+with `bin/resolve-identities` (CONVENTIONS.md §2), name the default accounts.
 `review_engines.reviewer` / `review_engines.implementer` map them to engines,
 respectively `codex` / `claude` when missing or null. Require both engines,
 distinct accounts, and a separate maintainer. Never guess engines from login
@@ -150,8 +151,11 @@ uses `--print --output-format json --permission-prompts none --model ... --effor
 model login or installed model CLI, only verified GitHub evidence. Codex uses `exec -C ... -o ...
 -m ... -c model_reasoning_effort=...`, with the existing optional fast settings.
 Both inherit host permissions. No sandbox bypass, auto-approval permission mode,
-or fallback engine is selected. A denied operation or unavailable required flag
-means BLOCKED; establish permissions through the normal host flow before retrying.
+or fallback engine is selected. A denied required operation or unavailable required
+flag means BLOCKED; establish permissions through the normal host flow before retrying.
+A denied optional runtime probe (any other check: a browser, a GUI app, Computer Use,
+`ps`) is named in the review instead and does not block it (review-claude-pr §2);
+the runner still blocks a Claude round whose JSON envelope records any denial.
 Unsupported models are caught by the CLI's checked exit, not silently substituted.
 Because stdin is closed and permission prompts have no interactive host, required
 GitHub reads/posting and proof commands must already be permitted by the host.

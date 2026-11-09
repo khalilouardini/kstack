@@ -2,9 +2,9 @@
 """Check overview catalog parity and owned documentation's local links.
 
 Stdlib only. Does not fetch external URLs or validate command semantics.
-Markdown links/images outside fenced blocks and HTML href/src attributes are
-checked, including fragments into Markdown headings and HTML IDs. Vendored
-documents are excluded; their catalog entries are still required.
+Markdown links/images outside code and HTML href/src attributes are checked,
+including fragments into Markdown headings and HTML IDs. Vendored documents
+are excluded; their catalog entries are still required.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ REPO = Path(__file__).resolve().parent.parent
 TIERS = ("router", "core", "roles", "tools")
 LINK = re.compile(r"!?\[[^\]\n]*\]\(\s*(<[^>]+>|[^\s)]+)(?:\s+[^)]*)?\)")
 FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+CODE_SPAN = re.compile(r"(?<![\\`])(`+)(?!`)(?:(?!\n\n).)*?(?<!`)\1(?!`)", re.S)
 CARD = re.compile(r'\{\s*n:\s*"([^"]+)",\s*href:\s*"([^"]+)"')
 
 
@@ -41,6 +42,16 @@ def prose_lines(text: str) -> list[tuple[int, str]]:
         if not fence:
             result.append((number, line))
     return result
+
+
+def prose_without_code(text: str) -> str:
+    """Mask fenced blocks and inline code while preserving source line numbers."""
+    lines = dict(prose_lines(text))
+    prose = "\n".join(lines.get(n, "") for n in range(1, len(text.splitlines()) + 1))
+    return CODE_SPAN.sub(
+        lambda match: "".join("\n" if ch == "\n" else " " for ch in match.group()),
+        prose,
+    )
 
 
 class HTMLLinks(HTMLParser):
@@ -63,8 +74,10 @@ def anchors(path: Path) -> set[str]:
     text = path.read_text(encoding="utf-8")
     parser = HTMLLinks()
     if path.suffix == ".md":
+        parser.feed(prose_without_code(text))
         text = "\n".join(line for _, line in prose_lines(text))
-    parser.feed(text)
+    else:
+        parser.feed(text)
     result = set(parser.ids)
     used: set[str] = set()
     if path.suffix == ".md":
@@ -103,12 +116,11 @@ def check_links(paths: list[Path], root: Path) -> list[str]:
     for path in paths:
         text = path.read_text(encoding="utf-8")
         if path.suffix == ".md":
-            lines = prose_lines(text)
-            links = [(n, m[1].strip("<>")) for n, line in lines for m in LINK.finditer(line)]
-            # Keep line numbers when parsing inline HTML outside Markdown fences.
+            prose = prose_without_code(text)
+            links = [(n, m[1].strip("<>")) for n, line in enumerate(prose.splitlines(), 1) for m in LINK.finditer(line)]
+            # Inline HTML examples in code spans are masked as well.
             parser = HTMLLinks()
-            by_number = dict(lines)
-            parser.feed("\n".join(by_number.get(n, "") for n in range(1, len(text.splitlines()) + 1)))
+            parser.feed(prose)
         else:
             parser = HTMLLinks()
             parser.feed(text)
@@ -137,7 +149,7 @@ def check_catalog(root: Path) -> list[str]:
     for name in ("README.md", "docs/skill-map.md"):
         path = root / name
         links = { (path.parent / m[1].strip("<>").split("#")[0]).resolve()
-                  for _, line in prose_lines(path.read_text()) for m in LINK.finditer(line)
+                  for line in prose_without_code(path.read_text()).splitlines() for m in LINK.finditer(line)
                   if not urlsplit(m[1].strip("<>")).scheme }
         for label, target in expected.items():
             if target not in links:

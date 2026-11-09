@@ -51,7 +51,7 @@ skills that need it and leaves the rest working.
 | `gates.lint` + `gates.test` | `/land` (gates before commit) and `/health` (scores your own checks). Both **refuse** without them — a gate that defaults open is not a gate. |
 | `gates.test_full` | `/health --full`, and `/land`'s full-suite path. |
 | `scope_doc` | the four role contracts, `/spec`, `/triage`, and `/next` gating. Without it they ask for the path and still refuse to invent a verdict. |
-| `identities.maintainer` + `identities.reviewer` + `identities.implementer` | The GitHub review cluster. `/pr-loop` requires all three, resolves authorship, and assigns the opposite engine to review; the Claude-implementation/Codex-review route is the default. |
+| `identities.maintainer` + `identities.reviewer` + `identities.implementer` | `/pr-loop` requires all three, resolves authorship, and assigns the opposite engine to review; Claude implementation with Codex review is the default. A host-local `${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/identities.yml` replaces all three for that machine ([identity configuration](../CONVENTIONS.md#2-per-project-configuration--agentsstackyml)). |
 | `ci.checks` | `/pr-loop`'s `CLEAN` verdict: which PR checks must be green at the reviewed head (`required`, `all`, or `none`). `/pr-loop` refuses without it. |
 | `review_model` + `claude_review_model` + `review_engines` | `/pr-loop` resolves the reviewer engine and pins its model and effort. Missing settings use the documented, announced defaults in the template. |
 | `review_gate.skill_path` + `review_gate.scope` | stack review skills defer to your project's own review gate on the paths it claims. |

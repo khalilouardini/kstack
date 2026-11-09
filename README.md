@@ -111,7 +111,7 @@ half-day estimate, refuses to estimate what it cannot name),
 | [`/careful`](core/careful/SKILL.md) | Pre-checks every shell command. Recursive deletes rooted at `/` or `$HOME` and force-pushes to the default branch are denied; the rest asks | **hook** (Claude Code) |
 | [`/freeze`](core/freeze/SKILL.md) · [`/unfreeze`](core/unfreeze/SKILL.md) | Restricts Edit/Write to one directory; shell writes remain possible | **hook** (Claude Code) |
 | [`/explain-diff-html`](core/explain-diff-html/SKILL.md) | Self-contained interactive page teaching a change, validator-gated | bundled validator |
-| [`/summarize-change`](core/summarize-change/SKILL.md) | Briefs a change in the session by its intent: stated intent with its source, approach and system constraints touched, diff checked against the intent, sensitive vs mechanical ranges, blast radius, decision needed; `--tight` caps it at 250 words | prompt-level |
+| [`/summarize-change`](core/summarize-change/SKILL.md) | Briefs a change by its intent, approach, diff, sensitive ranges, blast radius, evidence-based evaluation with gate exit codes, and decision needed; `--tight` caps it at 250 words | prompt-level |
 
 ### Review
 
@@ -130,6 +130,9 @@ checks to pass at the reviewed head before reporting `CLEAN`. `ci.checks: none`
 is an explicit exception for repositories without CI and is stated in the
 report. Its optional `--merge` path requires explicit authorization and its
 additional merge gates. `/land` always stops at the PR.
+
+A second person can use their own accounts with a host-local `identities.yml`;
+see [the identity configuration](CONVENTIONS.md#2-per-project-configuration--agentsstackyml).
 
 ### Land and operate
 

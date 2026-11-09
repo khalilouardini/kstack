@@ -1,7 +1,7 @@
 ---
 name: summarize-change
-version: 0.2.0
-description: Brief a change in the session by its intent — the intent with its source, approach and constraints touched, the diff checked against that intent, sensitive ranges, blast radius with real gate exit codes, the decision needed. Refuses file-by-file narration and line counts. Use when asked to "summarize this PR", "what did we do here", "give me a high-level summary of this branch", "brief me on this change", or "/summarize-change [branch | PR | commit range | paths] [--tight]". (kstack)
+version: 0.2.1
+description: Brief a change by intent — its source, approach and constraints, the diff checked against that intent, sensitive ranges, blast radius, an evidence-based eval with real gate exit codes, the decision needed. Refuses file-by-file narration and line counts. Use when asked to "summarize this PR", "what did we do here", "give me a high-level summary of this branch", "brief me on this change", or "/summarize-change [branch | PR | commit range | paths] [--tight]". (kstack)
 ---
 
 # summarize-change — brief a change by its intent, in chat
@@ -40,7 +40,7 @@ says "ship it".
 
 `/summarize-change [branch | PR number | commit range | file paths] [--tight]`.
 With no target, summarize the current branch against its merge base.
-`--tight` emits the same six parts under per-part caps, at most 250 words — see
+`--tight` emits the same seven parts under per-part caps, at most 250 words — see
 step 3. It changes only what is emitted; steps 1 and 2 run in full either way.
 
 **Resolve the argument to concrete revisions and state them before summarizing
@@ -141,7 +141,7 @@ on this.
 
 ## 3. Emit the briefing
 
-Six parts, in this order, 15–25 lines total. Longer than that is a page, and a
+Seven parts, in this order, 15–25 lines total. Longer than that is a page, and a
 page is `/explain-diff-html`.
 
 | Part | Carries |
@@ -150,7 +150,8 @@ page is `/explain-diff-html`.
 | **Approach** | The system-level choice, the alternative not taken, and the system constraints it relies on or changes. |
 | **Diff vs intent** | Three labelled lines — `Delivered:`, `Beyond intent:`, `Short of intent:` — each item a behavioral area citing `file:line`. An empty group says "none"; it is never dropped. |
 | **Sensitive vs mechanical** | `Sensitive:` the `file:line` ranges a reviewer must read. `Mechanical:` the rest, by kind. |
-| **Blast radius** | Callers affected, data-shape and migration changes, and which gates ran with which exit code. |
+| **Blast radius** | Callers affected, data-shape and migration changes. |
+| **Eval** | Evaluate the change against its intent using observed test, gate, or other evidence; state results and meaningful gaps. Include observed exit codes for gates, and say when evidence is unavailable. |
 | **Decision needed** | The one call the human has to make on this change; when none is pending, the next action, concrete and doable now. |
 
 Four rules carry the skill, and each is the one most often broken:
@@ -175,14 +176,17 @@ handover reader assumes the change completes its intent; this line says where
 it does not. If the change genuinely completes it, write "none" rather than
 inventing a gap.
 
-Gate results go in blast radius **only with the exit code you observed**. If
-you did not run the project's `gates.lint` and `gates.test` from
-`.agents/stack.yml`, write "gates not run in this session" — never imply a
-green suite you did not see.
+**Eval is required in every briefing**, even when no checks ran: state what was
+verified, what remains unverified, and the implications of the evidence without
+inventing results or issuing a merge verdict.
+
+Gate results go in Eval **only with the exit code you observed**. Report each
+configured `gates.lint` and `gates.test` from `.agents/stack.yml` that was not
+run as "not run in this session" — never imply a green suite you did not see.
 
 ### `--tight`
 
-The same six parts, in the same order, at most **250 words** in total as
+The same seven parts, in the same order, at most **250 words** in total as
 `wc -w` counts them, the range statement from Inputs included. The budget is in
 words, not lines, because a line has no length limit.
 
@@ -192,7 +196,8 @@ words, not lines, because a line has no length limit.
 | **Approach** | 2 sentences, 40 words, naming at most 2 system constraints |
 | **Diff vs intent** | 3 items per group, each 12 words plus its `file:line` |
 | **Sensitive vs mechanical** | 4 sensitive ranges, each a `file:line` plus 6 words; mechanical as one line of kinds |
-| **Blast radius** | 30 words, gate exit codes kept |
+| **Blast radius** | 30 words |
+| **Eval** | 40 words, evidence gaps and gate exit codes kept |
 | **Decision needed** | 1 sentence |
 
 When a cap drops items, keep the ones most likely to change the reader's
@@ -228,8 +233,8 @@ their counts; do not shorten citations to fit.
 **Prompt-level, entirely.** The deliverable is text in a session: there is no
 artifact to validate, so the validator model that gates `/explain-diff-html`
 does not transfer here and no hook is involved. Nothing but this procedure
-keeps the briefing at six parts, the intent sourced, the diff sorted against
-it, and the gate claims honest.
+keeps the briefing at seven parts, Eval present, the intent sourced, the diff
+sorted against it, and the gate claims honest.
 
 The one check that is available costs a second and is worth taking: reading
 only the Intent line and the Decision needed line, does the asker know what the

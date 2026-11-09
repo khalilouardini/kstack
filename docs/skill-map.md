@@ -247,7 +247,8 @@ gates; `/land` always stops at the PR.
 
 Use `/summarize-change` for a briefing in the chat: intent and its source,
 approach, relevant constraints, departures from intent, sensitive ranges,
-blast radius, and the decision needed. `--tight` retains the investigation but
+blast radius, evidence-based evaluation with observed gate exit codes, and the
+decision needed. `--tight` retains the investigation but
 caps the emitted briefing at 250 words. `/explain-diff-html` creates a durable
 teaching page; `/delivery-retro` compares periods of work.
 

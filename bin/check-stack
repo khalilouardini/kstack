@@ -321,9 +321,10 @@ def main(argv: list[str]) -> int:
         [sys.executable, "-m", "unittest", "discover", "-s", str(REPO / "bin/tests")],
         capture_output=True, text=True,
     )
+    print(out.stdout, end="")
     print(out.stderr, end="")
     if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
-        r.fail("bin/tests", "harness", "documentation checker tests failed or none discovered")
+        r.fail("bin/tests", "harness", "shared bin tests failed or none discovered")
     harness = REPO / "tools/linear/wave/tests/run.mjs"
     if harness.is_file():
         if shutil.which("node") is None:
@@ -357,6 +358,16 @@ def main(argv: list[str]) -> int:
     print(out.stderr, end="")
     if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
         r.fail("tools/github/pr-loop/tests", "harness", "review tests failed or none discovered")
+
+    label_sweep_tests = REPO / "tools/github/pr-label-sweep/tests"
+    out = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s", str(label_sweep_tests)],
+        capture_output=True, text=True,
+    )
+    print(out.stdout, end="")
+    print(out.stderr, end="")
+    if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+        r.fail("tools/github/pr-label-sweep/tests", "harness", "issue key tests failed or none discovered")
 
     roadmap_tests = REPO / "tools/linear/linear-roadmap/tests"
     if roadmap_tests.is_dir():

@@ -1,6 +1,7 @@
 """Deterministic boundaries for the prompt-driven loop. Stdlib, no shell eval."""
 import argparse
 from contextlib import nullcontext
+import fnmatch
 import hashlib
 import sys
 import json
@@ -328,7 +329,13 @@ def execute(args):
               f'{route["reviewer"]}; verify it with gh api user and use it for all GitHub reads '
               'and review submission. Do not obtain or use a maintainer credential, and do not '
               'reset to the configured default reviewer. Recompute provenance with this same token. '
-              'Respect host permissions; denial, absent evidence or moved head means BLOCKED. '
+              'Respect host permissions: never request, retry around or work around a denial. '
+              'A denied required step (identity, GitHub reads or review submission, the diff, '
+              'gates.test or the project proof gate), absent evidence or a moved head means '
+              'BLOCKED. Any other check is an optional runtime probe (a browser, a GUI app, '
+              'Computer Use, a process listing such as ps); a denied one is not BLOCKED: '
+              'name it and what it would have checked in the review body, post a '
+              'suspicion that needed it as a non-blocking question, and submit the review. '
               'Your final response must be only a JSON object: '
               '{"status":"REVIEW_SUBMITTED","review_id":123,"head":"<full reviewed SHA>"}. '
               'Use the actual submitted ID. On failure return {"status":"BLOCKED"}.')
@@ -429,6 +436,28 @@ def prior_count_main():
         print(prior_review_count(reviews, args.reviewer, args.engine))
     except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError, TimeoutError) as exc:
         parser.exit(2, 'BLOCKED: ' + str(exc) + '\n')
+
+
+def first_matching_path(paths, globs):
+    """First path any glob matches under fnmatch, where `*` also crosses `/`."""
+    for path in paths:
+        if any(fnmatch.fnmatchcase(path, glob) for glob in globs):
+            return path
+    return None
+
+
+def first_match_main():
+    parser = argparse.ArgumentParser(description='Print the first changed path an fnmatch glob matches')
+    parser.add_argument('--paths', required=True, help='file with one changed path per line')
+    parser.add_argument('globs', nargs='*')
+    args = parser.parse_args()
+    try:
+        paths = Path(args.paths).read_text(encoding='utf-8').split('\n')
+    except (OSError, ValueError) as exc:
+        parser.exit(2, 'BLOCKED: ' + str(exc) + '\n')
+    match = first_matching_path(filter(None, paths), args.globs)
+    if match is not None:
+        print(match)
 
 
 def review_main():

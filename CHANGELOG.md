@@ -11,6 +11,58 @@ contracts and add the missing skills and external tier. `bin/check-docs`, run
 by `bin/check-stack`, checks overview parity, the displayed version, and local
 Markdown/HTML links and anchors; offline regression cases cover those checks.
 
+`pr-loop` 0.11.1: the first-review path trigger matches `review_model.escalate_paths`
+through `bin/first-matching-path` (Python `fnmatch`), so bash and zsh get the same
+answer. Under zsh the old loop matched no path, so a first review on a high-risk path
+ran `review_model.slug` instead of `review_model.escalated_slug`, and its `read -r
+path` emptied `PATH`. Each `ESCALATE_PATHS` glob is now rendered in single quotes,
+because unquoted, the shell expands it against the checkout, and zsh stops with `no
+matches found` when no file matches. The ledger key reads `FINDING_PATH`, because under zsh `FPATH` is the
+function search path and a path-less finding keyed on it instead of `-`. A failed
+`bin/prior-review-count` now blocks the round: its empty result selected the base model
+under bash and counted as a first review under zsh. Source: the review of khalilouardini/kstack#57 on 2026-11-08, launched by hand after the zsh loop
+matched nothing. `tools/github/pr-loop/tests/test_shell_snippets.py` runs both
+snippets as `SKILL.md` prints them, under each shell.
+
+`bin/resolve-identities` is new: `${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/identities.yml`
+replaces the tracked `identities` block on one machine, so a second person runs the
+review skills under their own accounts without changing a tracked file. `land` 0.7.0,
+`triage` 0.4.0, `pr-loop` 0.11.0, `review-claude-pr` 0.6.0, `review-comments` 0.7.0,
+`wave` 0.12.0, `dispatch-implementation` 0.6.1 and `linear-roadmap` 0.7.1 check for that
+file; with none they use the block as before. The script does not read
+`.agents/stack.yml`. `bin/check-stack` runs its tests in
+`bin/tests/test_resolve_identities.py`.
+
+`pr-label-sweep` 0.4.0: the skill now ships `bin/pr_label_sweep.py`, the
+deterministic half of the sweep (`keys`, `plan`, `apply`). `bin/check-stack` runs
+`tools/github/pr-label-sweep/tests/test_issue_key.py`, 56 offline tests of the issue
+key rule on synthetic PR text (source: `python3 -m unittest discover -s
+tools/github/pr-label-sweep/tests`). The script reads no path from the user's home,
+so a `--tracker-file` value with an unexpanded `~` no longer resolves. A fenced code
+block now closes only on a matching fence, and a `Scope` section that opens with a
+numbered list takes its key from the first item.
+
+`pr-label-sweep` 0.3.0 and `session-titles` 0.5.0: a PR's issue key comes from its
+title, then a body line that opens with a link word and the key (`Fixes <KEY>`,
+`Part of <KEY>`, `Linear: <KEY>`), then the first sentence under a `Scope` heading,
+then its branch. Any other body key gives no tracker signal, and a project id such
+as `P-<PREFIX>-18` is not a key. `session-titles` no longer reads back the
+`<KEY> / PR#<N>` prefix an earlier sweep wrote. Source: the 307 khalilouardini/ogur
+PRs with a title key on 2026-11-06, where the first body key anywhere matched the
+title key 265 of 302 times, a link line 170 of 170, and a `Scope` first sentence 5
+of 6.
+
+`review-claude-pr` 0.5.0 and `pr-loop` 0.10.1: a denied optional runtime probe
+(any check beyond the required steps: a browser, a GUI app, Computer Use, `ps`) no
+longer blocks a review. The reviewer names
+the probe and what it would have checked, posts the suspicion as a non-blocking
+question, and submits; it never retries around the denial. A denied required step
+(identity, GitHub reads or submission, the diff, `gates.test`, the proof gate) still
+blocks, and the runner still blocks a Claude round that records any denial. Source:
+ogur PR #663, where three Codex reviews blocked on a headless Chrome launch
+(`kill EPERM`) and posted nothing, and kstack PR #54 round 1, which blocked on a
+denied `ps` after reporting no defects.
+
 `session-titles` 0.4.0: a session whose title is only keys (`<PREFIX>-490`, or
 a bare `<PREFIX>-490 / PR#580`) gets a one-line description from its PR title,
 else its tracker issue title, and is no longer counted as already correct.

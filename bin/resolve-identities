@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""resolve-identities — this machine's replacement for a repo's `identities` block.
+
+Prints null when ${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/identities.yml
+does not exist, so the session uses the block it read from .agents/stack.yml. When
+the file exists, prints maintainer, reviewer, implementer and source as one JSON
+object, and those logins replace the whole block (CONVENTIONS.md section 2).
+
+Exits 2 with a message on stderr, and prints nothing on stdout, for a project value
+that escapes the state directory or an invalid file. It does not read
+.agents/stack.yml, because stdlib Python has no YAML parser. Stdlib only. It reads
+one file and writes nothing.
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+ROLES = ("maintainer", "reviewer", "implementer")
+LINE = re.compile(r"([^\s:]+):\s+(\S+)(?:\s+#.*)?")
+# The same login form as resolve() in tools/github/pr-loop/lib/review_runtime.py.
+LOGIN = re.compile(r"[\w-]+(?:\[bot\])?")
+
+
+class Refused(ValueError):
+    pass
+
+
+def read_host(path):
+    """Return the three logins from a host file; every failure names the file."""
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise Refused(f"cannot read {path}: {exc}") from exc
+    values = {}
+    for number, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = LINE.fullmatch(line.rstrip())
+        if not match:
+            raise Refused(f'{path}:{number}: expected an unindented "<role>: <login>" line')
+        key, login = match.groups()
+        if key not in ROLES:
+            raise Refused(f"{path}:{number}: unknown key {key}; expected {', '.join(ROLES)}")
+        if key in values:
+            raise Refused(f"{path}:{number}: duplicate key {key}")
+        if not LOGIN.fullmatch(login) or login.lower() == "null":
+            raise Refused(f"{path}:{number}: identities.{key} is not a GitHub login: {login!r}")
+        values[key] = login
+    for role in ROLES:
+        if role not in values:
+            raise Refused(f"{path}: identities.{role} is missing; this file replaces the whole block")
+    return values
+
+
+def resolve(project, environ):
+    if not project:
+        return None
+    if project in (".", "..") or re.search(r"[/\\]", project):
+        raise Refused(f"project {project!r} cannot name a state directory")
+    state = environ.get("KSTACK_STATE") or str(Path(environ.get("HOME") or Path.home()) / ".kstack")
+    host = Path(state) / "projects" / project / "identities.yml"
+    if not os.path.lexists(host):
+        return None
+    return dict(read_host(host), source=str(host))
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Print this machine's replacement for the identities block.")
+    parser.add_argument("--project", required=True, help="the project value from .agents/stack.yml")
+    args = parser.parse_args()
+    try:
+        print(json.dumps(resolve(args.project, os.environ)))
+    except Refused as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+
+
+if __name__ == "__main__":
+    main()

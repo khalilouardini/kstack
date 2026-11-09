@@ -1,6 +1,6 @@
 ---
 name: pr-label-sweep
-version: 0.2.0
+version: 0.4.0
 description: Sweep open GitHub PRs and add the labels the consuming repo's rules call for — from the linked tracker issue's project and labels, the changed paths, and client keywords in the title and branch — each label citing the evidence that fired it. Dry-run by default; add-only; never creates a repo label. Use when asked to "label my PRs", "tag the open PRs", "sweep PR labels", or "/pr-label-sweep [--apply] [--pr N]". (kstack)
 ---
 
@@ -65,6 +65,25 @@ area and client labels on their own. Tracker rules (`linear_project`,
 session. When it is not, skip those matchers, keep the rest, and say so in the
 report — degraded, not refused (CONVENTIONS.md §1).
 
+## The script
+
+`bin/pr_label_sweep.py` runs §1 to §5 without judgment, for a sweep of every open
+PR. It makes every `gh` call itself, so an unattended run needs one allow rule, and
+it reads no path from the user's home.
+
+```bash
+python3 bin/pr_label_sweep.py --repo-dir "$REPO" keys
+python3 bin/pr_label_sweep.py --repo-dir "$REPO" plan  --tracker-file "$FILE"
+python3 bin/pr_label_sweep.py --repo-dir "$REPO" apply --tracker-file "$FILE"
+```
+
+`keys` prints the §2 issue keys. Look each one up with the tracker MCP and write the
+results to `--tracker-file`; the script's docstring gives the file's shape. `plan` is
+the §4 dry run. `apply` prints the same table and then does §5. It needs `ruby` to
+read `.agents/stack.yml`, and it has no `--pr`: for one PR, follow §1 to §5 by hand.
+`tools/github/pr-label-sweep/tests/test_issue_key.py` tests its §2 rule offline, and
+`bin/check-stack` runs that file.
+
 ## 1. Enumerate PRs
 
 ```bash
@@ -97,15 +116,56 @@ gh api "repos/{owner}/{repo}/pulls/$N/files" --paginate --jq '.[].filename'
 ```
 
 **Issue key** (skip when `issue_prefix` is unset) — match `<PREFIX>-\d+`
-case-insensitively against, in order, the PR title, the PR body, the head
-branch. First match wins; do not merge conflicting keys. The body is allowed
-here because this is a key lookup, not a keyword match.
+case-insensitively, in this order. First match wins; do not merge conflicting
+keys.
+
+1. **PR title:** the first key.
+2. **PR body, link line:** the first line that opens with a link word directly
+   followed by the key.
+3. **PR body, `Scope` section:** the first key in the first sentence under the
+   first heading named `Scope` (any heading level, case-insensitive). When the
+   section opens with a list, the sentence comes from its first item.
+4. **Head branch:** the first key.
+
+Any other key in the body is a citation and gives no tracker signal.
+
+Link words, case-insensitive: `close`, `closes`, `closed`, `closing`, `fix`,
+`fixes`, `fixed`, `fixing`, `resolve`, `resolves`, `resolved`, `resolving`,
+`complete`, `completes`, `completed`, `completing`, `implement`, `implements`,
+`implemented`, `implementing`, `ref`, `refs`, `references`, `part of`,
+`contributes to`, `towards`, `updates`, and the labels `Linear:`, `Issue:` and
+`Ticket:`, which need their colon. A list marker and bold or italic markers may
+come before the word. A colon, those markers, `[`, `(` or a backtick may come
+between the word and the key: `Fixes <KEY>`, `- **Part of** [<KEY>](url)`,
+`Linear: <KEY>`.
+
+In steps 1 to 3 a key has no letter, digit or hyphen directly before it and no
+letter or digit directly after it, so a project id (`P-<PREFIX>-18`) and a file
+stamp (`<PREFIX>-20261022T120513Z`) are not keys. Step 4 has no such limit, because
+branch names join words with hyphens (`fix-<PREFIX>-412`). Steps 2 and 3 skip HTML
+comments and fenced code blocks. `bin/pr_label_sweep.py` implements this rule and
+`tools/github/session-titles/SKILL.md` §2 repeats it; change all three together.
+
+The words are Linear's magic words (`linear.app/docs/gitlab`) plus `refs`. Linear
+itself links a PR by its title, its branch, or a magic word and issue ID in its
+description. This sweep is add-only and scheduled, so a wrong tracker label returns
+after each hand removal, while a missing one costs one `Part of <KEY>` line in the
+body. The rule therefore gives up some real links to avoid wrong ones.
+
+> **Worked example (OGUR, 2026-11-06).** PR #773's only body keys are citations such
+> as "The contract version in the OGUR-741 entry moves from 6 to 9", so it resolves
+> to no key and gets no tracker labels. PR #495 resolves to OGUR-416 from its line
+> `Fixes OGUR-416`. PR #745 resolves to OGUR-153 from the first sentence of its
+> `## Scope` section. On the repo's 307 PRs with a title key, the first body key
+> anywhere matched the title key 265 of 302 times, a link line 170 of 170, and a
+> `Scope` first sentence 5 of 6. The opening paragraph is not a position: 192 of 210,
+> and its misses are citations such as "Stacked on #654 (OGUR-669)".
 
 **Tracker issue** (only when a key resolved and the tracker MCP is connected) —
 fetch the issue (`get_issue` or the connected server's equivalent) and keep its
 `project`, `labels`, and `title`. A key that does not resolve to an issue is
 reported as **unknown key** and contributes no tracker signal. Never search the
-tracker to *discover* a key the regex did not find.
+tracker to *discover* a key this rule did not find.
 
 ## 3. Evaluate rules
 
@@ -172,7 +232,7 @@ All of these are **prompt-level** — nothing in the harness blocks a violating
 3. **Managed set only.** Never propose, report, or touch a label no rule names.
 4. **Never create, rename, or recolour a repo label.**
 5. **Never invent an issue key or search the tracker for one.** Tracker signal
-   comes only from a key the regex found.
+   comes only from a key the §2 rule found.
 6. **Open PRs only.** Closed and merged PRs are out of scope.
 
 > **Worked example (OGUR, 2026-09-25).** Rule `label: MVP-2`,

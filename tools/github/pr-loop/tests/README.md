@@ -9,7 +9,10 @@ author exceptions, host-marker mismatch/absence/ambiguity and no delegation,
 per-engine flags,
 closed stdin, matching submitted review and inline evidence, reuse, missing
 CLI/auth, bad credentials, unsupported flags, nonzero/denied/malformed outputs,
-remote head movement, and reviewer edits. No test calls a model or GitHub.
+remote head movement, and reviewer edits. `test_shell_snippets.py` runs the
+first-review path trigger and the ledger key as `SKILL.md` prints them, under bash
+and zsh; a shell that is not installed skips its subtest. No test calls a model or
+GitHub.
 
 These checks prove deterministic boundaries, not that a live model can read the
 skill, obey the review-only contract, obtain host permissions, review accurately,

@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.10.0
+version: 0.11.1
 description: Drive an independent Codex↔Claude review/fix loop on one PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. The implementation session keeps fixes; the other engine reviews with verified GitHub identity and head evidence. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#>". (kstack)
 ---
 
@@ -60,7 +60,16 @@ local/PR graph sources. No graph publication or extra tracker writes are granted
 ## Configuration — read `.agents/stack.yml` first
 
 Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
-`CONVENTIONS.md` §2) before preflight:
+`CONVENTIONS.md` §2) before preflight. A host-local file can replace the `identities` block on this machine, so when
+`project` is set, run this with its value before using any `identities.*` login:
+
+```bash
+python3 "$(cat "${KSTACK_STATE:-$HOME/.kstack}/stack-root")/bin/resolve-identities" --project "<project>"
+```
+
+It prints `null` when this machine has no such file: use the block. It prints a
+JSON object when it does: those logins replace the block, and the final report states its
+`source`. Non-zero exit → **refuse**, quoting its message.
 
 - **`identities.maintainer`** — the human maintainer's gh login. This account
   opens every PR, governs the repository, and is the only account that ever
@@ -250,7 +259,9 @@ ESCALATED_MODEL="<review_model.escalated_slug, or gpt-6-astra>"
 ESCALATED_EFFORT="<review_model.escalated_effort, or high>"
 ESCALATE_ABOVE="<review_model.escalate_above_lines, or empty>"
 ESCALATE_FILES="<review_model.escalate_above_files, or empty>"
-ESCALATE_PATHS=(<review_model.escalate_paths, or no elements>)
+# Unquoted, the shell expands each glob against this checkout before any changed
+# path is compared, and zsh stops with "no matches found" when no file matches.
+ESCALATE_PATHS=(<review_model.escalate_paths, each in single quotes, or no elements>)
 
 # the reviewer contract this loop delegates to, resolved through the host's installed
 # skill path (bin/install symlinks stack skills there). If your host installs skills
@@ -426,18 +437,14 @@ review marker, after which an automatic Astra escalation must expire:
 GH_TOKEN="$MAINTAINER_TOKEN" gh api --paginate --slurp \
   "repos/$OWNER_REPO/pulls/$PR/reviews" > "$SCRATCH/prior-reviews.json"
 PRIOR_REVIEW_COUNT=$(python3 "$STACK_ROOT/tools/github/pr-loop/bin/prior-review-count" \
-  --reviews "$SCRATCH/prior-reviews.json" --reviewer "$REVIEWER" --engine codex)
+  --reviews "$SCRATCH/prior-reviews.json" --reviewer "$REVIEWER" --engine codex) || exit 2
 SIZE=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json additions,deletions \
   --jq '.additions + .deletions')
 GH_TOKEN="$MAINTAINER_TOKEN" gh pr diff "$PR" --name-only > "$SCRATCH/changed-paths-raw.txt"
 sort -u "$SCRATCH/changed-paths-raw.txt" > "$SCRATCH/changed-paths.txt"
 FILE_COUNT=$(wc -l < "$SCRATCH/changed-paths.txt" | tr -d ' ')
-MATCHED_PATH=""
-while IFS= read -r path; do
-  for glob in "${ESCALATE_PATHS[@]}"; do
-    case "$path" in $glob) MATCHED_PATH="$path"; break 2 ;; esac
-  done
-done < "$SCRATCH/changed-paths.txt"
+MATCHED_PATH=$(python3 "$STACK_ROOT/tools/github/pr-loop/bin/first-matching-path" \
+  --paths "$SCRATCH/changed-paths.txt" -- "${ESCALATE_PATHS[@]}") || exit 2
 MODEL="$BASE_MODEL"; EFFORT="$BASE_EFFORT"
 if [ "$PRIOR_REVIEW_COUNT" -eq 0 ] && \
   { { [ -n "$ESCALATE_ABOVE" ] && [ "$SIZE" -gt "$ESCALATE_ABOVE" ]; } \
@@ -449,8 +456,11 @@ if [ "$MODEL_PINNED" = true ]; then MODEL="$PINNED_MODEL"; fi
 if [ "$EFFORT_PINNED" = true ]; then EFFORT="$PINNED_EFFORT"; fi
 ```
 
-The path loop uses shell glob matching, not substring or regex matching, and
-retains the first matching path for the routing report. Size thresholds are raw GitHub counts if a project opts
+`bin/first-matching-path` applies Python `fnmatch` (`CONVENTIONS.md` §2), not
+substring or regex matching, so `*` also crosses `/` and bash and zsh get the same
+answer. It prints the first matching path for the routing report. A failed prior-review
+count or an unreadable path list exits 2, which blocks the round: an empty count selects
+the base model under bash and counts as a first review under zsh. Size thresholds are raw GitHub counts if a project opts
 in; generated files and fixtures are not filtered from those optional counts.
 On a follow-up head, even a high-risk path uses the base model unless the
 invocation explicitly pins `--model gpt-6-astra`. This prevents an automatic
@@ -548,7 +558,7 @@ responding**:
 
 ```bash
 key() { tr 'A-Z' 'a-z' | tr -s '[:space:]' ' ' | sed 's/[[:punct:]]*$//;s/^ *//;s/ *$//'; }
-K="${FPATH:--}|$(printf '%s' "$TITLE" | key)"      # step 3 already parses (priority, title, path)
+K="${FINDING_PATH:--}|$(printf '%s' "$TITLE" | key)"      # step 3 already parses (priority, title, path)
 grep -Fqx -- "$K" <(cut -f2- "$LEDGER")   # hit ⇒ already answered in an earlier round or invocation
 ```
 
@@ -560,7 +570,9 @@ block an unrelated finding of the same name in another, and it would block it
 *before the implementer ever reads it*. Whatever the key includes, it must at
 minimum separate two findings that differ only by file. A finding parsed without
 a path falls back to `-`, which groups all path-less findings together; that is
-the one place the collision survives, and it is the conservative direction.
+the one place the collision survives, and it is the conservative direction. The
+variable is not `FPATH`, because zsh sets that to its function search path, and a
+path-less finding would key on that value instead of `-`.
 
 A hit means the reviewer and you disagree: exit `BLOCKED` with both positions quoted,
 and do not argue across another round. A miss means it is new; after the

@@ -83,6 +83,20 @@ const SKILLS = [
         self.assertEqual(len(errors), 1)
         self.assertIn("missing.svg", errors[0])
 
+    def test_inline_code_examples_are_not_links(self):
+        path = self.write("guide.md", '''Example `- **Part of** [<KEY>](url)` and ``[sample](missing.md)``.
+`<a href="fake.html">` and [actual `link`](missing.md)
+''')
+        errors = DOCS["check_links"]([path], self.root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("guide.md:2: missing target 'missing.md'", errors[0])
+
+    def test_inline_html_code_does_not_create_an_anchor(self):
+        path = self.write("guide.md", '`<a id="fake">`\n[link](#fake)\n')
+        errors = DOCS["check_links"]([path], self.root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("missing anchor '#fake'", errors[0])
+
     def test_heading_slug_ignores_fenced_examples(self):
         path = self.write("guide.md", '# Real `API`\n```\n# Fake\n```\n')
         self.assertEqual(DOCS["anchors"](path), {"real-api"})
