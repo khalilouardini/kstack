@@ -59,6 +59,7 @@ flowchart LR
     subgraph build["2 · Build — while changing code"]
       direction TB
       dispatch["/dispatch-implementation"]
+      sessionBatch["/session-batch"]
       wave["/wave plan / build"]
       investigate["/investigate"]
       controls["/careful · /freeze · /unfreeze"]
@@ -98,7 +99,7 @@ flowchart LR
     classDef phase fill:#ddeeec,stroke:#1d6a63,color:#16292b
     classDef stopStyle fill:#f6dee5,stroke:#a04360,color:#16292b
     class router route
-    class spec,next,triage,intake,roadmap,roles,dispatch,wave,investigate,controls,explain,summarize,produce,respond,loop,landSkill,updateStack,health,retro,titles,labels,schedules,steward,audit,issueGraph,digest phase
+    class spec,next,triage,intake,roadmap,roles,dispatch,sessionBatch,wave,investigate,controls,explain,summarize,produce,respond,loop,landSkill,updateStack,health,retro,titles,labels,schedules,steward,audit,issueGraph,digest phase
     class human stopStyle
 ```
 
@@ -144,7 +145,7 @@ flowchart TB
 | Core | Git + local filesystem | [`/investigate`](../core/investigate/SKILL.md), [`/careful`](../core/careful/SKILL.md), [`/freeze`](../core/freeze/SKILL.md), [`/unfreeze`](../core/unfreeze/SKILL.md), [`/explain-diff-html`](../core/explain-diff-html/SKILL.md), [`/summarize-change`](../core/summarize-change/SKILL.md), [`/land`](../core/land/SKILL.md), [`/health`](../core/health/SKILL.md), [`/update-stack`](../core/update-stack/SKILL.md) |
 | Roles | `scope_doc` | [`/spec`](../roles/spec/SKILL.md), [`/triage`](../roles/triage/SKILL.md), [`product-manager`](../roles/product-manager.md), [`tech-lead`](../roles/tech-lead.md), [`designer`](../roles/designer.md), [`qa`](../roles/qa.md) |
 | GitHub | `gh`; review identities and CI policy where required; desktop tools for scheduling | [`/review-claude-pr`](../tools/github/review-claude-pr/SKILL.md), [`/review-comments`](../tools/github/review-comments/SKILL.md), [`/pr-loop`](../tools/github/pr-loop/SKILL.md), [`/delivery-retro`](../tools/github/delivery-retro/SKILL.md), [`/session-titles`](../tools/github/session-titles/SKILL.md), [`/pr-label-sweep`](../tools/github/pr-label-sweep/SKILL.md), [`/sweep-schedules`](../tools/github/sweep-schedules/SKILL.md) |
-| Linear | Tracker rules and scope; local viewer operations need no tracker | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/wave`](../tools/linear/wave/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-roadmap`](../tools/linear/linear-roadmap/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md), [`/issue-graph`](../tools/linear/issue-graph/SKILL.md) |
+| Linear | Tracker rules and scope; local viewer operations need no tracker | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/session-batch`](../tools/linear/session-batch/SKILL.md), [`/wave`](../tools/linear/wave/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-roadmap`](../tools/linear/linear-roadmap/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md), [`/issue-graph`](../tools/linear/issue-graph/SKILL.md) |
 | External | Node, network, and the vendored skill's dependencies | [`/follow-builders`](../tools/external/follow-builders/SKILL.md) |
 
 [`/issue-graph`](../tools/linear/issue-graph/SKILL.md) opens an existing local viewer

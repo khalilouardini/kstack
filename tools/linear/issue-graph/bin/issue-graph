@@ -112,7 +112,80 @@ def load_roadmap(repo):
     return record, provenance
 
 
-def select_nodes(record, key):
+def live_projection(record, provenance, reports):
+    """Reconstruct display-only live deltas without changing the roadmap."""
+    canonical = lambda obj: digest(json.dumps(obj, sort_keys=True, separators=(',', ':')).encode())
+    reports = [reports] if isinstance(reports, dict) else reports
+    if not isinstance(reports, list) or not reports:
+        raise ValueError('at least one live admission report is required')
+    validator = runpy.run_path(str(STACK_ROOT / 'tools/linear/linear-roadmap/bin/graph-record'))
+    merged = copy.deepcopy(record)
+    projects = {p['key']: p for p in merged['projects']}
+    nodes = {n['id']: n for n in merged['nodes']}
+    signature = lambda e: (e['from'], e['from_event'], e['to'], e['to_event'], e['type'])
+    edges = {signature(e): e for e in merged['edges']}
+    statuses, observations, report_digests = {}, [], []
+    for report in reports:
+        delta = report.get('delta', {})
+        if (report.get('schema_version') != 1 or report.get('state') not in {'ELIGIBLE', 'BLOCKED'}
+                or delta.get('kind') != 'LIVE_RECONCILIATION' or delta.get('changed_edges') != []
+                or not isinstance(delta.get('added_projects'), list)
+                or not isinstance(delta.get('added_nodes'), list)
+                or not isinstance(delta.get('added_edges'), list)
+                or not isinstance(report.get('main_sha'), str)
+                or not re.fullmatch(r'[0-9a-f]{40}', report['main_sha'])
+                or report.get('base_digest') != canonical(record)
+                or report.get('evidence', {}).get('live_input', {}).get('issues', {}).get('complete') is not True):
+            raise ValueError('live projection must match the unchanged indexed roadmap and complete observation')
+        timestamp(report['checked_at'])
+        single = copy.deepcopy(record)
+        single['projects'].extend(copy.deepcopy(delta['added_projects']))
+        single['nodes'].extend(copy.deepcopy(delta['added_nodes']))
+        single['edges'].extend(copy.deepcopy(delta['added_edges']))
+        validator['validate'](single)
+        if canonical(single) != report.get('graph_digest'):
+            raise ValueError('live projection delta does not match its recorded graph digest')
+        for collection, key, lookup in ((delta['added_projects'], 'key', projects),
+                                        (delta['added_nodes'], 'id', nodes)):
+            for obj in collection:
+                if obj[key] in lookup and lookup[obj[key]] != obj:
+                    raise ValueError('conflicting live projection records')
+                if obj[key] not in lookup:
+                    copied = copy.deepcopy(obj)
+                    lookup[obj[key]] = copied
+                    merged['projects' if key == 'key' else 'nodes'].append(copied)
+        for edge in delta['added_edges']:
+            sig = signature(edge)
+            if sig in edges and edges[sig] != edge:
+                raise ValueError('conflicting live projection edge sources')
+            if sig not in edges:
+                copied = copy.deepcopy(edge)
+                edges[sig] = copied
+                merged['edges'].append(copied)
+        observations.append(report['checked_at'])
+        report_digests.append(canonical(report))
+        for n in delta['added_nodes']:
+            statuses.setdefault(n['id'], 'UNKNOWN')
+        for candidate in report.get('candidates', []):
+            state = candidate.get('state')
+            if state not in {'ELIGIBLE', 'BLOCKED'}:
+                raise ValueError('unknown live graph admission state')
+            if candidate.get('mode') != 'LIVE_RECONCILIATION' and candidate.get('node_id') not in statuses:
+                continue
+            key = candidate['node_id']
+            if statuses.get(key) not in (None, 'UNKNOWN', state):
+                raise ValueError('conflicting live candidate observations')
+            statuses[key] = state
+    if len({r['main_sha'] for r in reports}) != 1:
+        raise ValueError('live reports use different main pins; refresh before combining')
+    validator['validate'](merged)
+    meta = copy.deepcopy(provenance)
+    meta['live_projection'] = {'graph_digest': canonical(merged), 'main_sha': reports[0]['main_sha'],
+                               'checked_at': min(observations, key=timestamp),
+                               'report_digests': report_digests, 'nodes': statuses}
+    return merged, meta
+
+def select_nodes(record, key, allow_empty=False):
     projects = {p["key"]: p for p in record["projects"]}
     if key not in projects:
         raise ValueError(f"project {key} absent from indexed roadmap")
@@ -126,7 +199,7 @@ def select_nodes(record, key):
         if expanded == selected:
             break
         selected = expanded
-    if not selected:
+    if not selected and not allow_empty:
         raise ValueError("selected project has no displayable nodes")
     return [n for n in record["nodes"] if n["id"] in selected], [
         e for e in record["edges"] if e["from"] in selected and e["to"] in selected]
@@ -236,8 +309,11 @@ def checkpoint_observations(nodes, edges, provenance, evidence):
 
 
 def project_snapshot(record, provenance, key, evidence):
-    nodes, edges = select_nodes(record, key)
+    nodes, edges = select_nodes(record, key, allow_empty=True)
     by_id = validate_evidence(evidence)
+    projection = provenance.get('live_projection')
+    if projection and timestamp(projection['checked_at']) > timestamp(evidence['observed_at']):
+        raise ValueError('live graph projection is newer than the Linear display snapshot')
     missing = sorted({n["issue_ref"] for n in nodes
                       if n["issue_ref"] and n["issue_ref"] not in by_id})
     if missing:
@@ -292,6 +368,13 @@ def project_snapshot(record, provenance, key, evidence):
             "linearObservedAt": evidence["observed_at"],
             "snapshotComments": copy.deepcopy(linked.get("comments", [])) if linked else [],
         }
+        live_state = projection['nodes'].get(node['id']) if projection else None
+        if live_state:
+            item['labels'].append({'id': 'kstack-live-projection', 'name': 'Live projection — unpublished',
+                                   'color': '#f59e0b', 'group': None})
+            raw['origin'] = 'Live observation layered over indexed roadmap; not published'
+            raw['graphAdmission'] = {'state': live_state, 'observed_at': projection['checked_at'],
+                                     'meaning': 'Graph observation only; execution authorization remains unverified'}
         observation = observations.get(node["id"])
         if node["kind"] in {"human", "evidence", "release"}:
             status = observation["status"] if observation else "unknown"
@@ -319,6 +402,10 @@ def project_snapshot(record, provenance, key, evidence):
             "Display snapshot; execution and release readiness unverified.",
             "## Acceptance", *node["acceptance"],
         ]
+        if live_state:
+            detail += ['## Live projection (not published)',
+                       'Graph observation: ' + live_state + ' at ' + projection['checked_at'],
+                       'Graph admission is not execution or release approval.']
         if "checkpoint" in raw:
             detail += ["## Roadmap checkpoint (not a Linear ticket)",
                        "Observation: " + raw["checkpoint"]["label"],
@@ -347,10 +434,37 @@ def project_snapshot(record, provenance, key, evidence):
             "toEvent": edge["to_event"],
         })
     result = list(items.values())
+    # The collector may provide all live project tickets, not just mapped
+    # nodes. Surface missing units as UNKNOWN instead of hiding them or
+    # displaying absence of edges as proof of independence.
+    target_project = projects[key].get('linear_id')
+    mapped_units = {n['issue_ref'] for n in record['nodes']
+                    if n['project'] == key and n['kind'] == 'unit' and n['issue_ref']}
+    visible_ids = {item['identifier'] for item in result}
+    unmapped = []
+    if target_project:
+        for issue in evidence['issues']:
+            if not issue.get('project') or issue['project']['id'] != target_project or issue['id'] in mapped_units:
+                continue
+            item = copy.deepcopy(issue)
+            identifier = issue['identifier'] if issue['identifier'] not in visible_ids else 'UNMAPPED-' + issue['id']
+            visible_ids.add(identifier)
+            item.update(identifier=identifier, relations=[], parent=None, children=[])
+            item['labels'].append({'id': 'kstack-unmapped', 'name': 'Graph mapping unknown',
+                                   'color': '#ef4444', 'group': None})
+            item['raw'] = {'origin': 'Live Linear issue missing an executable graph unit',
+                           'linkedIssue': copy.deepcopy(issue), 'provenance': copy.deepcopy(provenance),
+                           'snapshotComments': copy.deepcopy(issue.get('comments', [])),
+                           'graphAdmission': {'state': 'UNKNOWN', 'observed_at': evidence['observed_at'],
+                                              'meaning': 'Scope and dependencies have not been reconciled'},
+                           'snapshotDescription': '# ' + issue['title'] + '\n\nUnmapped live ticket; scope, '
+                               'dependencies, execution and release readiness are unverified.\n\n' + issue['description']}
+            result.append(item)
+            unmapped.append(issue['identifier'])
     if len({i["identifier"] for i in result}) != len(result):
         raise ValueError("projected identifiers collide")
     meta = dict(provenance, project=key, linear_observed_at=evidence["observed_at"],
-                nodes=len(result), conditions=len(edges))
+                nodes=len(result), conditions=len(edges), unmapped=sorted(unmapped))
     return result, meta
 
 
@@ -436,31 +550,42 @@ def main():
     parser.add_argument("--project", required=True)
     parser.add_argument("--repo", required=True, type=Path)
     parser.add_argument("--issues", type=Path)
+    parser.add_argument("--admission-report", type=Path, action="append", help="repeatable live graph-admission report for a display-only projection")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     try:
         if args.apply and args.action != "refresh":
             raise ValueError("--apply is only valid with refresh")
+        if args.admission_report and args.action not in {"requirements", "refresh"}:
+            raise ValueError("--admission-report is only valid with requirements or refresh")
         cfg = load_binding(args.config, args.project)
         previous_ids, previous = cached(cfg)
         result = {"url": cfg["view_url"], "workspace": cfg["workspace"], "project": args.project}
         if args.action == "requirements":
             record, provenance = load_roadmap(args.repo)
-            nodes, edges = select_nodes(record, args.project)
+            if args.admission_report:
+                record, provenance = live_projection(record, provenance, [json_file(p) for p in args.admission_report])
+            nodes, edges = select_nodes(record, args.project, allow_empty=True)
+            project = next(p for p in record['projects'] if p['key'] == args.project)
             result.update(state="REQUIREMENTS", provenance=provenance,
+                          linear_project_id=project.get('linear_id'),
                           issue_refs=sorted({n["issue_ref"] for n in nodes if n["issue_ref"]}),
                           nodes=len(nodes), conditions=len(edges))
         elif args.action == "refresh":
             if args.issues is None:
                 raise ValueError("refresh requires --issues with fresh Linear evidence")
             record, provenance = load_roadmap(args.repo)
+            base_provenance = copy.deepcopy(provenance)
+            report = [json_file(p) for p in args.admission_report] if args.admission_report else None
+            if args.admission_report:
+                record, provenance = live_projection(record, provenance, report)
             issues, meta = project_snapshot(record, provenance, args.project, json_file(args.issues))
             new_ids = {i["identifier"] for i in issues}
             result.update(state="PREVIEW", provenance=meta,
                           added=sorted(new_ids - previous_ids), removed=sorted(previous_ids - new_ids))
             if args.apply:
                 _, current = load_roadmap(args.repo)
-                if current != provenance:
+                if current != base_provenance or (args.admission_report and [json_file(p) for p in args.admission_report] != report):
                     raise ValueError("roadmap changed during projection; repeat with current evidence")
                 result["backup"] = replace_cache(cfg, issues, meta)
                 result["state"] = "IMPORTED"

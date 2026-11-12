@@ -205,6 +205,111 @@ class ProjectionTests(unittest.TestCase):
                 self.assertTrue(item["identifier"].startswith("GATE-"))
                 self.assertEqual(item["labels"][0]["id"], "checkpoint")
 
+    def test_unmapped_live_project_ticket_is_visible_but_unknown(self):
+        source = record()
+        project_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        source['projects'][0]['linear_id'] = project_id
+        sample = evidence()
+        extra = issue('33333333-3333-4333-8333-333333333333', 'EXAMPLE-3')
+        extra['project'] = {'id': project_id, 'name': 'Alpha'}
+        sample['issues'].append(extra)
+        items, meta = graph.project_snapshot(source, provenance(), 'alpha', sample)
+        live = next(i for i in items if i['identifier'] == 'EXAMPLE-3')
+        self.assertEqual(live['raw']['graphAdmission']['state'], 'UNKNOWN')
+        self.assertIn('unverified', live['raw']['snapshotDescription'])
+        self.assertEqual(live['relations'], [])
+        self.assertEqual(meta['unmapped'], ['EXAMPLE-3'])
+
+    def test_live_delta_projection_is_labelled_and_does_not_mutate_baseline(self):
+        base = json.loads((graph.STACK_ROOT / 'tools/linear/linear-roadmap/tests/fixtures/reporting.json').read_text())
+        original = copy.deepcopy(base)
+        live_iid = '33333333-3333-4333-8333-333333333333'
+        unit = {**copy.deepcopy(base['nodes'][2]), 'id': 'live_new', 'issue_ref': live_iid,
+                'title': 'New issue', 'unit_of': None}
+        merged = copy.deepcopy(base)
+        merged['nodes'].append(unit)
+        canonical = lambda obj: graph.digest(json.dumps(obj, sort_keys=True, separators=(',', ':')).encode())
+        report = {'schema_version': 1, 'state': 'ELIGIBLE', 'base_digest': canonical(base),
+                  'graph_digest': canonical(merged), 'main_sha': 'a' * 40, 'checked_at': NOW,
+                  'delta': {'kind': 'LIVE_RECONCILIATION', 'added_projects': [], 'added_nodes': [unit],
+                            'added_edges': [], 'changed_edges': []},
+                  'evidence': {'live_input': {'issues': {'complete': True}}},
+                  'candidates': [{'node_id': 'live_new', 'state': 'ELIGIBLE'}]}
+        projected, meta = graph.live_projection(base, provenance(), report)
+        ids = sorted({n['issue_ref'] for n in projected['nodes'] if n['issue_ref']})
+        sample = {'complete': True, 'observed_at': NOW,
+                  'issues': [issue(i, 'EXAMPLE-' + str(j + 1)) for j, i in enumerate(ids)]}
+        for item in sample['issues']:
+            item['project'] = {'id': base['projects'][0]['linear_id'], 'name': 'Reporting'}
+        items, _ = graph.project_snapshot(projected, meta, 'reporting', sample)
+        new = next(i for i in items if i['id'] == live_iid)
+        self.assertEqual(new['raw']['graphAdmission']['state'], 'ELIGIBLE')
+        self.assertIn('not published', new['raw']['origin'])
+        self.assertIn('not execution', new['raw']['snapshotDescription'])
+        self.assertEqual(base, original)
+        bad = copy.deepcopy(report)
+        bad['base_digest'] = 'sha256:' + 'f' * 64
+        with self.assertRaisesRegex(ValueError, 'unchanged indexed roadmap'):
+            graph.live_projection(base, provenance(), bad)
+        bad = copy.deepcopy(report)
+        bad['delta']['added_nodes'][0]['acceptance'] = ['Changed after admission']
+        with self.assertRaisesRegex(ValueError, 'recorded graph digest'):
+            graph.live_projection(base, provenance(), bad)
+
+
+    def test_independent_live_reports_combine_and_mark_existing_affected_nodes(self):
+        base = json.loads((graph.STACK_ROOT / 'tools/linear/linear-roadmap/tests/fixtures/reporting.json').read_text())
+        canonical = lambda obj: graph.digest(json.dumps(obj, sort_keys=True, separators=(',', ':')).encode())
+        def report(node=None, edge=None, candidate=None):
+            amended = copy.deepcopy(base)
+            if node:
+                amended['nodes'].append(copy.deepcopy(node))
+            if edge:
+                amended['edges'].append(copy.deepcopy(edge))
+            return {'schema_version': 1, 'state': 'ELIGIBLE', 'base_digest': canonical(base),
+                    'graph_digest': canonical(amended), 'main_sha': 'a' * 40, 'checked_at': NOW,
+                    'delta': {'kind': 'LIVE_RECONCILIATION', 'added_projects': [],
+                              'added_nodes': [node] if node else [], 'added_edges': [edge] if edge else [], 'changed_edges': []},
+                    'evidence': {'live_input': {'issues': {'complete': True}}},
+                    'candidates': [candidate] if candidate else []}
+        first = {**copy.deepcopy(base['nodes'][2]), 'id': 'live_first', 'issue_ref': '33333333-3333-4333-8333-333333333333', 'unit_of': None}
+        second = {**copy.deepcopy(base['nodes'][2]), 'id': 'live_second', 'issue_ref': '44444444-4444-4444-8444-444444444444', 'unit_of': None}
+        gate = {'from': 'contract', 'from_event': 'merge', 'to': 'api', 'to_event': 'plan',
+                'type': 'start_after', 'source': 'https://linear.example/issue'}
+        rows = [report(first,candidate={'node_id': 'live_first','mode': 'LIVE_RECONCILIATION','state': 'ELIGIBLE'}),
+                report(second,candidate={'node_id': 'live_second','mode': 'LIVE_RECONCILIATION','state': 'ELIGIBLE'}),
+                report(edge=gate,candidate={'node_id': 'api','mode': 'LIVE_RECONCILIATION','state': 'BLOCKED'})]
+        merged, meta = graph.live_projection(base, provenance(), rows)
+        self.assertEqual({n['id'] for n in merged['nodes']} - {n['id'] for n in base['nodes']}, {'live_first', 'live_second'})
+        self.assertEqual(meta['live_projection']['nodes']['api'], 'BLOCKED')
+        self.assertEqual(len(meta['live_projection']['report_digests']), 3)
+        conflicting = copy.deepcopy(second)
+        conflicting['id'] = first['id']
+        conflicting['acceptance'] = ['Different criteria']
+        with self.assertRaisesRegex(ValueError, 'conflicting live projection records'):
+            graph.live_projection(base, provenance(), [rows[0], report(conflicting)])
+
+
+    def test_moved_ticket_and_empty_project_remain_visible_as_unmapped(self):
+        source = record()
+        project_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        source['projects'][1]['linear_id'] = project_id
+        sample = evidence()
+        sample['issues'][0]['project'] = {'id': project_id, 'name': 'Beta'}
+        items, meta = graph.project_snapshot(source, provenance(), 'beta', sample)
+        moved = next(i for i in items if i['identifier'] == 'EXAMPLE-1')
+        self.assertEqual(moved['raw']['graphAdmission']['state'], 'UNKNOWN')
+        self.assertEqual(meta['unmapped'], ['EXAMPLE-1'])
+
+        empty = {'projects': [{'key': 'alpha', 'title': 'Alpha', 'authorization': 'recorded',
+                               'linear_id': project_id}],
+                 'nodes': [node('container', 'group')], 'edges': []}
+        sample = {'complete': True, 'observed_at': NOW, 'issues': [sample['issues'][0]]}
+        items, meta = graph.project_snapshot(empty, provenance(), 'alpha', sample)
+        self.assertEqual([i['identifier'] for i in items], ['EXAMPLE-1'])
+        self.assertEqual(meta['unmapped'], ['EXAMPLE-1'])
+
+
     def test_unlinked_external_is_a_prerequisite_in_its_own_project(self):
         source = record()
         source["nodes"].append(node("unknown_external", "external", "beta"))

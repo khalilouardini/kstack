@@ -342,6 +342,14 @@ def main(argv: list[str]) -> int:
         if out.returncode:
             r.fail(str(selection_tests), "harness", out.stderr.strip() or "selection tests failed")
 
+    batch_tests = REPO / "tools/linear/session-batch/tests"
+    if shutil.which("node") and batch_tests.is_dir():
+        for batch_test in sorted(batch_tests.glob("*.cjs")):
+            out = subprocess.run(["node", str(batch_test)], capture_output=True, text=True)
+            print(out.stdout, end="")
+            if out.returncode:
+                r.fail(str(batch_test), "harness", out.stderr.strip() or "batch tests failed")
+
     wave_host_tests = REPO / "tools/linear/wave/tests"
     out = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", str(wave_host_tests), "-p", "test_*.py"], capture_output=True, text=True)
     print(out.stdout, end="")

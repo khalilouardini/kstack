@@ -561,6 +561,227 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'one to three'):
             API['reconcile'](self.base, self.base, [], self.request['selected'])
 
+    def live_unit(self, iid=REPAIR_ID, pid=PID, blockers=None, scope_edges=None):
+        project = next(p for p in self.snapshot['projects'] if p['project_id'] == pid)
+        criterion = 'Render the newly approved report question.'
+        description = 'Accepted question. ' + criterion + ' Merge requires owner approval.'
+        project['issues'].append({'id': iid, 'identifier': 'T-99', 'description': description,
+                                  'url': 'https://linear.example/issue/' + iid,
+                                  'updated_at': self.snapshot['checked_at'], 'relations_complete': True,
+                                  'blocked_by': [] if blockers is None else blockers,
+                                  'acceptance_complete': True, 'acceptance': [criterion], 'prerequisites': []})
+        entry = {'issue_id': iid, 'scope_confirmed': True, 'scope_dependencies_complete': True,
+                 'authorization_source': 'docs/scope.md:1',
+                 'scope': {'path': 'docs/scope.md', 'line': 1, 'quote': QUOTE,
+                           'rationale': 'The reported question is inside existing approved scope'},
+                 'scope_edges': [] if scope_edges is None else scope_edges}
+        self.request.setdefault('live_units', []).append(entry)
+        self.request['selected'] = [iid]
+        return entry
+
+    def test_new_in_scope_ticket_gets_append_only_live_admission_without_graph_pr(self):
+        self.live_unit()
+        report = self.audit()
+        self.assertEqual(report['state'], 'ELIGIBLE')
+        self.assertEqual(report['candidates'][0]['mode'], 'LIVE_RECONCILIATION')
+        self.assertEqual(report['candidates'][0]['issue_id'], REPAIR_ID)
+        self.assertEqual(report['delta']['kind'], 'LIVE_RECONCILIATION')
+        self.assertEqual(report['delta']['added_nodes'][0]['issue_ref'], REPAIR_ID)
+        self.assertEqual(report['delta']['changed_edges'], [])
+        self.assertEqual(report['evidence']['live_input']['issues'], self.snapshot)
+        self.assertIn('T-99', report['coverage']['projects'][0]['missing_manifest'])
+        self.assertEqual(self.git('status', '--porcelain'), '')
+
+    def test_new_project_can_be_mapped_from_cited_approved_scope(self):
+        new_project = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+        self.snapshot['projects'].append({'project_id': new_project, 'project_name': 'Existing in-scope project',
+                                          'view_path': 'docs/new-project.md', 'issues': []})
+        self.live_unit(pid=new_project)
+        report = self.audit()
+        self.assertEqual(report['state'], 'ELIGIBLE')
+        self.assertEqual(report['candidates'][0]['project_id'], new_project)
+        self.assertEqual(report['delta']['added_projects'][0]['linear_id'], new_project)
+        self.assertEqual(report['coverage']['projects'][1]['state'], 'UPDATE_REQUIRED')
+
+    def test_native_blockers_are_added_and_checked_without_weakening_existing_gates(self):
+        blocker = self.base['nodes'][2]['issue_ref']
+        for issue in self.snapshot['projects'][0]['issues']:
+            issue['blocked_by'] = []
+        self.live_unit(blockers=[blocker])
+        for event in self.request['events']:
+            if (event['node_id'], event['event']) == ('contract', 'merge'):
+                event['state'] = 'UNSATISFIED'
+        report = self.audit()
+        self.assertEqual(report['state'], 'BLOCKED')
+        self.assertEqual(report['delta']['added_edges'][0]['to_event'], 'plan')
+        self.assertIn({'node_id': 'contract', 'event': 'merge', 'state': 'UNSATISFIED'}, report['candidates'][0]['unmet'])
+
+    def test_unknown_or_incomplete_live_scope_acceptance_and_relations_refuse(self):
+        entry = self.live_unit()
+        issue = self.snapshot['projects'][0]['issues'][-1]
+        for field in ('scope_confirmed', 'scope_dependencies_complete'):
+            entry[field] = False
+            with self.assertRaisesRegex(ValueError, 'verified in-scope'):
+                self.audit()
+            entry[field] = True
+        entry['authorization_source'] = 'uncited assertion'
+        with self.assertRaisesRegex(ValueError, 'authorization source'):
+            self.audit()
+        entry['authorization_source'] = 'docs/scope.md:1'
+        entry['scope']['quote'] = 'Invented approval'
+        with self.assertRaisesRegex(ValueError, 'scope citation'):
+            self.audit()
+        entry['scope']['quote'] = QUOTE
+        issue['acceptance'] = ['A requirement not present in the issue']
+        with self.assertRaisesRegex(ValueError, 'quote complete issue criteria'):
+            self.audit()
+        issue['acceptance'] = ['Render the newly approved report question.']
+        issue['blocked_by'] = ['cccccccc-cccc-cccc-cccc-cccccccccccc']
+        with self.assertRaisesRegex(ValueError, 'native blocker'):
+            self.audit()
+        issue['blocked_by'] = None
+        with self.assertRaisesRegex(ValueError, 'complete canonical native blocker'):
+            self.audit()
+
+    def test_future_merge_gate_does_not_prevent_build_but_still_blocks_merge(self):
+        self.live_unit()
+        for issue in self.snapshot['projects'][0]['issues']:
+            issue['blocked_by'] = []
+        live_id = 'live_' + REPAIR_ID.replace('-', '_')
+        edge = {'from': 'merge', 'from_event': 'approve', 'to': live_id, 'to_event': 'merge',
+                'type': 'human_decision', 'source': 'https://linear.example/issue/' + REPAIR_ID}
+        self.request['live_units'][0]['scope_edges'] = [{'edge': edge,
+            'evidence': {'kind': 'issue', 'quote': 'Merge requires owner approval.'}}]
+        for event in self.request['events']:
+            if (event['node_id'], event['event']) == ('merge', 'approve'):
+                event['state'] = 'UNSATISFIED'
+        self.assertEqual(self.audit()['state'], 'ELIGIBLE')
+        self.request['transition'] = 'merge'
+        self.assertEqual(self.audit()['state'], 'BLOCKED')
+
+    def test_unrelated_live_node_does_not_change_existing_candidate_closure_digest(self):
+        old_iid = self.request['selected'][0]
+        before = self.audit()['candidates'][0]
+        self.live_unit()
+        self.request['selected'].insert(0, old_iid)
+        for issue in self.snapshot['projects'][0]['issues']:
+            issue['blocked_by'] = []
+        report = self.audit()
+        after = next(c for c in report['candidates'] if c['issue_id'] == old_iid)
+        self.assertEqual(before['semantic_closure_graph_digest'], after['semantic_closure_graph_digest'])
+        self.assertEqual(before['semantic_closure_evidence_digest'], after['semantic_closure_evidence_digest'])
+
+    def test_stale_rendered_view_is_coverage_warning_not_execution_gate(self):
+        (self.repo / 'docs/project.md').write_text('Roadmap view awaiting refresh.\n')
+        self.git('add', 'docs/project.md')
+        self.git('commit', '-m', 'stale view')
+        self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+        report = self.audit()
+        self.assertEqual(report['state'], 'ELIGIBLE')
+        self.assertEqual(report['coverage']['state'], 'UPDATE_REQUIRED')
+
+
+    def test_new_native_relation_blocks_only_affected_candidate_at_plan(self):
+        selected_issue = self.base['nodes'][3]['issue_ref']  # api
+        blocker = self.base['nodes'][2]['issue_ref']  # contract
+        self.request['selected'] = [selected_issue]
+        self.request['transition'] = 'plan'
+        self.request['live_relations'] = True
+        for issue in self.snapshot['projects'][0]['issues']:
+            issue['blocked_by'] = [blocker] if issue['id'] == selected_issue else []
+        for event in self.request['events']:
+            if (event['node_id'], event['event']) == ('contract', 'merge'):
+                event['state'] = 'UNSATISFIED'
+        report = self.audit()
+        self.assertEqual(report['state'], 'BLOCKED')
+        self.assertEqual(report['candidates'][0]['mode'], 'LIVE_RECONCILIATION')
+        self.assertIn({'node_id': 'contract', 'event': 'merge', 'state': 'UNSATISFIED'}, report['candidates'][0]['unmet'])
+
+    def test_live_scope_edges_need_exact_source_and_cannot_touch_unrelated_units(self):
+        entry = self.live_unit()
+        live_id = 'live_' + REPAIR_ID.replace('-', '_')
+        issue_url = 'https://linear.example/issue/' + REPAIR_ID
+        edge = {'from': 'merge', 'from_event': 'approve', 'to': live_id, 'to_event': 'merge',
+                'type': 'human_decision', 'source': issue_url}
+        entry['scope_edges'] = [{'edge': edge, 'evidence': {'kind': 'issue', 'quote': 'Invented quote'}}]
+        with self.assertRaisesRegex(ValueError, 'actual issue or approved scope'):
+            self.audit()
+        entry['scope_edges'][0]['evidence']['quote'] = 'Merge requires owner approval.'
+        edge['to'] = 'api'
+        with self.assertRaisesRegex(ValueError, 'touch its evidenced unit'):
+            self.audit()
+
+
+    def test_separate_candidate_audits_keep_a_sibling_with_unknown_scope_from_blocking(self):
+        first = REPAIR_ID
+        second = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+        first_entry = self.live_unit(iid=first)
+        second_entry = self.live_unit(iid=second)
+        self.snapshot['projects'][0]['issues'][-1]['identifier'] = 'T-100'
+        second_entry['scope_confirmed'] = False
+        original = copy.deepcopy(self.request)
+        self.request['selected'] = [first]
+        self.request['live_units'] = [first_entry]
+        report = self.audit()
+        self.assertEqual(report['state'], 'ELIGIBLE')
+        self.assertEqual(report['candidates'][0]['issue_id'], first)
+        self.request = original
+        self.request['selected'] = [second]
+        self.request['live_units'] = [second_entry]
+        with self.assertRaisesRegex(ValueError, 'verified in-scope'):
+            self.audit()
+
+
+    def test_new_unmapped_blocker_is_projected_and_never_implicitly_satisfied(self):
+        blocker = REPAIR_ID
+        selected = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+        self.live_unit(iid=blocker)
+        self.live_unit(iid=selected, blockers=[blocker])
+        self.snapshot['projects'][0]['issues'][-1]['identifier'] = 'T-100'
+        event = {'node_id': 'live_' + blocker.replace('-', '_'), 'event': 'merge',
+                 'state': 'UNSATISFIED', 'source': 'Verified unmerged prerequisite'}
+        self.request['events'].extend([
+            {'node_id': event['node_id'], 'event': phase, 'state': 'SATISFIED', 'source': 'Verified prerequisite phase'}
+            for phase in ('plan', 'build')])
+        self.request['events'].append(event)
+        report = self.audit()
+        self.assertEqual(report['state'], 'BLOCKED')
+        self.assertEqual(len(report['delta']['added_nodes']), 2)
+        self.assertIn({'node_id': event['node_id'], 'event': 'merge', 'state': 'UNSATISFIED'},
+                      report['candidates'][0]['unmet'])
+        event['state'] = 'SATISFIED'
+        self.assertEqual(self.audit()['state'], 'ELIGIBLE')
+
+
+    def verify_nonunit_native_blocker(self, kind, phase):
+        blocker_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+        node = {**copy.deepcopy(self.base['nodes'][2]), 'id': 'blocking_condition',
+                'kind': kind, 'issue_ref': blocker_id, 'unit_of': None}
+        self.base['nodes'].append(node)
+        self.prove(node, self.base)
+        (self.repo / 'orchestration/graph.json').write_text(json.dumps(self.base))
+        (self.repo / 'docs/project.md').write_text('```mermaid\n' + API['GRAPH']['render'](self.base) + '```\n')
+        self.git('add', 'orchestration/graph.json', 'docs/project.md')
+        self.git('commit', '-m', 'existing blocker condition')
+        self.snapshot['main_sha'] = self.git('rev-parse', 'main')
+        for issue in self.snapshot['projects'][0]['issues']:
+            issue['blocked_by'] = []
+        self.live_unit(blockers=[blocker_id])
+        observed = next(e for e in self.request['events'] if e['node_id'] == 'blocking_condition' and e['event'] == phase)
+        observed['state'] = 'UNSATISFIED'
+        report = self.audit()
+        self.assertEqual(report['state'], 'BLOCKED')
+        self.assertEqual(report['delta']['added_edges'][0]['from_event'], phase)
+        observed['state'] = 'SATISFIED'
+        self.assertEqual(self.audit()['state'], 'ELIGIBLE')
+
+    def test_existing_external_native_blocker_keeps_its_completion_event(self):
+        self.verify_nonunit_native_blocker('external', 'complete')
+
+    def test_existing_human_native_blocker_keeps_its_approval_event(self):
+        self.verify_nonunit_native_blocker('human', 'approve')
+
+
 
 if __name__ == '__main__':
     unittest.main()

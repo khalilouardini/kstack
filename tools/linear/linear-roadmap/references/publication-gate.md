@@ -49,8 +49,10 @@ project's failure does not block independently verified candidates.
 
 For every proposed, resumed or reviewed implementation unit:
 
-1. Map its canonical issue UUID to exactly one `kind: unit`. An unmapped candidate
-   may use only the bounded reconciliation below, otherwise report UNMAPPED.
+1. Map its canonical issue UUID to exactly one `kind: unit`. For a fresh,
+   independently verified in-scope ticket that is not mapped, construct the
+   candidate-scoped live projection below; do not require a separate graph PR.
+   Missing or ambiguous issue/scope/dependency evidence remains UNKNOWN.
 2. Verify the selected scope against the approved product contract and any original
    owner decision. Read exact citations at the pinned graph SHA; project membership,
    a maintenance label, `authorization: recorded`, a tracker status or a rationale
@@ -63,8 +65,10 @@ For every proposed, resumed or reviewed implementation unit:
 4. Fetch full issue bodies and complete relations for each referenced issue in
    that closure. Reconcile native blockers, prose prerequisites, ownership and
    acceptance conditions with the reviewed graph. Verify non-issue sources too.
-   Scope expansion or any changed dependency, acceptance/release criterion or
-   human gate requires reviewed publication; it is never a local metadata repair.
+   Current native blockers and cited additive prerequisites can be represented in
+   the live projection without a graph PR. Scope expansion still needs the original
+   authorized owner's decision. Never erase, relax or silently replace an existing
+   approved condition, acceptance criterion, release rule or human gate.
 5. Evaluate the current transition from fresh completion, PR, acceptance and human
    evidence. UNKNOWN is not satisfied. Native blockers target plan; any incoming
    plan/build condition is a start prerequisite. Future merge/release gates remain
@@ -96,9 +100,9 @@ order, after checking both prose and native relations. The list is per issue:
 when several nodes share one `issue_ref` (a unit and its human review node), it
 holds every edge into any of those nodes, in manifest order. Do not use truncated list
 responses as full bodies. Evidence expires after one hour and must be refreshed
-before each transition. A changed SHA requires a fresh audit. Only changed
-relevant conditions/evidence invalidate a track's approval; unrelated graph
-changes or commits do not. Keep old and new SHA observations in the audit trail.
+before each transition. A changed SHA requires a fresh audit and a source-backed assessment of relevant
+code impact. Only changed relevant conditions/evidence or code impact invalidate
+a track's plan; unrelated graph changes or commits do not. Keep old and new SHA observations in the audit trail.
 
 The request contains `selected` issue UUIDs, `transition` (plan/build/merge),
 `nodes` and `events`. Each closure node proof has `node_id`, exact `owner` and
@@ -107,12 +111,80 @@ The request contains `selected` issue UUIDs, `transition` (plan/build/merge),
 blob at the stated one-based line; the rationale explains applicability to this
 work. Event observations have `node_id`, `event`, `state` (SATISFIED, UNSATISFIED,
 UNKNOWN) and `source`. Every current prerequisite event needs cited evidence.
-Run separate audits for independent candidates when a group has incomplete
-evidence; an UNKNOWN group report is no reason to exclude a separately verified
-candidate. The helper validates structure, membership, exact citations, delta and
+Run one audit per independent candidate against the shared fresh snapshot, in
+parallel when possible. Supply only that candidate's live dependency closure. An
+UNKNOWN report holds its candidate, not a separately verified sibling. The helper validates structure, membership, exact citations, delta and
 event coverage. Its graph/evidence digests hash canonical JSON (sorted keys and
 compact separators); graph-record also reports its distinct raw manifest digest. The calling skill must verify source truth, scope meaning, actor
 identity and the actual acceptance result; a self-reported SATISFIED is not proof.
+
+## Incremental live projection for in-scope tickets
+
+By default, the selection collector prepares an internal `graph-admission` request
+with `live_relations: true`, fresh full closure issue bodies and both directions of
+native relations. It supplies each audited issue's `blocked_by` as a complete array
+of canonical issue UUIDs (empty only after checking). An observed blocker is added
+as a plan prerequisite; its actual merge/event evidence, not its status name alone,
+determines whether it is satisfied. Missing mappings for referenced blockers need
+verified live-unit evidence or remain UNKNOWN. A changed native relation is not an
+excuse to remove any existing approved graph condition.
+
+For each unmapped selected issue or required unmapped prerequisite, add one entry
+in `live_units` to the same internal request. Each entry has `issue_id`,
+`scope_confirmed: true`, `scope_dependencies_complete: true`, an original
+`authorization_source` (the exact `path:line` or an original HTTPS decision URL),
+a `scope` citation `{path, line, quote, rationale}`, and
+an explicit `scope_edges` array. Fetch the full issue with `description`, `url`,
+`updated_at`, `relations_complete: true`, `blocked_by`, `acceptance_complete: true`
+and `acceptance`, a nonempty list of exact substrings of the issue body. Project
+membership must be a canonical UUID in the complete snapshot. A project absent
+from the index can be projected using its verified membership and the same original
+approved scope citation; project name or Todo status never authorizes scope.
+
+The generated node ID is `live_` followed by the issue UUID with hyphens replaced
+by underscores; a newly projected project key uses `livep_` plus its similarly
+transformed project UUID. The helper derives the new node proof from the issue and
+scope entry: do not also supply a duplicate `nodes` proof for it. Existing node
+proofs and each mapped issue's `prerequisites` must describe the original indexed
+graph, before additions; for an unmapped issue omit `prerequisites` or use `[]`.
+The helper retains the original input and adds the live edges to derived evidence.
+Supply normal source-backed `events` observations for every required prerequisite.
+When using legacy `--reconcile` maintenance input, do not combine it with
+`live_relations` or `live_units` in the same audit; run the native blocker check
+separately and retain its evidence.
+
+A `scope_edges` entry is `{edge, evidence: {kind, quote}}`. `edge` is a full typed
+roadmap edge touching that live unit; its source is the issue URL for `kind: issue`
+or the scope path for `kind: scope`. Its quote must occur verbatim in the full
+issue body or the cited approved scope quote, respectively. Include every
+applicable start, merge, review, release, evidence and human condition. The
+collector must read the full original scope, exclusions and owner decisions, verify
+authority and applicability, and follow upstream prerequisites. A flag or quote is
+not proof of semantic authorization. Human decisions that have not occurred, or
+uncertain interpretation or blocker identity, hold the affected candidate.
+
+The helper creates deterministic live unit and project IDs, appends only cited
+conditions to an in-memory copy of the indexed graph, checks closure and native
+blockers, and emits `LIVE_RECONCILIATION` with the exact base/effective digests,
+original and derived observations, added projects/nodes/edges and candidate
+semantic closure digests. It never mutates the graph or Linear. The caller saves
+the report locally and forwards it to the selected session; a later ticket PR or
+separately requested roadmap maintenance may reconcile the durable view. No
+`--local-graph`, `--publish`, or extra approval is needed merely for this derived
+projection. An explicitly approved local graph is a different source: preserve its
+owner pins and validate it normally. Run independent audits when one candidate's
+observation is incomplete; unrelated issues and missing rendered view rows remain
+coverage warnings, not a batch-wide veto.
+
+At each start, build and review transition refresh the relevant issue, scope,
+closure, native blockers and ownership. Compare per-ticket semantic closure and
+evidence rather than a whole-project digest. If main moves, verify ancestry and
+assess the actual changed files against the specific plan, dependencies and
+project gates. A proven unrelated move preserves that plan; unknown or relevant
+impact holds the affected track for revalidation. Review dependency changes hold
+the affected reviews and dependents, not unrelated siblings. Retain original and
+current pins and evidence; an exact PR head, independent reviewer and current CI
+are still required before readiness or merge.
 
 ## Bounded local reconciliation within approved scope
 
@@ -161,9 +233,12 @@ never permits merging or signing off a release.
 
 ## Reviewed graph publication for semantic changes
 
-New scope, dependency changes, release/acceptance changes, human-gate changes,
-repairs outside the bounds above, or incomplete authorization require a reviewed
-graph update before affected execution. Prepare an isolated branch from fresh
+A real scope expansion, a decision to relax/remove existing approved conditions,
+or incomplete authorization is not granted by a live projection. Resolve the
+original owner decision and, where the authoritative graph must change or an
+existing gate must be relaxed, use a reviewed graph update before affected execution.
+Cited additions and native blocker observations in the live projection do not by
+themselves require a separate graph PR. Prepare an isolated branch from fresh
 main, reconcile live sources, update manifest/index and rendered views together,
 run validation and repository gates, and open the PR as `identities.maintainer`,
 after the host-local check with `bin/resolve-identities` (CONVENTIONS.md §2).

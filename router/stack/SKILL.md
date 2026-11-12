@@ -64,6 +64,11 @@ adapter, or read `roles/<role>.md` and follow it in-session.
 
 ### Build
 
+- "delegate a batch", "work on several tickets in parallel", "start multiple
+  independent ticket sessions" → invoke `/session-batch` (one supervising agent;
+  preserve explicit project, capacity and graph-source flags). A request only to
+  recommend work remains `/next`; explicit `/wave` remains `/wave`.
+
 - "run one wave", "plan a Linear batch", "build the approved wave",
   `/wave plan|build` → invoke `/wave`
 

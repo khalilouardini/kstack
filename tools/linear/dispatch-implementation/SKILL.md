@@ -69,10 +69,10 @@ Before any git or tracker write, follow the canonical
 `tools/linear/linear-roadmap/references/publication-gate.md` from the physical
 stack root. Verify this issue and its relevant dependency closure on fresh main,
 including resumed work and --plan-only. Unrelated missing tickets are coverage
-warnings, not a dispatch refusal. A selected unmapped maintenance repair may use
-the bounded local audit before any workspace/status write; retain its main SHA,
-full live evidence and exact delta. UNKNOWN selected evidence or semantic changes
-require reviewed publication. Accept repeatable --accept-graph-update only for
+warnings, not a dispatch refusal. A verified unmapped in-scope ticket may use the
+helper's candidate-scoped live projection before any workspace/status write; retain
+its main SHA, full live evidence and exact delta. Unresolved scope, missing source
+facts or an unapproved decision hold that ticket. Accept repeatable --accept-graph-update only for
 verified reviewed PRs under that contract. Carry audit paths/digests and explicit
 flags to later build/land; each transition rechecks fresh evidence. A prior plan
 or wave approval supplies no bypass or new scope authorization.

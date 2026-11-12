@@ -9,10 +9,11 @@ one or change `/wave`'s existing approval behavior.
 Project coverage is a maintenance warning; execution eligibility is per selected
 unit and its relevant dependency closure. Follow
 [the shared gate](tools/linear/linear-roadmap/references/publication-gate.md).
-Unrelated missing tickets do not freeze mapped work. Up to three missing
-maintenance units within approved scope may use an audited local reconciliation
-containing main SHA, full live evidence and exact delta. Scope, dependency,
-release-criteria and human-gate changes require reviewed graph publication.
+Unrelated missing tickets do not freeze mapped work. New tickets within verified
+approved scope use a candidate-scoped live graph projection, with main SHA, full
+Linear evidence and exact additions, without a preliminary graph PR. Current native
+blockers and cited additional conditions remain effective. New product scope or a
+weakened existing gate requires the relevant owner decision and graph review.
 Schema compatibility, prerequisites, ownership, acceptance and plan/review gates still apply.
 
 `/linear-roadmap <project>` updates local graph/scope files only. Add `--publish`
@@ -118,6 +119,14 @@ flowchart TD
 The `fix` arrow depicts work inside the bounded `/pr-loop`; it does not reset its
 round counter. A terminal verdict has no automatic retry. A new attempt requires
 a recorded human decision and carries forward unresolved findings.
+
+The default batch-delegation route is `/session-batch`: one supervising
+meta-agent tracks each independent ticket session and releases reviews in actual
+dependency order. The controller and its evidence ledger are available, but the
+bundled Claude adapter is currently read-only and refuses session launch until a
+same-session Plan-to-build lifecycle is verified. In that state the safe fallback
+is a read-only `/next --parallel` recommendation and manual dispatch. Explicit
+`/wave` remains available for coordinated batches.
 
 ## What exists and what still needs integration
 

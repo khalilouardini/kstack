@@ -36,9 +36,10 @@ Before Workflow starts, follow
 `tools/linear/linear-roadmap/references/publication-gate.md` from the physical
 stack root. Report project coverage warnings and require fresh candidate/closure
 admission for every selected/approved track before contract/worktree/tracker writes.
-Unrelated additions do not freeze mapped work. Bounded local maintenance repairs
-need no preliminary graph PR; retain their main SHA, full live evidence and exact
-delta. Semantic scope/dependency/release/human changes require reviewed publication.
+Unrelated additions do not freeze mapped work. Cited in-scope live units and
+native blockers use the helper's candidate-scoped projection without a separate
+graph PR; retain their main SHA, full live evidence and exact delta. Actual new
+scope needs the original owner decision; never weaken existing human or release gates.
 Only explicit --accept-graph-update can use a verified reviewed pending graph.
 Revalidate at A1, before A3/A4 writes, B1 implementation and B3 implementer fixes;
 Run A observations and --approve do not supply fresh evidence or a bypass.
