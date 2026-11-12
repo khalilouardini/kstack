@@ -114,6 +114,16 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(worker.verified_init)
                 self.assertIsNone(worker.plan)
 
+    async def test_only_stopped_error_can_be_closed(self):
+        self.worker.client=Fake(self.config,bad='error')
+        self.worker.task=asyncio.create_task(self.worker.run_plan())
+        await self.worker.task
+        self.assertEqual(self.worker.state,'ERROR')
+        response=await self.worker.handle({'token':self.config['token'],'command':'close'})
+        self.assertEqual(response['state'],'CLOSING')
+        self.assertEqual(self.worker.state,'CLOSING')
+        self.assertEqual((await self.worker.handle({'token':self.config['token'],'command':'close'}))['state'],'UNKNOWN')
+
     async def test_exclusive_worker_claim_is_not_reused(self):
         server=asyncio.create_task(serve(self.config,self.worker))
         try:

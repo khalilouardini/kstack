@@ -336,11 +336,20 @@ test('blocked reviews do not need a fabricated submitted review and unknown buil
   const uncertain=await c.finishBuild('run','T-2');assert.equal(uncertain.state,'ERROR');
   assert.equal(uncertain.uncertain_operation,true);assert.ok(fs.existsSync(uncertain.worker_slot));
   a.review=async x=>({state:'WAIT',session_id:x.session_id});
-  a.pollReview=async()=>({verdict:'BLOCKED',reason:'Bash permission denied',review_process_stopped:true,evidence:'process exit'});
+  a.pollReview=async()=>({verdict:'BLOCKED',reason:'Bash permission denied',review_process_stopped:true,evidence:'process exit',source:'process inspection',checked_at:new Date().toISOString()});
   assert.equal((await c.review('run','T-1')).state,'WAITING');
   const blocked=await c.finishReview('run','T-1');assert.equal(blocked.state,'BLOCKED');
   assert.equal(blocked.review.review_id,undefined);assert.equal(blocked.review_slot,null);
   assert.match((await c.reviewQueue('run')).blocked[0].reason,/Bash permission denied/);
+});
+test('a verified stopped failed worker releases only its slot',async()=>{
+  const a=makeAdapter(),c=controller('stopped-worker',a);await c.create(input('run',['T-1']));
+  const t=await c.start('run','T-1');await c.plan('run','T-1',plan(t));
+  a.build=async x=>({state:'WAIT',session_id:x.session_id});
+  const running=await c.beginBuild('run','T-1');assert.ok(fs.existsSync(running.worker_slot));
+  a.pollBuild=async x=>({state:'STOPPED',issue_id:x.issue_id,session_id:x.session_id,worker_turn_stopped:true,reason:'tool permission denied',source:'verified process',checked_at:new Date().toISOString()});
+  const blocked=await c.finishBuild('run','T-1');assert.equal(blocked.state,'BLOCKED');assert.equal(blocked.worker_slot,null);
+  assert.equal(fs.existsSync(running.worker_slot),false);assert.equal(blocked.error,'tool permission denied');
 });
 test('invalid run IDs cause no lock writes, including direct library calls',async()=>{
   const a=makeAdapter(),c=controller('invalid-run-lock',a);await c.create(input('run',['T-1']));

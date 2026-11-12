@@ -33,6 +33,15 @@ const runtime={start:async x=>({state:'READY',session_id:x.session_id,issue_id:x
  const pr=await a.pollBuild({run_id:'run',issue_id:issue,session_id:session,session:created});assert.equal(pr.state,'PR_OPEN');
  const review=await a.pollReview({run_id:'run',issue_id:issue,session_id:session,session:created});assert.equal(review.verdict,'CLEAN');
  evidence.verifyReviewResult=async()=>({verdict:'CLEAN'});assert.equal((await a.pollReview({run_id:'run',issue_id:issue,session_id:session,session:created})).state,'UNKNOWN');
+ runtime.buildStatus=async()=>({state:'UNKNOWN',status:{state:'ERROR',error:'permission denied'}});
+ runtime.reviewStatus=async()=>({state:'UNKNOWN',status:{state:'ERROR',error:'permission denied'}});
+ evidence.verifyWorkerFailure=async()=>({state:'STOPPED',issue_id:issue,session_id:session,worker_turn_stopped:true,review_process_stopped:true,reason:'Bash permission denied',source:'process inspection',checked_at:new Date().toISOString()});
+ const args={run_id:'run',issue_id:issue,session_id:session,session:created};
+ assert.equal((await a.pollBuild(args)).state,'STOPPED');
+ const blocked=await a.pollReview(args);assert.equal(blocked.verdict,'BLOCKED');assert.match(blocked.reason,/Bash/);
+ evidence.verifyWorkerFailure=async()=>({state:'STOPPED',issue_id:issue,session_id:session,worker_turn_stopped:false,reason:'unknown',source:'process inspection',checked_at:new Date().toISOString()});
+ assert.equal((await a.pollBuild(args)).state,'UNKNOWN');
+
  fs.writeFileSync(path.join(wt,'untracked'),'x');assert.equal((await a.ensureSession(req)).state,'UNKNOWN');
  assert.equal((await a.build({session:created,session_id:session,plan:{main_sha:base},plan_digest:'x'})).state,'UNKNOWN');
  assert.equal((await a.review({session:created,session_id:session,pr:{head_sha:base}})).state,'UNKNOWN');

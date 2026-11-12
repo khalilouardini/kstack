@@ -35,6 +35,7 @@ async function lock(dir, fn) {
   try { return await fn(); } finally { fs.rmdirSync(dir); }
 }
 
+function freshTime(s) { return /^\d{4}-\d\d-\d\dT.*Z$/.test(s||'') && Number.isFinite(Date.parse(s)) && Date.now()-Date.parse(s)>=0 && Date.now()-Date.parse(s)<=3600000; }
 function receipt(r, expected, stage) {
   assert(r && r.state === 'ALLOW' && r.issue_id === expected && r.stage === stage &&
     text(r.source) && /^\d{4}-\d\d-\d\dT.*Z$/.test(r.checked_at || '') &&
@@ -393,6 +394,12 @@ class Controller {
       assert(t.phase==='BUILD' && t.state==='WAITING' && t.operation==='AWAIT_BUILD', 'build is not awaiting completion');
       const result=await hostMethod(this.adapter,'pollBuild')({run_id:runId,issue_id:issue,session_id:t.session_id,session:t.session,plan:t.plan,plan_digest:t.plan_digest});
       if(result?.state==='WAIT' && result.session_id===t.session_id) return {state:'WAITING',issue_id:issue,reason:'implementation still running'};
+      if(result?.state==='STOPPED' && result.session_id===t.session_id && result.issue_id===issue &&
+        result.worker_turn_stopped===true && text(result.reason) && text(result.source) && freshTime(result.checked_at)) {
+        this.releaseSlot(t.worker_slot,run,t);
+        const blocked=await save({state:'BLOCKED',operation:null,worker_slot:null,error:result.reason,worker_failure:result},'BUILD_BLOCKED');
+        return this.finishSessionInside(run,blocked,save);
+      }
       if(result?.state==='UNKNOWN') return save({state:'ERROR',uncertain_operation:true,error:result.reason||'implementation status unavailable'},'BUILD_UNCERTAIN');
       return this.completeBuildInside(run,t,save,result);
     });
@@ -423,9 +430,10 @@ class Controller {
   async completeReviewInside(run,t,save,result) {
     // A blocked loop may have no submitted review. Report the actual stop
     // reason, but only release the slot after the reviewer is verified stopped.
-    if(result?.verdict==='BLOCKED' && result.review_process_stopped===true && text(result.evidence) && text(result.reason) && !result.review_id) {
+    if(result?.verdict==='BLOCKED' && result.review_process_stopped===true && text(result.evidence) && text(result.reason) && text(result.source) && freshTime(result.checked_at) && !result.review_id) {
       this.releaseSlot(t.review_slot,run,t);
-      return save({state:'BLOCKED',operation:null,review_slot:null,review:result,error:result.reason},'REVIEW_BLOCKED');
+      const blocked=await save({state:'BLOCKED',operation:null,review_slot:null,review:result,error:result.reason},'REVIEW_BLOCKED');
+      return result.worker_failure ? this.finishSessionInside(run,blocked,save) : blocked;
     }
     assert(result && ['CLEAN','BLOCKED','ROUNDS_EXHAUSTED'].includes(result.verdict) && isCommit(result.head_sha) &&
       text(result.reviewer_id) && text(result.review_id) && result.reviewer_id!==t.session_id && result.independent===true && result.review_process_stopped===true && text(result.evidence), 'independent stopped exact-head review evidence required');

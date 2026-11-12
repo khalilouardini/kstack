@@ -65,13 +65,13 @@ function createEvidenceBridge({stateRoot,interval=100,timeout=0}={}) {
   }
   const bridge={call,pending,respond};
   for(const method of ['verifyRunAuthorization','captureBatch','verifyBatch','verifyReviewGraph','admit',
-      'verifyMainChange','validatePlan','verifyPlanApproval','dependency','verifyReview','prepareSession','verifyPullRequest','verifyReviewResult'])
+      'verifyMainChange','validatePlan','verifyPlanApproval','dependency','verifyReview','prepareSession','verifyPullRequest','verifyReviewResult','verifyWorkerFailure'])
     bridge[method]=args=>call(method,args);
   const isFresh=r=>r && typeof r.source==='string' && !!r.source.trim() &&
     /^\d{4}-\d\d-\d\dT.*Z$/.test(r.checked_at||'') && Number.isFinite(Date.parse(r.checked_at)) &&
     Date.now()-Date.parse(r.checked_at)>=0 && Date.now()-Date.parse(r.checked_at)<=3600000;
   bridge.head=async args=>{const r=await call('head',args);return isFresh(r)?r.head_sha:null;};
-  for(const method of ['dependency','verifyReview','verifyPullRequest','verifyReviewResult'])
+  for(const method of ['dependency','verifyReview','verifyPullRequest','verifyReviewResult','verifyWorkerFailure'])
     bridge[method]=async args=>{const r=await call(method,args);return isFresh(r)?r:{state:'UNKNOWN',reason:'fresh source evidence required'};};
   return bridge;
 }

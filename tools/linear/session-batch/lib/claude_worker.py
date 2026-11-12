@@ -162,7 +162,8 @@ class Worker:
                 return {'state': 'WAIT', 'session_id': self.config['session_id']}
         if command == 'close':
             async with self.guard:
-                if self.state not in ('PLAN_READY', 'REVIEW_DONE'):
+                stopped_error = self.state == 'ERROR' and self.task is not None and self.task.done()
+                if self.state not in ('PLAN_READY', 'REVIEW_DONE') and not stopped_error:
                     return {'state': 'UNKNOWN', 'reason': 'worker is not at a safe terminal point'}
                 self.shutdown_requested = True
                 self.state = 'CLOSING'

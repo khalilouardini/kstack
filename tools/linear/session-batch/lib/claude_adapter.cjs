@@ -99,8 +99,18 @@ function createAdapter({stateRoot,evidence,runtime,python,claude,worker,env,chec
     const prompt=x.session.build_prompt+'\n\nImplement only this independently validated plan and acceptance; do not merge, deploy, or close the issue. Open only the authorized draft PR. Return a JSON object with pr_url and head_sha.\n'+JSON.stringify(x.plan);
     return host.build(x.session_id,x.plan,x.plan_digest,prompt);
   };
+  async function stoppedFailure(x,phase,observed) {
+    if(observed?.state!=='UNKNOWN' || observed.status?.state!=='ERROR') return null;
+    const proof=await source.verifyWorkerFailure({...x,phase,worker_status:observed.status});
+    if(proof?.state!=='STOPPED' || proof.session_id!==x.session_id || proof.issue_id!==x.issue_id ||
+      proof.worker_turn_stopped!==true || !text(proof.reason) || !text(proof.source) || !fresh(proof.checked_at) ||
+      (phase==='REVIEW' && proof.review_process_stopped!==true)) return null;
+    return proof;
+  }
   adapter.pollBuild=async x=>{
     const observed=await host.buildStatus(x.session_id);
+    const failure=await stoppedFailure(x,'BUILD',observed);
+    if(failure) return failure;
     if(observed?.state!=='READY') return observed;
     const proof=await source.verifyPullRequest({...x,worker_result:observed.result});
     const idle=await host.idle(x.session_id);
@@ -123,6 +133,8 @@ function createAdapter({stateRoot,evidence,runtime,python,claude,worker,env,chec
   };
   adapter.pollReview=async x=>{
     const observed=await host.reviewStatus(x.session_id);
+    const failure=await stoppedFailure(x,'REVIEW',observed);
+    if(failure) return {verdict:'BLOCKED',reason:failure.reason,review_process_stopped:true,evidence:failure.source,source:failure.source,checked_at:failure.checked_at,worker_failure:failure};
     if(observed?.state!=='READY') return observed;
     const proof=await source.verifyReviewResult({...x,worker_result:observed.result});
     const idle=await host.idle(x.session_id);

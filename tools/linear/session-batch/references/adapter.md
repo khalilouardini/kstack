@@ -126,6 +126,13 @@ The extra bridge methods used by the default adapter are:
   A blocked loop with no submitted review may instead return `verdict: BLOCKED`,
   a concrete `reason`, `review_process_stopped: true`, and cited `evidence`.
   Never invent a review ID or stopped-process proof.
+- `verifyWorkerFailure`: when the worker reports an error, independently check
+  the named session and its child processes. Return `state: STOPPED`, the exact
+  `issue_id` and `session_id`, `worker_turn_stopped: true`, a concrete `reason`,
+  `source` and fresh `checked_at` only if the activity is known to have stopped.
+  For a review failure also prove `review_process_stopped: true`. This permits
+  the controller to release that slot without losing the issue claim; unknown
+  process state remains reserved and requires reconciliation.
 - `head`: return `{head_sha, source, checked_at}` from a fresh forge read.
   `dependency` and `verifyReview` also require `source` and fresh `checked_at`.
   Every `checked_at` is UTC and no older than one hour; refresh earlier whenever
