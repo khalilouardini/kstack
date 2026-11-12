@@ -35,7 +35,7 @@ The runtime requires the signed-in Claude CLI and Python SDK version 0.2.180.
 Check `claude auth status` and the installed SDK before workspace/status writes.
 If needed, set up a dedicated venv once using `requirements.txt` in this skill's
 directory, under `${KSTACK_STATE:-$HOME/.kstack}/runtimes/claude-session-batch-0.2.180`;
-the adapter automatically uses its `bin/python`. An explicit
+the adapter automatically uses that environment’s Python interpreter. An explicit
 `KSTACK_CLAUDE_PYTHON` may select another compatible environment. With the
 physical root in `STACK_ROOT`, the one-time setup is:
 
@@ -134,7 +134,10 @@ automated.
 
 Each session produces an acceptance-cited plan naming files, tests, dependencies and
 risks. A different validator context checks criteria, file scope, dependencies,
-project gates and unresolved decisions. Record PASS, REVISE or HUMAN_REQUIRED;
+project gates and unresolved decisions. Forward all applicable user and repository
+instructions, including local test limits and CI policy, to every worker and
+reviewer; child sessions do not inherit the supervisor’s conversation. Record
+PASS, REVISE or HUMAN_REQUIRED;
 bind PASS to the plan content, issue criteria, scope evidence and fetched base.
 Limit revisions. A batch that explicitly authorizes implementation may proceed
 automatically only after PASS and fresh admission, in the same session. A changed
