@@ -12,6 +12,7 @@ args = sys.argv[1:]
 s['calls'].append({'name': name, 'args': args, 'cwd': os.getcwd(),
                    'has_expected_token': os.environ.get('GH_TOKEN') == 'fixture-secret',
                    'has_other_token': 'GITHUB_TOKEN' in os.environ,
+                   'tmpdir': os.environ.get('TMPDIR'), 'review_tmpdir': os.environ.get('KSTACK_REVIEW_TMPDIR'),
                    'host_markers': {key: os.environ[key] for key in
                                     ('CODEX_SESSION_ID', 'CODEX_THREAD_ID',
                                      'CLAUDE_CODE_CHILD_SESSION') if key in os.environ}})
@@ -66,6 +67,26 @@ if '--version' in args:
     sys.exit(0)
 if args == ['auth', 'status']:
     emit({'loggedIn': mode != 'unauthenticated'})
+if mode in ('scratch', 'scratch-nonzero', 'scratch-denied', 'scratch-timeout', 'scratch-symlink'):
+    root = os.environ.get('KSTACK_REVIEW_TMPDIR')
+    if not root or root != os.environ.get('TMPDIR') or not Path(root).is_dir() or Path(root).stat().st_mode & 0o077:
+        print('no controller-owned temporary directory', file=sys.stderr)
+        sys.exit(8)
+    if 'Do not delete temporary artifacts' not in args[-1]:
+        print('no controller-owned cleanup instruction', file=sys.stderr)
+        sys.exit(8)
+    (Path(root) / 'owned-proof').write_text('disposable')
+    s['scratch'] = root
+    state_path.write_text(json.dumps(s))
+    if mode == 'scratch-symlink':
+        scratch = Path(root)
+        scratch.rename(scratch.with_name(scratch.name + '-moved'))
+        scratch.symlink_to(s['outside'], target_is_directory=True)
+    if mode == 'scratch-timeout':
+        import time
+        time.sleep(3)
+    if mode == 'scratch-nonzero':
+        sys.exit(9)
 if mode == 'nonzero':
     print('fixture-secret', file=sys.stderr)
     sys.exit(9)
@@ -95,7 +116,7 @@ report = {'status': 'BLOCKED' if mode == 'blocked-report' else 'REVIEW_SUBMITTED
           'review_id': 999 if mode == 'wrong-report-id' else 123, 'head': 'a' * 40}
 if name == 'claude':
     emit({'type': 'result', 'subtype': 'success', 'is_error': mode == 'error-envelope',
-          'permission_denials': [{'tool_name': 'Bash'}] if mode == 'denied' else [], 'result': json.dumps(report)})
+          'permission_denials': [{'tool_name': 'Bash'}] if mode in ('denied', 'scratch-denied') else [], 'result': json.dumps(report)})
 if name == 'codex':
     Path(args[args.index('-o') + 1]).write_text(json.dumps(report))
     print('events are not the final report')

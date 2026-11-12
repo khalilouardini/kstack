@@ -84,7 +84,11 @@ the post-submit verification checks after the fact. Treat them as hard rules.
 - Make no repository edits. Do not implement fixes, commit, push, resolve
   threads, merge, approve, dismiss, or edit the PR description. Temporary proof
   artifacts may live only in a disposable checkout or temporary directory and
-  must be removed.
+  must be removed. Under `run-review`, use the controller-owned directory in
+  `KSTACK_REVIEW_TMPDIR` for every temporary artifact and let the parent remove
+  it after the reviewer exits. Do not run deletion commands yourself or combine
+  cleanup with GitHub verification. For standalone reviews, remove only your
+  exact temporary directory through the normal host permission flow.
 - After standalone bootstrap, use `$REVIEWER` for every GitHub read and write. Resolve its stored credential
   once with `gh auth token --user "$REVIEWER"`, pass it only through `GH_TOKEN` on
   each `gh` invocation, and never call `gh auth switch`. Never post from
@@ -188,13 +192,13 @@ Make every disposable checkout, including one for a proof run, with one of these
 commands. The clone keeps Git data; the archive holds files only.
 
 ```bash
-REVIEW_COPY=$(mktemp -d)
+REVIEW_COPY=$(mktemp -d "${KSTACK_REVIEW_TMPDIR:-${TMPDIR:-/tmp}}/kstack-review.XXXXXXXX")
 git clone --quiet --shared --no-checkout "$(git rev-parse --show-toplevel)" "$REVIEW_COPY"
 git -C "$REVIEW_COPY" checkout --quiet --detach "$REVIEW_HEAD"
 ```
 
 ```bash
-REVIEW_COPY=$(mktemp -d)
+REVIEW_COPY=$(mktemp -d "${KSTACK_REVIEW_TMPDIR:-${TMPDIR:-/tmp}}/kstack-review.XXXXXXXX")
 git archive "$REVIEW_HEAD" | tar -x -C "$REVIEW_COPY"
 ```
 
