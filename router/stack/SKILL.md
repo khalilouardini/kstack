@@ -105,6 +105,8 @@ nowhere.
 
 ### Operate
 
+- "open the PR decision queue", "show me the PR decision page" → invoke `/decision-queue`
+
 - "update kstack", "reinstall kstack", "refresh the shared skills", "are the
   shared skills current everywhere" → invoke `/update-stack` (preserve
   `--check`; in established kstack context, "reinstall gstack" routes here).

@@ -1,0 +1,510 @@
+#!/usr/bin/env python3
+"""Serve the maintainer's PR decision queue on loopback."""
+
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from urllib.parse import parse_qs, urlsplit
+
+
+LIST_QUERY = """
+query($owner: String!, $repo: String!, $endCursor: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequests(states: OPEN, first: 50, after: $endCursor) {
+      nodes {
+        number title author { login } createdAt isDraft mergeable
+        headRefOid body isMergeQueueEnabled
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}
+"""
+MERGE_QUERY = """
+query($owner: String!, $repo: String!, $n: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $n) {
+      state isDraft mergeable headRefOid isMergeQueueEnabled
+    }
+  }
+}
+"""
+MEDIA = re.compile(
+    r"!\[[^\]\n]*\]\([^\n]+\)|<(?:img|video)\b|"
+    r"(?<![\w.@/-])(?:(?:https?:)?//)?github\.com/user-attachments/assets/",
+    re.IGNORECASE,
+)
+BUCKETS = {"pass", "fail", "pending", "skipping", "cancel"}
+CI_ORDER = {"passing": 0, "skipped": 0, "pending": 1, "failing": 2, "unknown": 2}
+CONFIRM_SECONDS = 120
+MAX_BODY = 64 * 1024
+MAX_NOTE = 16 * 1024
+
+
+class Refused(Exception):
+    def __init__(self, message, status=HTTPStatus.CONFLICT):
+        super().__init__(message)
+        self.status = status
+
+
+def outside_checkout(path):
+    path = path.resolve()
+    return not any((parent / ".git").exists() for parent in (path, *path.parents))
+
+
+class GitHub:
+    def __init__(self, args, cwd):
+        self.repo = args.repo
+        self.owner, self.name = self.repo.split("/")
+        self.maintainer = args.maintainer
+        self.ci_scope = args.ci_checks
+        self.cwd = cwd
+        # An explicit named account and explicit repository scope every invocation.
+        ignored = {
+            "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
+            "GH_REPO", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
+        }
+        self.env = {key: value for key, value in os.environ.items() if key not in ignored}
+        self.env.update(GH_HOST="github.com", GH_PROMPT_DISABLED="1", GH_NO_UPDATE_NOTIFIER="1")
+
+    def run(self, args, token=None, note=None):
+        env = dict(self.env, GH_TOKEN=token) if token else self.env
+        return subprocess.run(
+            ["gh", *args], cwd=self.cwd, env=env, input=note, capture_output=True,
+            text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+
+    def token(self):
+        try:
+            result = self.run(["auth", "token", "--hostname", "github.com", "--user", self.maintainer])
+        except (OSError, subprocess.TimeoutExpired):
+            result = None
+        if not result or result.returncode or not result.stdout.strip():
+            raise Refused(f"Could not obtain a GitHub token for {self.maintainer}.", HTTPStatus.FORBIDDEN)
+        token = result.stdout.strip()
+        try:
+            actor = self.run(["api", "user", "--hostname", "github.com", "--jq", ".login"], token)
+        except (OSError, subprocess.TimeoutExpired):
+            actor = None
+        if not actor or actor.returncode or actor.stdout.strip() != self.maintainer:
+            raise Refused(f"Could not verify the GitHub token for {self.maintainer}.", HTTPStatus.FORBIDDEN)
+        return token
+
+    def read(self, args, token, ok=(0,)):
+        result = self.run(args, token)
+        if result.returncode not in ok:
+            raise ValueError(f"gh exited {result.returncode}")
+        return json.loads(result.stdout)
+
+    def graph(self, query, token, number=None):
+        args = ["api", "graphql", "--hostname", "github.com"]
+        if number is None:
+            args += ["--paginate", "--slurp"]
+        else:
+            args += ["-F", f"n={number}"]
+        return self.read(args + [
+            "-f", f"query={query}", "-f", f"owner={self.owner}", "-f", f"repo={self.name}",
+        ], token)
+
+    def open_prs(self, token):
+        pages = self.graph(LIST_QUERY, token)
+        if not isinstance(pages, list) or not pages:
+            raise ValueError("Missing pull request pages")
+        prs = {}
+        cursors = set()
+        for index, page in enumerate(pages):
+            if page.get("errors"):
+                raise ValueError("Incomplete pull request response")
+            connection = page["data"]["repository"]["pullRequests"]
+            info = connection["pageInfo"]
+            expected_next = index < len(pages) - 1
+            if info["hasNextPage"] is not expected_next:
+                raise ValueError("Incomplete pull request pagination")
+            if expected_next:
+                cursor = info["endCursor"]
+                if not cursor or cursor in cursors:
+                    raise ValueError("Pull request pagination did not advance")
+                cursors.add(cursor)
+            for pr in connection["nodes"]:
+                prs[pr["number"]] = pr
+        return list(prs.values())
+
+    def checks(self, number, token):
+        if self.ci_scope == "none":
+            return ()
+        args = ["pr", "checks", str(number), "--repo", self.repo, "--json", "bucket,name"]
+        if self.ci_scope == "required":
+            args.append("--required")
+        try:
+            checks = self.read(args, token, ok=(0, 1, 8))
+            if not checks:
+                return None
+            return tuple(sorted((check["name"], check["bucket"]) for check in checks))
+        except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+            return None
+
+    def head(self, number, token):
+        return self.read([
+            "pr", "view", str(number), "--repo", self.repo, "--json", "headRefOid",
+        ], token)["headRefOid"]
+
+    def screenshot(self, number, body, token):
+        if MEDIA.search(body or ""):
+            return True
+        try:
+            pages = self.read([
+                "api", f"repos/{self.repo}/issues/{number}/comments", "--hostname", "github.com",
+                "--paginate", "--slurp",
+            ], token)
+            return any(
+                (comment.get("user") or {}).get("type") == "User"
+                and MEDIA.search(comment.get("body") or "")
+                for page in pages for comment in page
+            )
+        except (OSError, subprocess.TimeoutExpired, ValueError, TypeError, AttributeError):
+            return None
+
+
+def ci_status(checks):
+    if checks is None:
+        return "unknown", "No usable CI checks reported"
+    if not checks:
+        return "skipped", "No CI gate configured"
+    buckets = {bucket for _, bucket in checks}
+    detail = ", ".join(f"{name} ({bucket})" for name, bucket in checks)
+    if buckets & {"fail", "cancel"}:
+        return "failing", detail
+    if buckets - BUCKETS:
+        return "unknown", detail
+    if "pending" in buckets:
+        return "pending", detail
+    return "passing", detail
+
+
+class Queue:
+    def __init__(self, args, state, github):
+        self.github = github
+        self.state = state
+        self.log = state / "projects" / args.project / "decision-queue" / "decisions.jsonl"
+        self.merge_method = args.merge_method
+        self.snapshot = None
+        self.rows = {}
+        self.confirmations = {}
+        self.lock = threading.Lock()
+
+    def answered_findings(self, number, head):
+        ledger = self.state / "pr-loop" / f"{self.github.repo.replace('/', '-')}-{number}"
+        try:
+            with ledger.open(encoding="utf-8") as source:
+                last = ""
+                for line in source:
+                    if line.strip():
+                        last = line.strip()
+        except FileNotFoundError:
+            return None
+        except (OSError, UnicodeError):
+            return "Could not read ledger"
+        sha, separator, _ = last.partition("\t")
+        if not separator:
+            return "No head recorded"
+        return "Current head" if sha == head else "Earlier head"
+
+    def read_row(self, pr, token):
+        number, head = pr["number"], pr["headRefOid"]
+        checks = self.github.checks(number, token)
+        if checks and self.github.ci_scope != "none":
+            try:
+                if self.github.head(number, token) != head:
+                    checks = None
+            except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+                checks = None
+        ci, detail = ci_status(checks)
+        actions = ["close", "comment"]
+        if (
+            self.merge_method and head and pr["isDraft"] is False
+            and pr["mergeable"] == "MERGEABLE" and ci in ("passing", "skipped")
+            and pr.get("isMergeQueueEnabled") is False
+        ):
+            actions.insert(0, "merge")
+        return checks, {
+            "number": number,
+            "title": pr["title"],
+            "author": (pr["author"] or {}).get("login") or "Unknown author",
+            "created_at": pr["createdAt"],
+            "is_draft": pr["isDraft"],
+            "mergeable": pr["mergeable"],
+            "ci": ci,
+            "ci_detail": detail,
+            "review": "UNKNOWN",
+            "answered_findings": self.answered_findings(number, head),
+            "screenshot": self.github.screenshot(number, pr["body"], token),
+            "head_sha": head,
+            "actions": actions,
+        }
+
+    def refresh(self):
+        with self.lock:
+            token = self.github.token()
+            try:
+                prs = self.github.open_prs(token)
+                with ThreadPoolExecutor(max_workers=4) as workers:
+                    results = list(workers.map(lambda pr: self.read_row(pr, token), prs))
+            except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError, AttributeError):
+                raise Refused("Could not read the open pull requests from GitHub.", HTTPStatus.BAD_GATEWAY)
+            results.sort(key=lambda item: (CI_ORDER[item[1]["ci"]], item[1]["created_at"], item[1]["number"]))
+            self.rows = {row["number"]: (checks, row) for checks, row in results}
+            self.snapshot = secrets.token_urlsafe(24)
+            self.confirmations.clear()
+            return {
+                "repository": self.github.repo,
+                "snapshot_id": self.snapshot,
+                "merge_notice": None if self.merge_method else "Set merge.method in .agents/stack.yml to enable merge.",
+                "rows": [row for _, row in results],
+            }
+
+    def action(self, data):
+        with self.lock:
+            if "action_id" in data:
+                if set(data) != {"action_id"} or not isinstance(data["action_id"], str):
+                    raise Refused("Supply only the action id to confirm.", HTTPStatus.BAD_REQUEST)
+                entry = self.confirmations.pop(data["action_id"], None)
+                if entry is None or entry[2] <= time.monotonic() or entry[0] not in self.rows:
+                    raise Refused("Confirmation expired or was already used. Start the action again.")
+                number, action, _ = entry
+                return self.execute(number, action, "")
+
+            if data.get("snapshot_id") != self.snapshot:
+                raise Refused("The queue changed. Refresh before acting.")
+            number, action, note = data.get("number"), data.get("action"), data.get("note", "")
+            if type(number) is not int or not isinstance(action, str) or not isinstance(note, str):
+                raise Refused("Invalid pull request, action, or note.", HTTPStatus.BAD_REQUEST)
+            if number not in self.rows or action not in self.rows[number][1]["actions"]:
+                raise Refused("This action is unavailable for the pull request.")
+            if action == "comment":
+                try:
+                    size = len(note.encode("utf-8"))
+                except UnicodeError:
+                    raise Refused("Enter a valid UTF-8 note.", HTTPStatus.BAD_REQUEST)
+                if not note.strip() or size > MAX_NOTE:
+                    raise Refused("Enter a note up to 16 KiB.", HTTPStatus.BAD_REQUEST)
+                return self.execute(number, action, note)
+
+            now = time.monotonic()
+            self.confirmations = {
+                key: entry for key, entry in self.confirmations.items()
+                if entry[2] > now and entry[0] != number
+            }
+            action_id = secrets.token_urlsafe(24)
+            self.confirmations[action_id] = (number, action, now + CONFIRM_SECONDS)
+            return {"action_id": action_id}
+
+    def recheck_merge(self, number, checks, head, token):
+        current_checks = self.github.checks(number, token)
+        try:
+            response = self.github.graph(MERGE_QUERY, token, number)
+            if response.get("errors"):
+                raise ValueError("Incomplete pull request response")
+            pr = response["data"]["repository"]["pullRequest"]
+            if not isinstance(pr, dict):
+                raise ValueError("Pull request unavailable")
+        except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError, AttributeError):
+            raise Refused("Could not recheck the pull request. Refresh before merging.")
+        if pr.get("headRefOid") != head:
+            raise Refused("The head SHA changed. Refresh before merging.")
+        if current_checks != checks:
+            raise Refused("CI checks changed. Refresh before merging.")
+        if pr.get("isMergeQueueEnabled") is not False:
+            raise Refused("A direct merge is unavailable because merge queue status changed or is unknown.")
+        if pr.get("state") != "OPEN" or pr.get("isDraft") is not False or pr.get("mergeable") != "MERGEABLE":
+            raise Refused("The pull request is no longer mergeable. Refresh before acting.")
+
+    def execute(self, number, action, note):
+        checks, row = self.rows[number]
+        head = row["head_sha"]
+        token = self.github.token()
+        args = ["pr", action, str(number), "--repo", self.github.repo]
+        if action == "merge":
+            self.recheck_merge(number, checks, head, token)
+            args += [f"--{self.merge_method}", "--match-head-commit", head]
+        elif action == "comment":
+            args += ["--body-file", "-"]
+
+        if not outside_checkout(self.log):
+            raise Refused("Set KSTACK_STATE outside every Git checkout to record decisions.")
+        try:
+            self.log.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            fd = os.open(self.log, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        except OSError:
+            raise Refused(f"Could not open the decision log at {self.log}.")
+        result = None
+        with os.fdopen(fd, "ab", buffering=0) as output:
+            try:
+                result = self.github.run(args, token, note=note if action == "comment" else None)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            record = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "repository": self.github.repo, "pr_number": number, "head_sha": head,
+                "action": action, "note": note,
+                "gh_exit_code": result.returncode if result else None,
+            }
+            try:
+                output.write((json.dumps(record) + "\n").encode("utf-8"))
+            except OSError:
+                raise Refused("The GitHub action ran, but the decision log failed. Refresh before retrying.")
+        if result is None:
+            raise Refused("GitHub CLI did not return an exit code. Check GitHub before retrying.", HTTPStatus.BAD_GATEWAY)
+        if result.returncode:
+            reason = result.stderr.strip().replace(token, "[redacted]")
+            raise Refused(f"GitHub CLI exited {result.returncode}. {reason}".strip(), HTTPStatus.BAD_GATEWAY)
+        if action != "comment":
+            del self.rows[number]
+        message = {"merge": "Merged", "close": "Closed", "comment": "Commented on"}[action]
+        return {"message": f"{message} #{number}."}
+
+
+class Handler(BaseHTTPRequestHandler):
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(10)
+
+    def log_message(self, *_):
+        # Request URLs carry the local token.
+        pass
+
+    def reply(self, status, body, media_type, nonce=None):
+        self.send_response(status)
+        self.send_header("Content-Type", f"{media_type}; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        policy = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+        if nonce:
+            policy += f"; connect-src 'self'; script-src 'nonce-{nonce}'; style-src 'nonce-{nonce}'"
+        self.send_header("Content-Security-Policy", policy)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def json_reply(self, status, data):
+        self.reply(status, json.dumps(data).encode("utf-8"), "application/json")
+
+    def request_path(self, post=False):
+        if not self.path.startswith("/"):
+            raise Refused("This request is not authorized.", HTTPStatus.FORBIDDEN)
+        url = urlsplit(self.path)
+        tokens = parse_qs(url.query).get("token", [])
+        if (
+            self.headers.get_all("Host") != [self.server.host]
+            or len(tokens) != 1
+            or not secrets.compare_digest(tokens[0].encode("utf-8"), self.server.token)
+            or url.scheme or url.netloc
+            or (post and self.headers.get_all("Origin") != [f"http://{self.server.host}"])
+        ):
+            raise Refused("This request is not authorized.", HTTPStatus.FORBIDDEN)
+        return url.path
+
+    def do_GET(self):
+        try:
+            path = self.request_path()
+            if path == "/":
+                nonce = secrets.token_urlsafe(24)
+                page = self.server.page.replace("__CSP_NONCE__", nonce)
+                self.reply(HTTPStatus.OK, page.encode("utf-8"), "text/html", nonce)
+            elif path == "/api/queue":
+                self.json_reply(HTTPStatus.OK, self.server.queue.refresh())
+            else:
+                raise Refused("Page not found.", HTTPStatus.NOT_FOUND)
+        except Refused as error:
+            self.json_reply(error.status, {"error": str(error)})
+
+    def do_POST(self):
+        try:
+            if self.request_path(post=True) != "/api/actions":
+                raise Refused("Page not found.", HTTPStatus.NOT_FOUND)
+            lengths = self.headers.get_all("Content-Length") or []
+            if (
+                self.headers.get_content_type() != "application/json" or self.headers.get("Transfer-Encoding")
+                or len(lengths) != 1 or not re.fullmatch(r"[0-9]{1,6}", lengths[0])
+                or not 0 < int(lengths[0]) <= MAX_BODY
+            ):
+                raise Refused("Expected a JSON action.", HTTPStatus.BAD_REQUEST)
+            try:
+                data = json.loads(self.rfile.read(int(lengths[0])))
+            except (ValueError, TimeoutError):
+                data = None
+            if not isinstance(data, dict):
+                raise Refused("Expected a JSON action object.", HTTPStatus.BAD_REQUEST)
+            self.json_reply(HTTPStatus.OK, self.server.queue.action(data))
+        except Refused as error:
+            self.json_reply(error.status, {"error": str(error)})
+
+
+def configuration(script):
+    parser = argparse.ArgumentParser(description=__doc__)
+    required = {
+        "project": "project", "ci-checks": "ci.checks", "maintainer": "identities.maintainer",
+        "repo": "the consuming repository's GitHub remote (no .agents/stack.yml key)",
+    }
+    for flag, key in required.items():
+        parser.add_argument(f"--{flag}", help=f"Required. Read {key}.")
+    parser.add_argument("--merge-method", choices=("merge", "squash", "rebase"), help="Read merge.method.")
+    args = parser.parse_args()
+    missing = [f"--{flag} ({key})" for flag, key in required.items() if not getattr(args, flag.replace("-", "_"))]
+    if missing:
+        parser.error("missing " + ", ".join(missing) + "; read .agents/stack.yml and the consuming repository remote")
+    if args.project in (".", "..") or not re.fullmatch(r"[\w.-]+", args.project):
+        parser.error("project must be a state directory name")
+    if args.ci_checks not in ("required", "all", "none"):
+        parser.error("ci.checks must be required, all, or none")
+    if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9_.-]+", args.repo) or args.repo.split("/")[1] in (".", ".."):
+        parser.error("--repo must be a GitHub.com owner/repo")
+    resolver = script.parents[4] / "bin" / "resolve-identities"
+    resolved = subprocess.run(
+        [sys.executable, str(resolver), "--project", args.project], capture_output=True, text=True,
+    )
+    if resolved.returncode:
+        parser.error(resolved.stderr.strip())
+    identities = json.loads(resolved.stdout)
+    if identities is not None:
+        args.maintainer = identities["maintainer"]
+    if not re.fullmatch(r"[A-Za-z0-9-]+", args.maintainer) or args.maintainer.lower() == "null":
+        parser.error("identities.maintainer must be a GitHub login")
+    return args
+
+
+def main():
+    script = Path(__file__).resolve()
+    args = configuration(script)
+    state = Path(os.environ.get("KSTACK_STATE") or Path.home() / ".kstack").expanduser().resolve()
+    page = (script.parent.parent / "page.html").read_text(encoding="utf-8")
+    with tempfile.TemporaryDirectory(prefix="kstack-decision-queue-", dir="/tmp") as cwd:
+        if not outside_checkout(Path(cwd)):
+            raise SystemExit("Refused to run GitHub CLI from inside a Git checkout.")
+        with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+            server.host = f"127.0.0.1:{server.server_port}"
+            token = secrets.token_urlsafe(32)
+            server.token = token.encode("utf-8")
+            server.page = page
+            server.queue = Queue(args, state, GitHub(args, cwd))
+            print(f"http://{server.host}/?token={token}", flush=True)
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                pass
+
+
+if __name__ == "__main__":
+    main()
