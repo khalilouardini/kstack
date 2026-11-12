@@ -105,7 +105,7 @@ half-day estimate, refuses to estimate what it cannot name),
 
 | Skill | Does | Enforcement |
 |---|---|---|
-| [`/session-batch`](tools/linear/session-batch/SKILL.md) | One supervisor, independent ticket sessions and ordered review | Controller exists; bundled Claude host adapter is read-only and refuses launch |
+| [`/session-batch`](tools/linear/session-batch/SKILL.md) | One supervisor, independent ticket sessions and ordered review | persistent SDK worker, source-evidence bridge and dependency-aware scheduler; live ticket validation pending |
 | [`/wave`](tools/linear/wave/SKILL.md) | One fixed batch; opt-in streaming build/review | prompt-level checkpoints; script checks approval and final heads; cooperative process limits; Codex selection only |
 | [`/dispatch-implementation`](tools/linear/dispatch-implementation/SKILL.md) | Starts one approved issue in an isolated worktree and automatically moves it to the contract's started status after the worktree exists | Linear write + mandatory read-back; prompt-level outside the skill |
 | [`/investigate`](core/investigate/SKILL.md) | Root-cause debugging: no fix before the cause is found; three failed attempts stops the run; every fix ships a fail-then-pass test | prompt + optional scope lock |
@@ -168,11 +168,11 @@ is explicit; installing the skill does not enable continuous synchronization.
 ## Choose a workflow
 
 For one existing ticket, use `/next` and then `/dispatch-implementation`.
-For delegated batches, `/session-batch` defines one supervisor and independent
-Claude ticket sessions with dependency-ordered reviews. Its controller currently
-requires a verified host adapter; the included Claude registry adapter is read-only
-and refuses session creation. Until a full adapter is verified, it falls back to
-read-only `/next --parallel` recommendations and manual dispatch.
+For delegated batches, `/session-batch` uses one supervisor, persistent independent
+Claude ticket sessions and dependency-ordered reviews. The supervisor supplies
+fresh tracker and forge evidence; the adapter checks local Git and actual SDK
+session initialization. Runtime fixtures pass offline; a live ticket evaluation
+remains pending. See the skill for one-time SDK setup and host limitations.
 
 Use `/wave` explicitly for its coordinated Workflow graph and human plan checkpoint.
 Claude Code runs the Workflow graph; Codex runs selection only. Legacy execution

@@ -149,6 +149,12 @@ write landed; it is not a global guarantee about other sessions.
 
 ## 4. Route plan-only, then stop for approval
 
+**Inside `/session-batch`:** the supervisor performs §§1–3 as the preparation
+for that batch's one persistent Claude worker; do not launch a second executor
+here. A single explicit batch grant may authorize implementation after an
+independent exact-plan PASS and fresh admission. Forward that grant and evidence;
+without it retain the ordinary human approval checkpoint below.
+
 **Graph node / `--plan-only` mode (prompt-level):** run §1–3 unchanged,
 including the isolated workspace and status ledger/write/read-back. In §4,
 write the acceptance-cited plan in the current agent and return it; launch no

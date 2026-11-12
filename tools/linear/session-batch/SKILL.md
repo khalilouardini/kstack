@@ -1,6 +1,6 @@
 ---
 name: session-batch
-version: 0.1.0
+version: 0.2.0
 description: Supervise one selected Linear batch using independent Claude ticket sessions, one authorization, bounded plan validation and dependency-aware review. Use for delegating several tickets; wave remains an explicit option. (kstack)
 ---
 
@@ -20,17 +20,37 @@ PRs. Repeat any explicit graph-source flags exactly; never infer local-graph or
 accepted-PR approval. This is not merge, deployment, scope change, or completion
 approval. A plan-only evaluation never starts implementation or review.
 
-## Host capability and current limit
+## Claude runtime
 
-Resolve the physical stack root. Before any write or tracker transition, check that
-a trusted host adapter supports the entire requested lifecycle and can bind the
-same actual Claude session across plan and implementation. The included Claude
-registry adapter only observes session state and deliberately refuses session
-creation: background resume can fork a different session and plan-to-build mode
-transition has not been verified. Do not bypass that refusal with a prompt, a
-mock, or a replacement session. With no capable adapter, offer the ordinary
-read-only `/next --parallel` result and separate manual dispatch kickoffs; report
-that automatic delegation did not run. Never silently substitute Wave.
+Resolve the physical stack root. The default adapter uses one persistent Claude
+Agent SDK client and one Claude process per ticket, with a private file mailbox.
+It starts in real Plan mode, checks the SDK initialization's full session UUID,
+working directory and permission mode, and denies non-read tools through a
+fail-closed hook during planning. After independent plan validation the *same*
+client switches to Claude's normal `auto` permission mode for implementation.
+The worker stays alive for the ordered review loop and any fixes. A missing or
+uncertain worker is never silently recreated or resumed as a different session.
+
+The runtime requires the signed-in Claude CLI and Python SDK version 0.2.180.
+Check `claude auth status` and the installed SDK before workspace/status writes.
+If needed, set up a dedicated venv once using `requirements.txt` in this skill's
+directory, under `${KSTACK_STATE:-$HOME/.kstack}/runtimes/claude-session-batch-0.2.180`;
+the adapter automatically uses its `bin/python`. An explicit
+`KSTACK_CLAUDE_PYTHON` may select another compatible environment. With the
+physical root in `STACK_ROOT`, the one-time setup is:
+
+```bash
+session_runtime_dir="${KSTACK_STATE:-$HOME/.kstack}/runtimes/claude-session-batch-0.2.180"
+python3 -m venv "$session_runtime_dir"
+"$session_runtime_dir/bin/python" -m pip install -r "$STACK_ROOT/tools/linear/session-batch/requirements.txt"
+```
+
+A missing capability or denied permission holds that track; do not use bypass permissions.
+The SDK/CLI path is covered by offline fixtures, not yet validated with a live
+Claude ticket. Report that limitation until a live evaluation is completed.
+The `--restricted` CLI mode confines Claude file tools to its worktree; shell
+commands can have broader effects and remain subject to host permissions and
+prompt-level scope rules. Do not describe it as a shell sandbox.
 
 ## One supervisor and one selection
 
@@ -58,7 +78,7 @@ source pins, per-ticket session UUID, worktree and branch, plan digest, validati
 PR URL, reviewed head, status and stop reason. Persist and resume this run rather
 than starting a second coordinator. Never steal an ambiguous or abandoned claim.
 
-A worker refreshes its issue, scope, dependency, ownership and admission evidence
+The supervisor refreshes each issue’s scope, dependency, ownership and admission evidence
 before workspace/status writes, without repeating the entire selection. Use
 canonical dispatch lifecycle and its read-back; resume verified active ownership,
 never create a duplicate. Start the exact Claude session in actual Plan mode with
@@ -66,19 +86,35 @@ a hard read-only boundary. Do not infer host permission mode from prompt text.
 
 ## Controller interface and evidence
 
-`tools/linear/session-batch/bin/session-batch` accepts `--state-root` and a
-trusted absolute `--adapter` module. The only valid state root is the real Git
-common directory plus `/kstack-session-batch`; use the same root across all
-worktrees. `create <input.json>` binds an explicit authorization, `mode`
-(`plan_only` or `implement`), issue IDs and maximum tracks, policy limits,
-complete selector input and source-backed review edges. A verified adapter must
-independently attest authorization, batch dependencies and the review graph.
-Read the exact [adapter evidence contract](references/adapter.md) before use.
-The controller rejects incomplete proofs and unstartable lifecycle states.
-`tick <run-id>` advances one bounded supervisory pass; it is not a daemon.
-`queue` and `show` inspect a run. Use `--help` for the individual transition
-commands. The meta-agent retains the original authorization and never invents
-an evidence receipt to satisfy the adapter interface.
+`tools/linear/session-batch/bin/session-batch` defaults to the persistent Claude
+adapter; `--adapter <absolute-module>` is an explicit alternative. The only valid
+`--state-root` is the real Git common directory plus `/kstack-session-batch`,
+shared by every worktree. `create <input.json>` binds the original user's scope,
+mode (`plan_only` or `implement`), selected issue IDs and maximum tracks, policy
+limits, complete selection input and source-backed review edges. A scope-and-cap
+batch grant can authorize IDs selected later within that scope; do not pretend the
+user individually named those IDs. Preserve the original grant citation.
+
+The supervising meta-agent is the evidence collector. Start `create` or `tick`
+as a background command, poll `evidence-pending <run-id>`, read the requested original
+Linear/GitHub/scope evidence with the available connector, and answer each request
+using `evidence-respond <run-id> <request-id> <result.json>`. Each request and response
+is private to the Git common directory and bound to the exact request. Service
+multiple pending requests without serializing independent workers. Resume the
+same run and check `queue`/`show`; `tick` performs one bounded pass, not a daemon.
+Read the exact [adapter evidence contract](references/adapter.md) for result
+schemas and proof duties. The bridge transports the supervisor's observations;
+it does not independently authenticate model assertions. Missing, stale or
+ambiguous source evidence holds the relevant transition. Never manufacture a
+receipt to satisfy the interface.
+
+For `prepareSession`, perform only the canonical dispatch admission, workspace
+creation and tracker read-back steps (§1–3); do not launch dispatch's own plan
+executor. Return the verified worktree/branch, actual status and scoped worker
+prompts. The adapter separately checks the actual Git common directory, branch,
+clean workspace and base. If the batch explicitly permits only read-only tracker
+use, create the local workspace without a Linear status mutation and report the
+observed eligible status. The runtime starts the one plan-mode executor.
 
 Plan-only is immutable for the run: no direct transition or `tick` may build or
 review. A completed plan releases its worker slot only after the same session is

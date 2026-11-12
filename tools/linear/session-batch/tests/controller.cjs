@@ -143,7 +143,7 @@ test('supervisor tick advances independent tracks in parallel and survives sibli
   assert.equal(tracks['T-2'].state,'BLOCKED');assert.equal(tracks['T-3'].state,'COMPLETED');
 });
 test('timed-out host operation remains reserved while independent work continues',async()=>{
-  const a=makeAdapter(), c=controller('timeout',a), x=input('run',['T-1','T-2']);x.policy.operation_timeout_ms=100;
+  const a=makeAdapter(), c=controller('timeout',a), x=input('run',['T-1','T-2']);x.policy.operation_timeout_ms=1000;
   const original=a.ensureSession;a.ensureSession=async args=>args.issue_id==='T-1' ? new Promise(()=>{}) : original(args);
   await c.create(x);const first=await c.tick('run');
   assert.ok(first.results.some(r=>r.issue_id==='T-1' && r.state==='UNKNOWN_IN_FLIGHT'));
@@ -289,5 +289,76 @@ test('unknown host guarantees, invalid lifecycle, cyclic or incomplete graph ref
   a.verifyReviewGraph=async x=>({complete:true,source:'verified',digest:hash,checked_at:new Date().toISOString(),edges:x.review_edges,issues:Object.fromEntries(x.selection_snapshot.candidates.map(c=>[c.issue_id,hash]))});a.idempotentSessionCreation=false;
   await c.create(input('no-host',['T-1']));await assert.rejects(()=>c.start('no-host','T-1'),/cannot guarantee/);assert.equal(a.sessions.size,0);
   assert.equal(fs.readdirSync(path.join(fixtureRepo,'.git','kstack-session-batch','claims')).length,0,'unsupported host cannot claim issue');
+});
+test('a requested revision is sent to the same session and independently revalidated',async()=>{
+  const a=makeAdapter(),c=controller('plan-revision',a);await c.create(input('run',['T-1']));
+  const started=await c.start('run','T-1');a.verdict='REVISE';
+  assert.equal((await c.plan('run','T-1',plan(started))).state,'REVISE');
+  let sent;
+  a.revisePlan=async x=>{sent=x;return {state:'WAIT',session_id:x.session_id};};
+  a.pollPlan=async x=>({state:'READY',session_id:x.session_id,plan:{...plan(x),text:'Revised plan cites the feedback'}});
+  await c.tick('run');assert.equal(sent.session_id,started.session_id);
+  assert.equal(c.snapshot('run').tracks['T-1'].operation,'AWAIT_REVISION');
+  a.verdict='PASS';await c.tick('run');
+  const t=c.snapshot('run').tracks['T-1'];assert.equal(t.phase,'BUILD');assert.equal(t.plan_revisions,1);
+  assert.equal(t.plan.text,'Revised plan cites the feedback');
+});
+test('asynchronous workers retain slots and dependency-order reviews without a global barrier',async()=>{
+  const a=makeAdapter(),c=controller('async-worker',a);
+  const edges=[{from:'T-1',to:'T-2',from_event:'review',to_event:'review',source:'graph'}];
+  await c.create(input('run',['T-1','T-2'],edges));
+  for(const id of ['T-1','T-2']) {const t=await c.start('run',id);await c.plan('run',id,plan(t));}
+  let buildsDone=false,reviewsDone=false;
+  a.build=async x=>({state:'WAIT',session_id:x.session_id});
+  a.pollBuild=async x=>{if(!buildsDone)return {state:'WAIT',session_id:x.session_id};a.heads.set(x.issue_id,head);return {state:'PR_OPEN',session_id:x.session_id,pr_url:'https://example.test/'+x.issue_id,head_sha:head,session_idle:true,evidence:'verified PR'};};
+  a.review=async x=>({state:'WAIT',session_id:x.session_id});
+  a.pollReview=async x=>reviewsDone ? {verdict:'CLEAN',head_sha:head,review_id:'review-'+x.issue_id,reviewer_id:'independent',independent:true,review_process_stopped:true,ci:'GREEN',evidence:'verified review'} : {state:'WAIT',session_id:x.session_id};
+  for(const id of ['T-1','T-2']) {assert.equal((await c.beginBuild('run',id)).state,'WAITING');assert.equal((await c.finishBuild('run',id)).state,'WAITING');}
+  assert.ok(c.snapshot('run').tracks['T-1'].worker_slot);
+  buildsDone=true;for(const id of ['T-1','T-2']) assert.equal((await c.finishBuild('run',id)).phase,'REVIEW');
+  assert.equal((await c.review('run','T-2')).state,'BLOCKED');
+  assert.equal((await c.review('run','T-1')).state,'WAITING');
+  assert.deepEqual((await c.reviewQueue('run')).running,['T-1']);
+  assert.equal((await c.finishReview('run','T-1')).state,'WAITING');
+  assert.equal((await c.review('run','T-2')).state,'BLOCKED');
+  reviewsDone=true;assert.equal((await c.finishReview('run','T-1')).state,'COMPLETED');
+  assert.equal((await c.review('run','T-2')).state,'WAITING');
+  assert.equal((await c.finishReview('run','T-2')).state,'COMPLETED');
+});
+test('blocked reviews do not need a fabricated submitted review and unknown builds retain claims',async()=>{
+  const a=makeAdapter(),c=controller('async-blocked',a);await c.create(input('run',['T-1','T-2']));
+  for(const id of ['T-1','T-2']) {const t=await c.start('run',id);await c.plan('run',id,plan(t));}
+  const syncBuild=a.build;
+  a.build=async x=>x.issue_id==='T-1' ? syncBuild(x) : {state:'WAIT',session_id:x.session_id};
+  assert.equal((await c.beginBuild('run','T-1')).phase,'REVIEW');
+  assert.equal((await c.beginBuild('run','T-2')).state,'WAITING');
+  a.pollBuild=async()=>({state:'UNKNOWN',reason:'worker disappeared'});
+  const uncertain=await c.finishBuild('run','T-2');assert.equal(uncertain.state,'ERROR');
+  assert.equal(uncertain.uncertain_operation,true);assert.ok(fs.existsSync(uncertain.worker_slot));
+  a.review=async x=>({state:'WAIT',session_id:x.session_id});
+  a.pollReview=async()=>({verdict:'BLOCKED',reason:'Bash permission denied',review_process_stopped:true,evidence:'process exit'});
+  assert.equal((await c.review('run','T-1')).state,'WAITING');
+  const blocked=await c.finishReview('run','T-1');assert.equal(blocked.state,'BLOCKED');
+  assert.equal(blocked.review.review_id,undefined);assert.equal(blocked.review_slot,null);
+  assert.match((await c.reviewQueue('run')).blocked[0].reason,/Bash permission denied/);
+});
+test('invalid run IDs cause no lock writes, including direct library calls',async()=>{
+  const a=makeAdapter(),c=controller('invalid-run-lock',a);await c.create(input('run',['T-1']));
+  const original=fs.mkdirSync,calls=[];
+  fs.mkdirSync=function(p,...args){calls.push(String(p));return original.call(this,p,...args);};
+  try {
+    await assert.rejects(()=>c.tick('../../escape'),/invalid run ID/);
+    await assert.rejects(()=>c.start('../../escape','T-1'),/invalid run ID/);
+  } finally {fs.mkdirSync=original;}
+  assert.deepEqual(calls,[],'invalid identifiers must not touch any filesystem path');
+});
+test('unselected review targets are ignored without losing incoming prerequisites',async()=>{
+  const a=makeAdapter(),c=controller('irrelevant-review-targets',a);
+  const edges=[{from:'T-1',to:'T-2',from_event:'review',to_event:'review',source:'graph'},
+    {from:'outside',to:'T-1',from_event:'merge',to_event:'review',source:'graph'}];
+  const x=input('run',['T-1','T-2'],edges);x.selection_snapshot.candidates[1].lifecycle.state='READ_ONLY_ONLY';
+  const run=await c.create(x);
+  assert.deepEqual(Object.keys(run.tracks),['T-1']);
+  assert.deepEqual(run.review_edges,[edges[1]]);
 });
 (async()=>{let failed=0;for(const t of tests)try{await t.f();console.log('PASS '+t.name);}catch(e){failed++;console.error('FAIL '+t.name+' '+e.stack);}console.log((tests.length-failed)+'/'+tests.length+' passed');if(failed)process.exitCode=1;})();

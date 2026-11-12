@@ -122,11 +122,10 @@ a recorded human decision and carries forward unresolved findings.
 
 The default batch-delegation route is `/session-batch`: one supervising
 meta-agent tracks each independent ticket session and releases reviews in actual
-dependency order. The controller and its evidence ledger are available, but the
-bundled Claude adapter is currently read-only and refuses session launch until a
-same-session Plan-to-build lifecycle is verified. In that state the safe fallback
-is a read-only `/next --parallel` recommendation and manual dispatch. Explicit
-`/wave` remains available for coordinated batches.
+dependency order. The controller uses a persistent Claude SDK client per ticket
+and a request-bound source-evidence bridge to the supervisor. Offline fixtures
+exercise the same-session lifecycle; a live ticket evaluation remains pending.
+Explicit `/wave` remains available for coordinated batches.
 
 ## What exists and what still needs integration
 
@@ -147,10 +146,9 @@ Its agents are inspectable as workflow tasks; that alone does not prove a
 persistent, separate Desktop session per ticket. Do not claim these requirements
 are implemented by enabling Ultracode or renaming a workflow node.
 
-The next implementation should be a thin project controller and session adapter
-that reuse the existing skills. No new `/orchestrate` command exists yet. Validate
-host session capabilities before choosing its API; do not invent launch flags,
-Workflow options or a Desktop automation API.
+The session adapter uses the Claude Agent SDK and existing skills; no new
+`/orchestrate` command or Desktop automation API is required. Validate the live
+host lifecycle before relying on it in production work.
 
 The [wave throughput design](docs/wave-throughput-design.md) scopes a smaller
 precursor: compare one fixed wave with three manually dispatched sessions, remove

@@ -117,7 +117,7 @@ class Controller {
   runFile(id) { assert(/^[a-zA-Z0-9_-]{1,100}$/.test(id || ''), 'invalid run ID'); return path.join(this.root,'runs',id+'.json'); }
   runLock(id) { return this.runFile(id)+'.lock'; }
   claimDir(repo,issue) { return path.join(this.root,'claims',sha(repo+'\0'+issue)); }
-  trackLock(id,issue) { return path.join(this.root,'runs',id+'-'+sha(issue)+'.lock'); }
+  trackLock(id,issue) { this.runFile(id); return path.join(this.root,'runs',id+'-'+sha(issue)+'.lock'); }
   async update(id, fn) { return lock(this.runLock(id), async()=>{ const p=this.runFile(id), data=read(p); const value=await fn(data); atomic(p,data); return value; }); }
   snapshot(id) {
     const run=read(this.runFile(id));
@@ -155,20 +155,24 @@ class Controller {
       Number.isSafeInteger(auth.max_tracks) && auth.max_tracks>0 && s.requested<=auth.max_tracks &&
       input.policy.worker_concurrency<=auth.max_tracks && [...ids].every(id=>auth.issue_ids.includes(id)),
       'explicit authorization must cover run mode, selected issues and requested capacity');
-    const grant=await hostMethod(this.adapter,'verifyRunAuthorization')({repo,authorization:auth,policy:input.policy,selection_snapshot:s});
+    const grant=await hostMethod(this.adapter,'verifyRunAuthorization')({run_id:input.run_id,repo,authorization:auth,policy:input.policy,selection_snapshot:s});
     assert(grant?.state==='APPROVED' && grant.mode===auth.mode && text(grant.source) &&
       grant.authorization_digest===digest(auth), 'verified exact run authorization required');
-    assert(Array.isArray(input.review_edges), 'explicit review graph required'); validateEdges(input.review_edges,ids);
+    assert(Array.isArray(input.review_edges) && input.review_edges.every(e=>e && text(e.to)), 'explicit review graph required');
+    // Edges to unselected targets cannot constrain this batch. Keep edges
+    // from external prerequisites into selected targets.
+    const reviewEdges=input.review_edges.filter(e=>ids.has(e.to));
+    validateEdges(reviewEdges,ids);
     // Legacy selector may propose Backlog advisory planning. Hold it rather
     // than dispatching it, and keep all held/capacity decisions visible.
-    const batchProof=await hostMethod(this.adapter,'captureBatch')({repo,selection_snapshot:s,selected_ids:[...ids]});
+    const batchProof=await hostMethod(this.adapter,'captureBatch')({run_id:input.run_id,repo,selection_snapshot:s,selected_ids:[...ids]});
     assert(batchProof?.complete===true && text(batchProof.source) && batchProof.issues &&
       [...ids].every(id=>isHash(batchProof.issues[id])) && batchProof.admissions &&
       [...ids].every(id=>validFacts(batchProof.admissions[id]?.plan) &&
         (input.policy.mode==='plan_only' || validFacts(batchProof.admissions[id]?.build))),
       'complete selected-batch dependency and phase evidence required');
-    const graphProof=reviewedGraph(await hostMethod(this.adapter,'verifyReviewGraph')({repo,selection_snapshot:s,review_edges:input.review_edges,fresh:true}),ids,true);
-    for (const id of ids) assert(reviewFingerprint(graphProof.edges,id)===reviewFingerprint(input.review_edges,id),
+    const graphProof=reviewedGraph(await hostMethod(this.adapter,'verifyReviewGraph')({run_id:input.run_id,repo,selection_snapshot:s,review_edges:reviewEdges,fresh:true}),ids,true);
+    for (const id of ids) assert(reviewFingerprint(graphProof.edges,id)===reviewFingerprint(reviewEdges,id),
       'selection review dependencies differ from fresh graph: '+id);
     graphProof.fingerprints=Object.fromEntries([...ids].map(id=>[id,reviewFingerprint(graphProof.edges,id)]));
     const tracks=Object.fromEntries([...ids].map(id=>[id,{issue_id:id,state:'READY',phase:'PLAN',
@@ -184,7 +188,7 @@ class Controller {
       assert(!fs.existsSync(f), 'run already exists; resume it');
       const run={schema_version:1,run_id:input.run_id,repo,repository_common_dir:common,created_at:now(),policy:input.policy,authorization:auth,authorization_evidence:grant,
         selection_snapshot:s,selection_output:output,held_lifecycle_ids:held,
-        deferred_capacity_ids:startable.slice(s.requested),review_edges:input.review_edges,
+        deferred_capacity_ids:startable.slice(s.requested),review_edges:reviewEdges,
         review_graph_evidence:graphProof,batch_evidence:batchProof,tracks};
       atomic(f,run); return run;
     });
@@ -282,7 +286,7 @@ class Controller {
       await save({state:'RUNNING',operation:'ENSURE_SESSION',worker_slot:workerSlot,batch_admission:batch,admission,selection_main_check:baseCheck,error:null},'SESSION_ENSURE');
       // ensureSession MUST recover this exact deterministic ID on retries or fail;
       // adapters without that guarantee must return UNKNOWN and must not create.
-      const session=await hostMethod(this.adapter,'ensureSession')({run_id:runId,issue_id:issue,session_id:t.session_id,repo:run.repo,admission});
+      const session=await hostMethod(this.adapter,'ensureSession')({run_id:runId,issue_id:issue,session_id:t.session_id,repo:run.repo,admission,mode:run.policy.mode});
       assert(session && session.state==='READY' && session.session_id===t.session_id && session.issue_id===issue &&
         session.permission_mode==='plan' && text(session.branch) && path.isAbsolute(session.worktree || '') &&
         session.workspace_verified===true && session.status_verified===true && text(session.source), 'session identity, plan mode, workspace and status read-back required');
@@ -322,13 +326,29 @@ class Controller {
     if (!(idle?.state==='IDLE' && idle.session_id===t.session_id && text(idle.source)))
       return {state:'WAITING',issue_id:t.issue_id,reason:'plan session idle not verified'};
     this.releaseSlot(t.worker_slot,run,t);
-    return save({state:'COMPLETED',phase:'PLAN',operation:null,worker_slot:null,idle_evidence:idle},'PLAN_ONLY_COMPLETED');
+    const done=await save({state:'COMPLETED',phase:'PLAN',operation:null,worker_slot:null,idle_evidence:idle},'PLAN_ONLY_COMPLETED');
+    return this.finishSessionInside(run,done,save);
   }
   async finishPlanOnly(runId,issue) {
     return this.track(runId,issue,async(run,t,save)=>{
       assert(run.policy.mode==='plan_only' && t.phase==='PLAN' && t.state==='WAITING' &&
         t.validation?.verdict==='PASS' && t.validation.plan_digest===digest(t.plan), 'plan-only completion not awaiting idle');
       return this.finishPlanOnlyInside(run,t,save);
+    });
+  }
+  async startRevision(runId,issue) {
+    return this.track(runId,issue,async(run,t,save)=>{
+      assert(t.state==='REVISE' && t.phase==='PLAN' && t.operation!=='AWAIT_REVISION' &&
+        t.validation?.verdict==='REVISE' && t.validation.plan_digest===digest(t.plan), 'no exact plan revision requested');
+      const result=await hostMethod(this.adapter,'revisePlan')({run_id:runId,issue_id:issue,session_id:t.session_id,session:t.session,plan:t.plan,validation:t.validation});
+      assert(result?.state==='WAIT' && result.session_id===t.session_id, 'same-session plan revision could not be started');
+      return save({state:'REVISE',operation:'AWAIT_REVISION'},'PLAN_REVISION_IN_FLIGHT');
+    });
+  }
+  async holdUnknownPlan(runId,issue,sessionId,reason) {
+    return this.track(runId,issue,async(_run,t,save)=>{
+      assert(t.phase==='PLAN' && t.session_id===sessionId, 'plan session changed');
+      return save({state:'ERROR',uncertain_operation:true,error:reason},'PLAN_UNCERTAIN');
     });
   }
   async approvePlan(runId,issue,approval) {
@@ -355,14 +375,29 @@ class Controller {
       assert(freshEqual(run.batch_evidence.admissions[issue].build,fresh), 'approved build conditions changed');
       const baseCheck=await this.verifyMainChange(run,issue,t.plan.main_sha,fresh,'build',t.plan);
       await save({state:'RUNNING',operation:'BUILD',build_batch_admission:batch,build_admission:fresh,build_main_check:baseCheck},'BUILD_STARTED');
-      // Host resumes the SAME session; unknown results cannot become success.
+      // The worker starts asynchronously, retaining its slot while it runs.
       const result=await hostMethod(this.adapter,'build')({run_id:runId,issue_id:issue,session_id:t.session_id,session:t.session,plan:t.plan,plan_digest:t.plan_digest});
-      assert(result && result.state==='PR_OPEN' && result.session_id===t.session_id && text(result.pr_url) &&
-        isCommit(result.head_sha) && result.session_idle===true && text(result.evidence), 'same session, stopped worker and PR head evidence required');
-      this.releaseSlot(t.worker_slot,run,t);
-      return save({state:'READY',phase:'REVIEW',operation:null,worker_slot:null,pr:{url:result.pr_url,head_sha:result.head_sha,evidence:result.evidence},review:null},'REVIEW_READY');
+      if(result?.state==='WAIT' && result.session_id===t.session_id)
+        return save({state:'WAITING',phase:'BUILD',operation:'AWAIT_BUILD'},'BUILD_IN_FLIGHT');
+      return this.completeBuildInside(run,t,save,result);
     });
   }
+  async completeBuildInside(run,t,save,result) {
+    assert(result && result.state==='PR_OPEN' && result.session_id===t.session_id && text(result.pr_url) &&
+      isCommit(result.head_sha) && result.session_idle===true && text(result.evidence), 'same session, stopped worker and PR head evidence required');
+    this.releaseSlot(t.worker_slot,run,t);
+    return save({state:'READY',phase:'REVIEW',operation:null,worker_slot:null,pr:{url:result.pr_url,head_sha:result.head_sha,evidence:result.evidence},review:null},'REVIEW_READY');
+  }
+  async finishBuild(runId,issue) {
+    return this.track(runId,issue,async(run,t,save)=>{
+      assert(t.phase==='BUILD' && t.state==='WAITING' && t.operation==='AWAIT_BUILD', 'build is not awaiting completion');
+      const result=await hostMethod(this.adapter,'pollBuild')({run_id:runId,issue_id:issue,session_id:t.session_id,session:t.session,plan:t.plan,plan_digest:t.plan_digest});
+      if(result?.state==='WAIT' && result.session_id===t.session_id) return {state:'WAITING',issue_id:issue,reason:'implementation still running'};
+      if(result?.state==='UNKNOWN') return save({state:'ERROR',uncertain_operation:true,error:result.reason||'implementation status unavailable'},'BUILD_UNCERTAIN');
+      return this.completeBuildInside(run,t,save,result);
+    });
+  }
+
   async review(runId,issue) {
     return this.track(runId,issue,async(run,t,save)=>{
       assert(run.policy.mode==='implement', 'plan-only run cannot review or open a PR');
@@ -374,21 +409,52 @@ class Controller {
       // prerequisites are checked independently by reviewBlock.
       assert(freshEqual(t.build_admission,fresh), 'review conditions changed');
       const baseCheck=await this.verifyMainChange(run,issue,t.plan.main_sha,fresh,'review',t.plan);
-      const head=await hostMethod(this.adapter,'head')({pr:t.pr,issue_id:issue});
+      const head=await hostMethod(this.adapter,'head')({run_id:runId,pr:t.pr,issue_id:issue});
       assert(head===t.pr.head_sha, 'PR head moved before review');
       const reviewSlot=this.slot('reviews',run,t,run.policy.review_concurrency);
       if (!reviewSlot) return {state:'BLOCKED',issue_id:issue,reason:'review capacity unavailable'};
       await save({state:'RUNNING',operation:'REVIEW',review_slot:reviewSlot,review_main_check:baseCheck},'REVIEW_STARTED');
-      const result=await hostMethod(this.adapter,'review')({run_id:runId,issue_id:issue,session_id:t.session_id,pr:t.pr});
-      assert(result && ['CLEAN','BLOCKED','ROUNDS_EXHAUSTED'].includes(result.verdict) && isCommit(result.head_sha) &&
-        text(result.reviewer_id) && text(result.review_id) && result.reviewer_id!==t.session_id && result.independent===true && result.review_process_stopped===true && text(result.evidence), 'independent stopped exact-head review evidence required');
-      assert(await hostMethod(this.adapter,'head')({pr:t.pr,issue_id:issue})===result.head_sha, 'PR head moved after reviewed head');
-      assert(!(await this.reviewBlock(this.snapshot(runId),t)), 'review prerequisite changed during review');
-      if(result.verdict==='CLEAN') assert(result.ci==='GREEN' || result.ci==='NONE_CONFIGURED', 'reviewed-head CI evidence required');
-      this.releaseSlot(reviewSlot,run,t);
-      return save({state:result.verdict==='CLEAN'?'COMPLETED':'BLOCKED',operation:null,review_slot:null,
-        pr:{...t.pr,head_sha:result.head_sha},review:result},'REVIEW_'+result.verdict);
+      const result=await hostMethod(this.adapter,'review')({run_id:runId,issue_id:issue,session_id:t.session_id,session:t.session,pr:t.pr});
+      if(result?.state==='WAIT' && result.session_id===t.session_id)
+        return save({state:'WAITING',phase:'REVIEW',operation:'AWAIT_REVIEW'},'REVIEW_IN_FLIGHT');
+      return this.completeReviewInside(run,{...t,review_slot:reviewSlot},save,result);
     });
+  }
+  async completeReviewInside(run,t,save,result) {
+    // A blocked loop may have no submitted review. Report the actual stop
+    // reason, but only release the slot after the reviewer is verified stopped.
+    if(result?.verdict==='BLOCKED' && result.review_process_stopped===true && text(result.evidence) && text(result.reason) && !result.review_id) {
+      this.releaseSlot(t.review_slot,run,t);
+      return save({state:'BLOCKED',operation:null,review_slot:null,review:result,error:result.reason},'REVIEW_BLOCKED');
+    }
+    assert(result && ['CLEAN','BLOCKED','ROUNDS_EXHAUSTED'].includes(result.verdict) && isCommit(result.head_sha) &&
+      text(result.reviewer_id) && text(result.review_id) && result.reviewer_id!==t.session_id && result.independent===true && result.review_process_stopped===true && text(result.evidence), 'independent stopped exact-head review evidence required');
+    assert(await hostMethod(this.adapter,'head')({run_id:run.run_id,pr:t.pr,issue_id:t.issue_id})===result.head_sha, 'PR head moved after reviewed head');
+    assert(!(await this.reviewBlock(this.snapshot(run.run_id),t)), 'review prerequisite changed during review');
+    if(result.verdict==='CLEAN') assert(result.ci==='GREEN' || result.ci==='NONE_CONFIGURED', 'reviewed-head CI evidence required');
+    this.releaseSlot(t.review_slot,run,t);
+    const done=await save({state:result.verdict==='CLEAN'?'COMPLETED':'BLOCKED',operation:null,review_slot:null,
+      pr:{...t.pr,head_sha:result.head_sha},review:result},'REVIEW_'+result.verdict);
+    return result.verdict==='CLEAN' ? this.finishSessionInside(run,done,save) : done;
+  }
+  async finishReview(runId,issue) {
+    return this.track(runId,issue,async(run,t,save)=>{
+      assert(t.phase==='REVIEW' && t.state==='WAITING' && t.operation==='AWAIT_REVIEW', 'review is not awaiting completion');
+      const result=await hostMethod(this.adapter,'pollReview')({run_id:runId,issue_id:issue,session_id:t.session_id,session:t.session,pr:t.pr});
+      if(result?.state==='WAIT' && result.session_id===t.session_id) return {state:'WAITING',issue_id:issue,reason:'review still running'};
+      if(result?.state==='UNKNOWN') return save({state:'ERROR',uncertain_operation:true,error:result.reason||'review status unavailable'},'REVIEW_UNCERTAIN');
+      return this.completeReviewInside(run,t,save,result);
+    });
+  }
+
+  async finishSessionInside(run,t,save) {
+    if(typeof this.adapter.finishSession!=='function') return t;
+    try {
+      const result=await this.adapter.finishSession({run_id:run.run_id,issue_id:t.issue_id,session_id:t.session_id,session:t.session});
+      if(result?.state==='STOPPED' && result.session_id===t.session_id)
+        return save({cleanup_pending:false,cleanup_evidence:result},'SESSION_STOPPED');
+    } catch { /* Completion remains valid; surface the cleanup separately. */ }
+    return save({cleanup_pending:true},'SESSION_CLEANUP_PENDING');
   }
   async deadline(runId,timeoutMs,promise,issue=null) {
     assert(Number.isSafeInteger(timeoutMs) && timeoutMs>=100 && timeoutMs<=300000, 'invalid operation timeout');
@@ -414,20 +480,28 @@ class Controller {
   // One bounded supervisor pass: independent tracks advance concurrently.
   // Host wait/queue behavior stays in the adapter; no retry or merge is invented.
   async tick(runId) {
+    this.runFile(runId); // validate before forming or creating the tick lock
     return lock(path.join(this.root,'runs',runId+'.tick.lock'),async()=>{
       const run=this.snapshot(runId);
       const actionable=Object.values(run.tracks).filter(t=>
         (t.phase==='PLAN' && ['READY','REVISE','WAITING'].includes(t.state)) ||
-        (t.phase==='BUILD' && t.state==='READY'));
+        (t.phase==='BUILD' && ['READY','WAITING'].includes(t.state)) ||
+        (t.phase==='REVIEW' && t.state==='WAITING' && t.operation==='AWAIT_REVIEW'));
       const bounded=(promise,issue)=>this.deadline(runId,run.policy.operation_timeout_ms,promise,issue);
       const queue=await bounded(this.reviewQueue(runId),null);
       if(queue.state==='UNKNOWN_IN_FLIGHT') return {run_id:runId,results:[queue],review_queue:null};
       const actions=[...actionable.map(async t=>{
-        if(t.state==='WAITING') return {issue_id:t.issue_id,stage:'PLAN_IDLE',result:await this.finishPlanOnly(runId,t.issue_id)};
-        if(t.phase==='BUILD') return {issue_id:t.issue_id,stage:'BUILD',result:await this.beginBuild(runId,t.issue_id)};
+        if(t.phase==='PLAN' && t.state==='WAITING') return {issue_id:t.issue_id,stage:'PLAN_IDLE',result:await this.finishPlanOnly(runId,t.issue_id)};
+        if(t.phase==='BUILD') return {issue_id:t.issue_id,stage:'BUILD',result:await (t.state==='WAITING' ? this.finishBuild(runId,t.issue_id) : this.beginBuild(runId,t.issue_id))};
+        if(t.phase==='REVIEW') return {issue_id:t.issue_id,stage:'REVIEW',result:await this.finishReview(runId,t.issue_id)};
         if(!t.session) return {issue_id:t.issue_id,stage:'START',result:await this.start(runId,t.issue_id)};
+        if(t.state==='REVISE' && t.operation!=='AWAIT_REVISION')
+          return {issue_id:t.issue_id,stage:'PLAN_REVISION',result:await this.startRevision(runId,t.issue_id)};
         const observation=await hostMethod(this.adapter,'pollPlan')({run_id:runId,issue_id:t.issue_id,session:t.session,session_id:t.session_id});
         if(observation?.state==='WAIT') return {issue_id:t.issue_id,stage:'PLAN',result:observation};
+        if(observation?.state==='UNKNOWN') return {issue_id:t.issue_id,stage:'PLAN',result:await this.holdUnknownPlan(runId,t.issue_id,t.session_id,observation.reason||observation.status?.error||'plan session unavailable')};
+        if(t.state==='REVISE' && observation?.state==='READY' && digest(observation.plan)===t.plan_digest)
+          return {issue_id:t.issue_id,stage:'PLAN',result:await this.holdUnknownPlan(runId,t.issue_id,t.session_id,'revised plan did not change')};
         assert(observation?.state==='READY' && observation.session_id===t.session_id && observation.plan,
           t.issue_id+': host plan status unavailable or wrong session');
         return {issue_id:t.issue_id,stage:'PLAN',result:await this.plan(runId,t.issue_id,observation.plan)};
@@ -443,7 +517,7 @@ class Controller {
   // track error. Live head/dependency checks are repeated immediately in review.
   async reviewBlock(run,t,observed=null) {
     const ids=new Set(Object.keys(run.tracks));
-    const graph=observed || reviewedGraph(await hostMethod(this.adapter,'verifyReviewGraph')({repo:run.repo,selection_snapshot:run.selection_snapshot,review_edges:run.review_edges,fresh:true}),ids);
+    const graph=observed || reviewedGraph(await hostMethod(this.adapter,'verifyReviewGraph')({run_id:run.run_id,repo:run.repo,selection_snapshot:run.selection_snapshot,review_edges:run.review_edges,fresh:true}),ids);
     try { validateEdges(relevantReviewEdges(graph.edges,t.issue_id),ids); }
     catch (e) { return 'ticket review dependency invalid: '+e.message; }
     if (!isHash(graph.issues[t.issue_id])) return 'ticket review evidence unavailable';
@@ -455,7 +529,7 @@ class Controller {
       if (edge.from_event==='review' && dep) {
         if (!(dep?.state==='COMPLETED' && dep.review?.verdict==='CLEAN' && dep.review.head_sha===dep.pr?.head_sha))
           return 'review dependency not complete: '+edge.from;
-        if (await hostMethod(this.adapter,'head')({pr:dep.pr,issue_id:edge.from})!==dep.review.head_sha)
+        if (await hostMethod(this.adapter,'head')({run_id:run.run_id,pr:dep.pr,issue_id:edge.from})!==dep.review.head_sha)
           return 'review dependency head moved: '+edge.from;
         if (!(await this.reviewCurrent(run,dep))) return 'review dependency evidence or CI is stale: '+edge.from;
         const upstream=await this.reviewBlock(run,dep,graph);
@@ -478,7 +552,7 @@ class Controller {
     let graph=null, graphError=null;
     if (Object.values(run.tracks).some(t=>t.phase==='REVIEW' && ['READY','COMPLETED'].includes(t.state))) {
       try {
-        graph=reviewedGraph(await hostMethod(this.adapter,'verifyReviewGraph')({repo:run.repo,
+        graph=reviewedGraph(await hostMethod(this.adapter,'verifyReviewGraph')({run_id:run.run_id,repo:run.repo,
           selection_snapshot:run.selection_snapshot,review_edges:run.review_edges,fresh:true}),new Set(Object.keys(run.tracks)));
       } catch(e) { graphError='dependency evidence unavailable: '+e.message; }
     }
@@ -488,17 +562,17 @@ class Controller {
         let reason;
         try { reason=graphError || await this.reviewBlock(run,t,graph); } catch(e) { reason='dependency evidence unavailable: '+e.message; }
         (reason ? result.blocked : result.ready).push(reason ? {issue_id:t.issue_id,reason} : t.issue_id);
-      } else if (t.state==='RUNNING') result.running.push(t.issue_id);
+      } else if (t.state==='RUNNING' || (t.state==='WAITING' && t.operation==='AWAIT_REVIEW')) result.running.push(t.issue_id);
       else if (t.state==='COMPLETED') {
         let reason;
         try {
           reason=graphError || await this.reviewBlock(run,t,graph);
-          if (!reason && await hostMethod(this.adapter,'head')({pr:t.pr,issue_id:t.issue_id})!==t.review?.head_sha) reason='reviewed PR head moved';
+          if (!reason && await hostMethod(this.adapter,'head')({run_id:run.run_id,pr:t.pr,issue_id:t.issue_id})!==t.review?.head_sha) reason='reviewed PR head moved';
           if (!reason && !(await this.reviewCurrent(run,t))) reason='same-head review or CI evidence is stale';
         } catch(e) { reason='final evidence unavailable: '+e.message; }
         if(reason) result.blocked.push({issue_id:t.issue_id,reason}); else result.completed.push(t.issue_id);
       }
-      else if (t.state==='BLOCKED') result.blocked.push({issue_id:t.issue_id,reason:t.review?.verdict || t.error || 'blocked'});
+      else if (t.state==='BLOCKED') result.blocked.push({issue_id:t.issue_id,reason:t.review?.reason || t.error || t.review?.verdict || 'blocked'});
       else if (t.state==='ERROR') result.error.push({issue_id:t.issue_id,reason:t.error});
     }
     return result;

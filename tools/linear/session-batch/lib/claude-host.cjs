@@ -44,4 +44,5 @@ function createClaudeHost({run = execFileAsync, command = 'claude', timeout = 10
   };
 }
 
-module.exports = {createClaudeHost, createAdapter:createClaudeHost};
+// Discovery stays available separately; the adapter export runs the full lifecycle.
+module.exports = {createClaudeHost, createAdapter:options=>require('./claude_adapter.cjs').createAdapter(options)};
