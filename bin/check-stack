@@ -369,6 +369,16 @@ def main(argv: list[str]) -> int:
     if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
         r.fail("tools/github/pr-label-sweep/tests", "harness", "issue key tests failed or none discovered")
 
+    decision_queue_tests = REPO / "tools/github/decision-queue/tests"
+    out = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s", str(decision_queue_tests)],
+        capture_output=True, text=True,
+    )
+    print(out.stdout, end="")
+    print(out.stderr, end="")
+    if out.returncode or re.search(r"^Ran 0 tests", out.stderr, re.MULTILINE):
+        r.fail("tools/github/decision-queue/tests", "harness", "decision queue tests failed or none discovered")
+
     roadmap_tests = REPO / "tools/linear/linear-roadmap/tests"
     if roadmap_tests.is_dir():
         out = subprocess.run(
