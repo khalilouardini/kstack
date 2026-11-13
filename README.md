@@ -111,7 +111,7 @@ half-day estimate, refuses to estimate what it cannot name),
 | [`/careful`](core/careful/SKILL.md) | Pre-checks every shell command. Recursive deletes rooted at `/` or `$HOME` and force-pushes to the default branch are denied; the rest asks | **hook** (Claude Code) |
 | [`/freeze`](core/freeze/SKILL.md) · [`/unfreeze`](core/unfreeze/SKILL.md) | Restricts Edit/Write to one directory; shell writes remain possible | **hook** (Claude Code) |
 | [`/explain-diff-html`](core/explain-diff-html/SKILL.md) | Self-contained interactive page teaching a change, validator-gated | bundled validator |
-| [`/summarize-change`](core/summarize-change/SKILL.md) | Briefs a change by its intent, approach, diff, sensitive ranges, blast radius, evidence-based evaluation with gate exit codes, and decision needed; `--tight` caps it at 250 words | prompt-level |
+| [`/summarize-change`](core/summarize-change/SKILL.md) | Leads with the decision and key caveats, then gives the change, impact, and verification. `--tight` gives one compact paragraph. | prompt-level |
 
 ### Review
 

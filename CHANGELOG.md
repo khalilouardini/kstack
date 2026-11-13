@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+`summarize-change` 0.3.0 leads with the decision and key caveats, keeps observed verification, and cites code only where inspection matters. `--tight` gives one compact paragraph.
+
 `review-claude-pr` 0.7.0 and `pr-loop` 0.11.2: a reviewer makes a disposable checkout
 with `git clone --shared --no-checkout` or `git archive`, never `git worktree add`.
 The `run-review` prompt and §2 of the skill both say so. `git worktree add` writes a

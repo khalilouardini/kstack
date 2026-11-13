@@ -245,12 +245,11 @@ gates; `/land` always stops at the PR.
 
 ## Briefings and recurring work
 
-Use `/summarize-change` for a briefing in the chat: intent and its source,
-approach, relevant constraints, departures from intent, sensitive ranges,
-blast radius, evidence-based evaluation with observed gate exit codes, and the
-decision needed. `--tight` retains the investigation but
-caps the emitted briefing at 250 words. `/explain-diff-html` creates a durable
-teaching page; `/delivery-retro` compares periods of work.
+Use `/summarize-change` for a chat briefing that leads with the decision and
+key caveats and includes observed verification. The default cites code only
+where the reader has a reason to inspect it. `--tight` gives one compact
+paragraph with the same evidence standard. `/explain-diff-html` creates a
+durable teaching page. `/delivery-retro` compares periods of work.
 
 Manual session-title and PR-label sweeps default to dry-run. `/sweep-schedules`
 creates or updates a desktop schedule only when requested; installing a skill
