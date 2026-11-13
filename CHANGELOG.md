@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+`review-claude-pr` 0.8.0 and `pr-loop` 0.12.0: a reviewer under `run-review` never
+deletes anything, and cleanup is never a required step. The contract said temporary
+proof artifacts "must be removed", Codex's exec policy rejects `rm -rf` together with
+the whole shell call that holds it, and the prompt forbids working around a denial,
+so a finished review ended BLOCKED. The runner now owns the reviewer's scratch
+directory: it creates it outside the repository, passes it in the prompt and in
+`$REVIEW_SCRATCH`, removes it after a verified review and keeps it after a BLOCKED
+round. The reviewer posts in a shell call that holds only the identity re-check and
+the post. The runner keeps the reviewer's redacted stdout and stderr in the report
+directory, and a BLOCKED report names the reviewer's session log
+(`reviewer_session`), the kept scratch (`reviewer_scratch`) and any review already
+posted at this head (`submitted_review`), which a rerun at the same head reuses
+without a paid launch. Source: ogur PR #828 under codex-cli 0.160.1. Round 1
+(head `b86af672`) posted review 5883187775, then its verification and cleanup call
+was refused and the round reported BLOCKED; round 2 (head `d6090b5d`) wrote a P2
+finding to its payload file, ran `rm -rf` on its temporary checkouts before posting,
+and ended with nothing posted. `tools/github/pr-loop/tests/test_runner.py` covers the
+scratch lifecycle, the session pointer and the named posted review; each new check
+fails against the previous runner.
+
 `summarize-change` 0.3.0 leads with the decision and key caveats, keeps observed verification, and cites code only where inspection matters. `--tight` gives one compact paragraph.
 
 `review-claude-pr` 0.7.0 and `pr-loop` 0.11.2: a reviewer makes a disposable checkout
