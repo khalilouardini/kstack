@@ -2177,14 +2177,21 @@ const shaDigest=value=>/^sha256:[0-9a-f]{64}$/.test(value || '');
 if (!Array.isArray(admissions)) return refuse('graph admission: audit reports must be an array');
 // Apply the same build-report validation to live input and Run A's stored input.
 // Prior reports use their original invocation date, even when Run B is later.
+const validLiveDelta=r=>r.delta?.kind==='LIVE_RECONCILIATION' &&
+  r.evidence?.live_input?.issues?.complete===true && r.evidence?.live_input?.request &&
+  (Array.isArray(r.evidence.live_input.request.live_units) || r.evidence.live_input.request.live_relations===true) &&
+  Array.isArray(r.delta.added_projects) && Array.isArray(r.delta.added_edges) &&
+  r.delta.added_nodes.length<=1000 && r.delta.added_edges.every(e=>e &&
+    typeof e.from==='string' && typeof e.to==='string' && typeof e.from_event==='string' &&
+    typeof e.to_event==='string' && typeof e.type==='string' && typeof e.source==='string' && e.source.trim());
 const validAdmissionReports=(reports,pins,date,transition="build") => Array.isArray(reports) ? reports.filter(r=>
   r && r.schema_version===1 && r.main_sha===pins?.main_sha &&
   validUTC(r.checked_at) && r.checked_at.slice(0,10)===date &&
   shaDigest(r.graph_digest) && shaDigest(r.base_digest) && shaDigest(r.issue_evidence_digest) &&
   r.transition===transition && Array.isArray(r.candidates) &&
   r.evidence?.issues?.complete===true && r.evidence?.request && r.delta &&
-  Array.isArray(r.delta.added_nodes) && r.delta.added_nodes.length<=3 &&
-  Array.isArray(r.delta.changed_edges) && !r.delta.changed_edges.length
+  Array.isArray(r.delta.added_nodes) && Array.isArray(r.delta.changed_edges) && !r.delta.changed_edges.length &&
+  (r.delta.kind==='LIVE_RECONCILIATION' ? validLiveDelta(r) : r.delta.added_nodes.length<=3)
 ) : [];
 // Incomplete unrelated reports and plan-only reports cannot shadow eligible builds.
 const validAdmissions=validAdmissionReports(admissions,publication,args.date);
@@ -2207,21 +2214,25 @@ const candidateAdmission=(track,reports=validAdmissions,pins=publication,current
   const localProject=projects[0].state==='APPROVED_LOCAL';
   if (localProject && (!sameLocalPins(report.local_graph,pins.local_graph) ||
       (current && !sameLocalPins(report.local_graph,localPins)) ||
-      !report.evidence?.local_scope_sources || report.delta.added_nodes.length)) return null;
+      !report.evidence?.local_scope_sources || (report.delta.added_nodes.length && !validLiveDelta(report)))) return null;
   if (report.graph_sha!==(localProject ? null : projects[0].state==='ACCEPTED_UPDATE' ? projects[0].head_sha : pins.main_sha) ||
       report.transition!==transition || c.state!=='ELIGIBLE' ||
       typeof c.issue_id!=='string' || !c.issue_id || typeof c.node_id!=='string' || !c.node_id ||
-      !['PUBLISHED','LOCAL_RECONCILIATION','APPROVED_LOCAL'].includes(c.mode) ||
-      (c.mode==='APPROVED_LOCAL')!==localProject ||
+      !['PUBLISHED','LOCAL_RECONCILIATION','APPROVED_LOCAL','LIVE_RECONCILIATION'].includes(c.mode) ||
+      (c.mode==='APPROVED_LOCAL' && !localProject) ||
+      (localProject && !['APPROVED_LOCAL','LIVE_RECONCILIATION'].includes(c.mode)) ||
       !Array.isArray(c.closure) || !c.closure.includes(c.node_id) ||
       !shaDigest(c.closure_graph_digest) || !shaDigest(c.closure_evidence_digest) || !Array.isArray(c.unmet) || c.unmet.length ||
-      (c.mode==='LOCAL_RECONCILIATION' && !report.delta.added_nodes.some(n=>n.id===c.node_id && n.issue_ref===c.issue_id))) return null;
+      (c.mode==='LOCAL_RECONCILIATION' && !report.delta.added_nodes.some(n=>n.id===c.node_id && n.issue_ref===c.issue_id)) ||
+      (c.mode==='LIVE_RECONCILIATION' && (!validLiveDelta(report) ||
+       !(report.delta.added_nodes.some(n=>n.id===c.node_id && n.issue_ref===c.issue_id) ||
+         report.delta.added_edges.some(e=>c.closure.includes(e.to)))))) return null;
   return {report,candidate:c};
 };
 const candidateEligible=track => !!candidateAdmission(track);
 // Run A -> B1 and B1 -> B3 must preserve the same candidate conditions.
 const candidateChanges=(before,after) => {
-  const publishedRepair=before.mode==='LOCAL_RECONCILIATION' && after.mode==='PUBLISHED';
+  const publishedRepair=['LOCAL_RECONCILIATION','LIVE_RECONCILIATION'].includes(before.mode) && after.mode==='PUBLISHED';
   const comparisons=['issue_id','project_id','node_id'].map(field=>({field,prior:before[field],current:after[field]}));
   for (const field of ['closure_graph_digest','closure_evidence_digest']) {
     const semantic=Object.hasOwn(before,'semantic_'+(publishedRepair?'published_':'')+field);

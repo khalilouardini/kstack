@@ -215,11 +215,15 @@ Before ranking or emitting any kickoff, resolve the physical stack root and read
 fresh main coverage audit and separate candidate/closure eligibility checks,
 including legacy projects with no index. Report coverage counts and missing keys
 as project warnings. Rank otherwise eligible mapped candidates despite unrelated
-missing tickets. Selected unmapped maintenance work may prepare the bounded local
-reconciliation artifact; cite main SHA, full live evidence and exact delta in its
-kickoff. Scope/dependency/release/human changes need reviewed publication. Unknown
-selected main/live/closure evidence fails closed; exclude that candidate, not all
-independently verified work in its project.
+missing tickets. For ordinary unmapped in-scope issues, collect the live unit,
+complete native blockers, approved scope and typed prerequisite evidence described
+in the shared gate. `graph-admission` builds a local candidate-scoped projection;
+no separate graph PR or user flag is needed. Carry its exact report and delta into
+the kickoff. Actual scope expansion and unverified human decisions still hold the
+affected candidate. Audit candidates separately and concurrently against the same
+fresh snapshot, restricting each live projection to that candidate's closure.
+Unknown selected main/live/closure evidence fails closed for that candidate, not
+for independently verified work in its project.
 
 Accept repeatable --accept-graph-update <PR#> with the contract's positive-number,
 OPEN/main-base, reviewed exact-head, indexed validation and selected-closure checks
@@ -237,9 +241,9 @@ Use a detached, read-only graph checkout at the exact main SHA validated above,
 or the exact accepted graph PR head for that project. Call it `<graph-checkout>`;
 verify its HEAD equals the coverage SHA. Read the index, manifest, root roadmap
 and human-decision table from that checkout. Never use the consuming working
-tree's unmerged graph for condition analysis. The sole exception is the bounded
-local maintenance manifest reconstructed from pinned main plus the recorded exact
-delta; validate its effective digest and origin closure under the shared contract.
+tree's unmerged graph for condition analysis. The helper may add its internally
+constructed live projection or bounded maintenance delta to the pinned base;
+validate its effective digest and closure under the shared contract.
 If the validated head or relevant evidence moves, repeat admission and condition
 analysis before a kickoff.
 
@@ -261,10 +265,13 @@ their graph conditions.
 Read the exact manifest named by the index. Cite the `sha256:<digest>` reported
 by indexed validation as its revision. Never combine additional files or infer
 readiness from Mermaid. A covered project's open issue without a kind `unit`
-matching its canonical UUID is UNMAPPED: require bounded verified local maintenance
-reconciliation or reviewed graph publication before a kickoff. A publication flag
-cannot waive executable mapping or closure evidence. Other node kinds can share
-issue references for context only.
+matching its canonical UUID receives a verified in-scope live projection when the
+complete facts are available. Otherwise it remains UNMAPPED/UNKNOWN; a publication
+flag cannot waive scope or closure evidence. Other node kinds can share issue
+references for context only. For normal live-projection audits, pass
+`live_relations: true` and complete canonical `blocked_by` arrays as specified in
+the shared gate. Legacy `--reconcile` audits separately retain fresh native blocker
+evidence; they cannot combine the two projection modes in one helper request.
 
 This analysis owns the read-only graph rehearsal. Use the state predicates in the
 contract: ACTIVE, HUMAN_REQUIRED, UNKNOWN, BLOCKED, PLAN_ONLY, READY_TO_BUILD and
@@ -277,8 +284,9 @@ kickoff. Report conflicting representations as a named human decision.
 Check each event against fresh PR/default-branch, acceptance and human-decision
 evidence. Before a controller exists, read the root Human decisions table and its
 original scope decision-log entry or Linear comment, including authorized actor,
-UTC date, exact boundary and manifest digest. A changed graph/scope invalidates a
-decision unless its owner explicitly reaffirms it. Do not write approval records.
+UTC date, exact boundary and evidence. Recheck a decision when its relevant scope
+or prerequisite changes; an unrelated graph edit does not invalidate it. Do not
+write approval records.
 Done, a draft/recorded field or structural validity is not completion evidence.
 
 Verified plan/native conditions with a false or unknown later build condition

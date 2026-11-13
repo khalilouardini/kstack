@@ -1211,6 +1211,21 @@ tests.push(async()=>{
   }
 });
 
+cases.push({number:cases.length+1,name:'live in-scope graph admission'});
+tests.push( async()=>{
+   const live=(_f,a)=>{
+     const report=a.graph_admission[0],c=report.candidates[0];
+     c.mode='LIVE_RECONCILIATION';
+     report.delta={kind:'LIVE_RECONCILIATION',added_projects:[],added_nodes:[{id:c.node_id,issue_ref:c.issue_id}],added_edges:[],changed_edges:[],repairs:[]};
+     report.evidence.live_input={issues:{complete:true},request:{live_units:[{issue_id:c.issue_id}]}};
+   };
+   const planned=await run('plan',live);assert.equal(planned.result.state,'AWAITING_APPROVAL');
+   const built=await run('build',(f,a)=>{live(f,a);a.plan_record=planned.result;});
+   assert.equal(built.result.state,'COMPLETE');assert.ok(built.calls.some(c=>c.label==='B1 build T-1'));
+   const invalid=await run('plan',(f,a)=>{live(f,a);delete a.graph_admission[0].evidence.live_input;});
+   assert.equal(invalid.result.state,'STOPPED');assert.equal(invalid.calls.length,1);
+ });
+
 let failed=0;
 for(let i=0;i<tests.length;i++)try{await tests[i]();console.log(`PASS ${cases[i].number} ${cases[i].name}`);}catch(e){failed++;console.error(`FAIL ${cases[i].number} ${cases[i].name}: ${e.stack}`);}
 console.log(`${tests.length-failed}/${tests.length} wave cases passed`);

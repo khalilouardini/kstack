@@ -9,8 +9,9 @@ projects. Empty group containers are represented by each card's project/group
 provenance rather than synthetic tickets. Outgoing edges to unrelated projects
 are shown in those projects' own views.
 
-Pass a UTF-8 evidence file. `complete` means every referenced issue in that
-selection was fetched, not that the entire Linear workspace was audited.
+Pass a UTF-8 evidence file. `complete` means the whole selected Linear project
+(including archived issues) and every referenced external prerequisite were
+fetched; it does not mean the entire Linear workspace was audited.
 `observed_at` is the actual UTC observation time. Use the connector's canonical
 UUID in `id`, and its human issue key in `identifier`. Resolve tracker status
 types from team workflow metadata; never guess completion from a status name.
@@ -57,6 +58,14 @@ label. Both stay unverified and retain their actual roadmap project instead of
 being grouped with checkpoints. Each detail retains the original UUID/key when
 linked, manifest node kind, acceptance,
 source, project admission, incoming/outgoing events and their sources.
+
+One or more candidate reports may be supplied with repeated `--admission-report`;
+each append-only delta must match the same indexed base and its effective digest.
+The helper combines consistent deltas and refuses conflicts. Projected
+nodes are labelled **Live projection — unpublished**. Tickets in the complete live
+project list with no executable unit are labelled **Graph mapping unknown** and
+shown without inferred edges. A missing edge in this display is not proof of
+independence, and graph eligibility is not execution or release approval.
 
 The viewer's generic Blocks/Blocked by counts project event-specific conditions
 onto one relation model. They are not scheduling/readiness calculations.

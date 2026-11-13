@@ -10,7 +10,9 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import tempfile
 import time
+import stat
 
 
 class Blocked(ValueError):
@@ -218,6 +220,34 @@ def run(argv, *, cwd, env=None, timeout=60, pass_fds=()):
     return result.stdout
 
 
+def create_review_scratch(report_dir, repo):
+    """Create one private, parent-owned directory for a paid reviewer."""
+    if not getattr(shutil.rmtree, 'avoids_symlink_attacks', False):
+        raise Blocked('safe review scratch cleanup is unsupported on this host')
+    try:
+        # Keep failed work outside the caller's report tree: the loop's exit
+        # trap may remove that tree even when a reviewer is still running.
+        scratch = Path(tempfile.mkdtemp(prefix='kstack-review-')).resolve()
+        if repo in scratch.parents or report_dir.parent in scratch.parents:
+            scratch.rmdir()  # still empty; no child has launched
+            raise Blocked('review scratch overlaps the repository or controller report tree')
+        info = scratch.lstat()
+    except OSError as exc:
+        raise Blocked('cannot create private review scratch') from exc
+    return scratch, (info.st_dev, info.st_ino)
+
+
+def cleanup_review_scratch(scratch, identity):
+    """Delete only the exact directory we created, without following symlinks."""
+    try:
+        info = scratch.lstat()
+        if not stat.S_ISDIR(info.st_mode) or (info.st_dev, info.st_ino) != identity:
+            raise Blocked(f'review scratch identity changed; preserved at {scratch}')
+        shutil.rmtree(scratch)
+    except OSError as exc:
+        raise Blocked(f'review scratch cleanup failed; preserved at {scratch}') from exc
+
+
 def decode(text):
     try:
         return json.loads(text)
@@ -332,6 +362,11 @@ def execute(args):
               'Make any disposable checkout with git clone --shared --no-checkout or git archive '
               'in a temporary directory, never git worktree add: it writes to the shared .git, '
               'which a sandboxed reviewer cannot write. '
+              'Put all temporary checkouts, scratch and test artifacts under the controller-owned '
+              'directory in KSTACK_REVIEW_TMPDIR. Do not delete temporary artifacts; the parent '
+              'cleans that directory after your process exits. Never create scratch elsewhere '
+              'or combine cleanup with GitHub verification commands. Do not leave background '
+              'processes or tools running after your response. '
               'Respect host permissions: never request, retry around or work around a denial. '
               'A denied required step (identity, GitHub reads or review submission, the diff, '
               'gates.test or the project proof gate), absent evidence or a moved head means '
@@ -374,12 +409,21 @@ def execute(args):
                    run(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=repo))
         if current != before:
             raise Blocked('review checkout changed while waiting for a resource permit')
+        scratch, scratch_identity = create_review_scratch(report_dir, repo)
+        reviewer_env['TMPDIR'] = str(scratch)
+        reviewer_env['KSTACK_REVIEW_TMPDIR'] = str(scratch)
         started_at = time.monotonic()
-        output = run(argv, cwd=repo, env=reviewer_env, timeout=args.timeout,
-                     pass_fds=() if fd is None else (fd,))
+        try:
+            output = run(argv, cwd=repo, env=reviewer_env, timeout=args.timeout,
+                         pass_fds=() if fd is None else (fd,))
+        except Blocked as exc:
+            # A timeout or failed launcher may leave descendants alive. Do not
+            # delete their data or retry their operation automatically.
+            raise Blocked(f'{exc}; review scratch preserved at {scratch}') from exc
         finished_at = time.monotonic()
     if engine == 'claude':
         report.write_text(output.replace(token, '[REDACTED]'))
+    cleanup_review_scratch(scratch, scratch_identity)
     if not report.is_file():
         raise Blocked('reviewer did not produce a captured report')
     text = report.read_text()
@@ -396,7 +440,7 @@ def execute(args):
     if submitted['head'] != args.head or submitted['review_id'] != evidence['review_id']:
         raise Blocked('captured report does not match submitted GitHub evidence')
     fresh()
-    return dict(evidence, reused=False, cli_version=version,
+    return dict(evidence, reused=False, cli_version=version, scratch_cleanup='REMOVED',
                 timing=dict(slot_wait_seconds=acquired_at-queued_at,
                             reviewer_process_seconds=finished_at-started_at))
 

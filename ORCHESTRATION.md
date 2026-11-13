@@ -9,10 +9,11 @@ one or change `/wave`'s existing approval behavior.
 Project coverage is a maintenance warning; execution eligibility is per selected
 unit and its relevant dependency closure. Follow
 [the shared gate](tools/linear/linear-roadmap/references/publication-gate.md).
-Unrelated missing tickets do not freeze mapped work. Up to three missing
-maintenance units within approved scope may use an audited local reconciliation
-containing main SHA, full live evidence and exact delta. Scope, dependency,
-release-criteria and human-gate changes require reviewed graph publication.
+Unrelated missing tickets do not freeze mapped work. New tickets within verified
+approved scope use a candidate-scoped live graph projection, with main SHA, full
+Linear evidence and exact additions, without a preliminary graph PR. Current native
+blockers and cited additional conditions remain effective. New product scope or a
+weakened existing gate requires the relevant owner decision and graph review.
 Schema compatibility, prerequisites, ownership, acceptance and plan/review gates still apply.
 
 `/linear-roadmap <project>` updates local graph/scope files only. Add `--publish`
@@ -119,6 +120,13 @@ The `fix` arrow depicts work inside the bounded `/pr-loop`; it does not reset it
 round counter. A terminal verdict has no automatic retry. A new attempt requires
 a recorded human decision and carries forward unresolved findings.
 
+The default batch-delegation route is `/session-batch`: one supervising
+meta-agent tracks each independent ticket session and releases reviews in actual
+dependency order. The controller uses a persistent Claude SDK client per ticket
+and a request-bound source-evidence bridge to the supervisor. Offline fixtures
+exercise the same-session lifecycle; a live ticket evaluation remains pending.
+Explicit `/wave` remains available for coordinated batches.
+
 ## What exists and what still needs integration
 
 | Requirement | Existing support | Integration still needed |
@@ -138,10 +146,9 @@ Its agents are inspectable as workflow tasks; that alone does not prove a
 persistent, separate Desktop session per ticket. Do not claim these requirements
 are implemented by enabling Ultracode or renaming a workflow node.
 
-The next implementation should be a thin project controller and session adapter
-that reuse the existing skills. No new `/orchestrate` command exists yet. Validate
-host session capabilities before choosing its API; do not invent launch flags,
-Workflow options or a Desktop automation API.
+The session adapter uses the Claude Agent SDK and existing skills; no new
+`/orchestrate` command or Desktop automation API is required. Validate the live
+host lifecycle before relying on it in production work.
 
 The [wave throughput design](docs/wave-throughput-design.md) scopes a smaller
 precursor: compare one fixed wave with three manually dispatched sessions, remove

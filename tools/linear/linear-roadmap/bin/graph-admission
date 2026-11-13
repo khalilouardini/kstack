@@ -62,6 +62,178 @@ def reconcile(base, proposed, repairs, selected):
     return added, origins
 
 
+def live_reconcile(base, snapshot, request):
+    """Build an append-only, candidate-scoped projection from cited live facts.
+
+    This does not authenticate the collector's Linear reads, decisions or scope
+    interpretation. The caller must verify those independently. Existing graph
+    policy, nodes and edges remain intact; native blockers only add conditions.
+    """
+    entries = request.get('live_units', [])
+    if not isinstance(entries, list) or len(entries) > 1000 or (not entries and request.get('live_relations') is not True):
+        raise ValueError('live reconciliation requires unit or relation evidence')
+    if request.get('repairs'):
+        raise ValueError('live units and a maintenance reconciliation cannot be mixed')
+    graph = copy.deepcopy(base)
+    working = copy.deepcopy(snapshot)
+    enriched = copy.deepcopy(request)
+    issue_entries = {i['id']: (p, i) for p in working['projects'] for i in p['issues']}
+    by_id = {}
+    new_nodes = []
+    new_projects = []
+    added_edges = []
+    before_nodes = {n['id']: n for n in base['nodes']}
+    before_refs = {n['issue_ref'] for n in base['nodes'] if n['kind'] == 'unit'}
+    for entry in entries:
+        iid = entry.get('issue_id')
+        if not isinstance(iid, str) or not COVERAGE['UUID'].fullmatch(iid) or iid in by_id or iid in before_refs:
+            raise ValueError('live unit must identify one unique unmapped issue')
+        if iid not in issue_entries:
+            raise ValueError('complete live project membership required for live unit')
+        project, issue = issue_entries[iid]
+        if entry.get('scope_confirmed') is not True or entry.get('scope_dependencies_complete') is not True:
+            raise ValueError('live unit needs verified in-scope and complete scope-dependency evidence')
+        scope = entry.get('scope', {})
+        COVERAGE['safe_path'](scope.get('path'))
+        required_text(scope.get('quote'), 'approved scope quote')
+        required_text(scope.get('rationale'), 'scope applicability rationale')
+        if type(scope.get('line')) is not int or scope['line'] < 1:
+            raise ValueError('approved scope line must be a positive integer')
+        authority = required_text(entry.get('authorization_source'), 'original scope authorization source')
+        if authority != f"{scope['path']}:{scope['line']}" and not re.match(r'^https://[^/\s]+/\S+', authority):
+            raise ValueError('scope authorization source needs the exact cited file line or original HTTPS decision')
+        for field in ('description', 'url', 'updated_at'):
+            required_text(issue.get(field), 'live issue ' + field)
+        if issue.get('relations_complete') is not True or issue.get('acceptance_complete') is not True:
+            raise ValueError('live issue requires complete relations and acceptance evidence')
+        acceptance = issue.get('acceptance')
+        if not isinstance(acceptance, list) or not acceptance or any(
+                not isinstance(a, str) or not a.strip() or a not in issue['description'] for a in acceptance):
+            raise ValueError('live acceptance must quote complete issue criteria exactly')
+        project_id = project['project_id']
+        matches = [p for p in graph['projects'] if p['linear_id'] == project_id]
+        if len(matches) > 1:
+            raise ValueError('ambiguous project mapping')
+        if matches:
+            mapped = matches[0]
+        else:
+            mapped = {'key': 'livep_' + project_id.replace('-', '_'), 'title': project['project_name'],
+                      'linear_id': project_id, 'scope_source': 'Per-unit approved scope evidence for ' + project_id,
+                      'authorization': 'recorded'}
+            graph['projects'].append(mapped)
+            new_projects.append(mapped)
+        if mapped['authorization'] != 'recorded':
+            raise ValueError('REVIEWED_PUBLICATION_REQUIRED: scope authorization is draft')
+        node = {'id': 'live_' + iid.replace('-', '_'), 'title': issue['identifier'], 'kind': 'unit',
+                'project': mapped['key'], 'unit_of': None, 'issue_ref': iid, 'owner': 'implementer',
+                'acceptance': copy.deepcopy(acceptance), 'source': issue['url'], 'effort': None}
+        if node['id'] in before_nodes:
+            raise ValueError('live unit identifier collides with existing graph')
+        graph['nodes'].append(node)
+        new_nodes.append(node)
+        by_id[iid] = (entry, node)
+
+    # Explicit scoped edges may point either way, including a future merge/review
+    # gate. Every edge must touch its new unit and quote the source verbatim.
+    for iid, (entry, node) in by_id.items():
+        rows = entry.get('scope_edges')
+        if not isinstance(rows, list):
+            raise ValueError('live unit needs an explicit complete scope_edges list')
+        issue = issue_entries[iid][1]
+        for row in rows:
+            edge = copy.deepcopy(row.get('edge'))
+            evidence = row.get('evidence', {})
+            if not isinstance(edge, dict) or node['id'] not in (edge.get('from'), edge.get('to')):
+                raise ValueError('live scope edge must touch its evidenced unit')
+            quote = required_text(evidence.get('quote'), 'scope edge source quote')
+            kind = evidence.get('kind')
+            expected = issue['url'] if kind == 'issue' else entry['scope']['path'] if kind == 'scope' else None
+            body = issue['description'] if kind == 'issue' else entry['scope']['quote'] if kind == 'scope' else ''
+            if edge.get('source') != expected or quote not in body:
+                raise ValueError('live scope edge must quote its actual issue or approved scope source')
+            graph['edges'].append(edge)
+            added_edges.append(edge)
+
+    selected = request['selected']
+    nodes = {n['id']: n for n in graph['nodes']}
+    units = {n['issue_ref']: n for n in graph['nodes'] if n['kind'] == 'unit' and n['issue_ref']}
+    refs = {}
+    for node in graph['nodes']:
+        if node['issue_ref'] and node['kind'] in ('unit', 'external', 'human', 'evidence', 'release'):
+            refs.setdefault(node['issue_ref'], []).append(node)
+    if any(i not in units for i in selected):
+        raise ValueError('UNMAPPED: selected work needs verified live unit evidence')
+    # Read complete native blockers for the selected closure, including ancestors
+    # discovered while adding blocker edges. Unknown blockers never disappear.
+    examined = set()
+    while True:
+        roots = {(units[i]['id'], e) for i in selected for e in ('plan', 'build', 'merge')}
+        closure = closure_nodes(nodes, ancestors(graph, roots))
+        outstanding = {nodes[k]['issue_ref'] for k in closure if nodes[k]['issue_ref']} - examined
+        if not outstanding:
+            break
+        for iid in sorted(outstanding):
+            examined.add(iid)
+            if iid not in issue_entries:
+                raise ValueError('complete live issue evidence required throughout closure')
+            issue = issue_entries[iid][1]
+            blockers = issue.get('blocked_by')
+            if issue.get('relations_complete') is not True or not isinstance(blockers, list) or any(
+                    not isinstance(x, str) or not COVERAGE['UUID'].fullmatch(x) for x in blockers) or len(set(blockers)) != len(blockers):
+                raise ValueError('complete canonical native blocker evidence required throughout live closure')
+            for blocker in blockers:
+                options = refs.get(blocker, [])
+                source = units.get(blocker) or (options[0] if len(options) == 1 else None)
+                if source is None:
+                    raise ValueError('UNMAPPED: native blocker requires verified graph or live unit evidence')
+                target = units.get(iid)
+                if not target:
+                    raise ValueError('native blockers require an executable target unit')
+                event = {'unit': 'merge', 'external': 'complete', 'human': 'approve',
+                         'evidence': 'pass', 'release': 'release'}[source['kind']]
+                kind = {'human': 'human_decision', 'evidence': 'evidence_required'}.get(source['kind'], 'start_after')
+                edge = {'from': source['id'], 'from_event': event, 'to': target['id'],
+                        'to_event': 'plan', 'type': kind, 'source': issue['url']}
+                signature = lambda e: (e['from'], e['from_event'], e['to'], e['to_event'], e['type'])
+                if not any(signature(e) == signature(edge) for e in graph['edges']):
+                    graph['edges'].append(edge)
+                    added_edges.append(edge)
+    if any(node['id'] not in closure for _, node in by_id.values()):
+        raise ValueError('live units must belong to the selected dependency closure')
+    GRAPH['validate'](graph)
+
+    # Existing cited evidence must exactly match the immutable base; add only
+    # deterministic, separately retained live edges. Never erase old gates.
+    proofs = {p['node_id']: p for p in enriched.get('nodes', [])}
+    if len(proofs) != len(enriched.get('nodes', [])):
+        raise ValueError('duplicate closure evidence')
+    for key in closure:
+        node = nodes[key]
+        incoming_before = [e for e in base['edges'] if e['to'] == key]
+        if key in before_nodes and key in proofs:
+            if proofs[key].get('prerequisites') != incoming_before:
+                raise ValueError('base prerequisite evidence must match the published graph')
+            proofs[key]['prerequisites'] += [e for e in added_edges if e['to'] == key]
+    for iid, (entry, node) in by_id.items():
+        if node['id'] in proofs:
+            raise ValueError('live unit proof is derived from its cited live evidence')
+        proof = {'node_id': node['id'], 'owner': node['owner'], 'acceptance': node['acceptance'],
+                 'source': issue_entries[iid][1]['url'], 'scope': copy.deepcopy(entry['scope']),
+                 'prerequisites': [e for e in graph['edges'] if e['to'] == node['id']]}
+        enriched.setdefault('nodes', []).append(proof)
+    for iid in examined:
+        issue = issue_entries[iid][1]
+        mapped_keys = {n['id'] for n in graph['nodes'] if n['issue_ref'] == iid}
+        before = [e for e in base['edges'] if e['to'] in mapped_keys]
+        if iid in before_refs or any(n['issue_ref'] == iid for n in base['nodes']):
+            if issue.get('prerequisites') != before:
+                raise ValueError('base issue prerequisites must match the published graph')
+        elif issue.get('prerequisites') not in (None, []):
+            raise ValueError('unmapped issue cannot claim published graph prerequisites')
+        issue['prerequisites'] = [e for e in graph['edges'] if e['to'] in mapped_keys]
+    return graph, working, enriched, new_projects, new_nodes, added_edges
+
+
 def ancestors(graph, roots):
     incoming = {}
     for edge in graph['edges']:
@@ -164,15 +336,25 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, 
     base = GRAPH['validate'](json.loads(read_source(index['manifest'])))
     if local_index and 'sha256:' + hashlib.sha256(read_source(index['manifest']).encode()).hexdigest() != coverage['manifest_digest']:
         raise ValueError('local graph changed during admission')
-    graph = copy.deepcopy(base) if proposed is None else GRAPH['validate'](proposed)
     selected = request.get('selected')
     if not isinstance(selected, list) or not selected or len(set(selected)) != len(selected):
         raise ValueError('selected must contain unique canonical issue UUIDs')
     transition = request.get('transition')
     if transition not in ('plan', 'build', 'merge'):
         raise ValueError('transition must be plan, build or merge')
+    live_input = None
+    live_projects, live_nodes, live_edges = [], [], []
+    if request.get('live_units') or request.get('live_relations') is True:
+        if proposed is not None:
+            raise ValueError('live units cannot be mixed with a proposed maintenance manifest')
+        live_input = {'issues': copy.deepcopy(snapshot), 'request': copy.deepcopy(request)}
+        graph, snapshot, request, live_projects, live_nodes, live_edges = live_reconcile(base, snapshot, request)
+    else:
+        graph = copy.deepcopy(base) if proposed is None else GRAPH['validate'](proposed)
     added, origins = ([], {})
-    if graph != base:
+    if live_input is not None:
+        added = live_nodes
+    elif graph != base:
         added, origins = reconcile(base, graph, request.get('repairs', []), selected)
     elif request.get('repairs'):
         raise ValueError('repair evidence has no exact graph delta')
@@ -241,8 +423,8 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, 
                     raise ValueError('complete live relations and issue-body prerequisite read required')
                 if issue.get('prerequisites') != issue_edges.get(n['issue_ref'], []):
                     raise ValueError('REVIEWED_PUBLICATION_REQUIRED: live dependencies differ from reviewed graph')
-                if issue['identifier'] in next(p for p in coverage['projects'] if p['project_id'] == entry[0]['project_id'])['missing_view'] and key not in origins:
-                    raise ValueError('selected closure node is absent from published Markdown; reviewed repair required')
+                # The rendered Markdown view is presentation, not an admission
+                # condition. Its drift remains visible in coverage warnings.
         # Check current phase only. Future merge/human/release gates stay visible.
         required = ancestors(graph, {(node['id'], transition)})
         if origin:
@@ -275,10 +457,12 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, 
         # Audit and retain the origin while a repair is local. Publication may
         # drop that extra closure only when both of the repair's own digests match.
         published_required = {e for e in ancestors(graph, {(node['id'], transition)}) if e[0] != node['id']}
+        live_affected = live_input is not None and (any(n['id'] in closure for n in live_nodes) or
+            any((e['to'], e['to_event']) in closure_events for e in live_edges))
         candidates.append({'issue_id': iid, 'identifier': issues[iid][1]['identifier'],
                            'project_id': projects[node['project']]['linear_id'],
                            'state': 'BLOCKED' if unmet else 'ELIGIBLE',
-                           'mode': 'APPROVED_LOCAL' if local_index else 'LOCAL_RECONCILIATION' if origin else 'PUBLISHED',
+                           'mode': 'LIVE_RECONCILIATION' if live_affected else 'APPROVED_LOCAL' if local_index else 'LOCAL_RECONCILIATION' if origin else 'PUBLISHED',
                            'node_id': node['id'], 'closure': sorted(closure),
                            'closure_graph_digest': digest(closure_graph(graph, closure_events, closure)),
                            'closure_evidence_digest': evidence_digest(closure, required, closure_events),
@@ -301,8 +485,10 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, 
             'transition': transition, 'coverage': coverage,
             'base_digest': digest(base), 'graph_digest': digest(graph),
             'issue_evidence_digest': digest(snapshot), 'evidence': {'issues': snapshot, 'request': request,
+                **({'live_input': live_input} if live_input is not None else {}),
                 **({'local_scope_sources': local_scopes} if local_index else {})},
-            'delta': {'added_nodes': added, 'changed_edges': [], 'repairs': request.get('repairs', [])},
+            'delta': {'added_nodes': added, 'changed_edges': [], 'repairs': request.get('repairs', []),
+                      **({'kind': 'LIVE_RECONCILIATION', 'added_projects': live_projects, 'added_edges': live_edges} if live_input is not None else {})},
             'candidates': candidates, 'state': 'ELIGIBLE' if all(c['state'] == 'ELIGIBLE' for c in candidates) else 'BLOCKED'}
 
 
