@@ -119,9 +119,14 @@ if mode == 'malformed':
 report = {'status': 'BLOCKED' if mode == 'blocked-report' else 'REVIEW_SUBMITTED',
           'review_id': 999 if mode == 'wrong-report-id' else 123, 'head': 'a' * 40}
 if name == 'claude':
+    if mode == 'unwritable-report':
+        Path(s['report_path']).mkdir()
     emit({'type': 'result', 'subtype': 'success', 'is_error': mode == 'error-envelope',
           'session_id': SESSION,
           'permission_denials': [{'tool_name': 'Bash'}] if mode == 'denied' else [], 'result': json.dumps(report)})
 if name == 'codex':
-    Path(args[args.index('-o') + 1]).write_text(json.dumps(report))
+    report_path = Path(args[args.index('-o') + 1])
+    report_path.write_text(json.dumps(report))
+    if mode == 'unwritable-diagnostics':
+        (report_path.parent / 'reviewer.stdout.txt').mkdir()
     print('events are not the final report')

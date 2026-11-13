@@ -239,14 +239,12 @@ def scratch_dir(repo):
 
 def remove_tree(path):
     """Delete a scratch tree without following a link out of it. False if it remains."""
+    if not shutil.rmtree.avoids_symlink_attacks:
+        return False
     try:
-        if not os.path.islink(path):
-            os.chmod(path, 0o700)
-        for parent, directories, _ in os.walk(path):
-            for name in directories:
-                child = os.path.join(parent, name)
-                if not os.path.islink(child):
-                    os.chmod(child, 0o700)  # a read-only directory would keep its files
+        # Repair read-only checkouts by descriptor. fwalk skips symlinks, including the root.
+        for _, _, _, fd in os.fwalk(path, follow_symlinks=False):
+            os.fchmod(fd, 0o700)
         shutil.rmtree(path)
     except OSError:
         return not os.path.lexists(path)
@@ -289,7 +287,12 @@ def launch(argv, *, engine, cwd, env, timeout, pass_fds, report_dir, secret):
             if isinstance(text, bytes):
                 text = text.decode('utf-8', 'replace')
             streams[name] = (text or '').replace(secret, '[REDACTED]')
-            (report_dir / f'reviewer.{name}.txt').write_text(streams[name])
+            filename = f'reviewer.{name}.txt'
+            try:
+                with (report_dir / filename).open('x', encoding='utf-8') as stream:
+                    stream.write(streams[name])
+            except OSError:
+                print(f'reviewer diagnostics not saved: {filename}', file=sys.stderr)
         session = reviewer_session(engine, streams['stdout'], streams['stderr'])
         return {'reviewer_session': session} if session else {}
 
@@ -529,6 +532,9 @@ def review_round(args, scratch, detail):
         text = report.read_text()
         report.write_text(text.replace(token, '[REDACTED]'))
         submitted = cli_report(engine, text)
+    except OSError as exc:
+        raise name_posted_review(Blocked('cannot read or save the captured reviewer report'),
+                                 observed) from exc
     except Blocked as exc:
         raise name_posted_review(exc, observed)
     after = (run(['git', 'rev-parse', 'HEAD'], cwd=repo),

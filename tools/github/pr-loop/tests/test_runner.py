@@ -207,6 +207,25 @@ class RunnerTests(unittest.TestCase):
         self.assertNotIn('reviewer_scratch', report)  # nothing in it, so it is removed
         self.assertEqual(self.scratches(), [])
 
+    def test_unwritable_diagnostics_do_not_block_verification(self):
+        result, report, _ = self.invoke('Claude', mode='unwritable-diagnostics')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(report['status'], 'REVIEW_CLEAR')
+        self.assertEqual(report['review_id'], 123)
+        self.assertIn('reviewer diagnostics not saved: reviewer.stdout.txt', result.stderr)
+        self.assertIn(SESSION, (self.root / 'reports/reviewer.stderr.txt').read_text())
+        self.assertEqual(self.scratches(), [])
+
+    def test_unwritable_report_preserves_posted_review_and_scratch(self):
+        report_path = self.root / 'reports' / 'report.txt'
+        result, report, _ = self.invoke(mode='unwritable-report',
+                                        modify=lambda state: state.update(report_path=str(report_path)))
+        self.assert_blocked(result, report)
+        self.assertIn('cannot read or save the captured reviewer report', report['reason'])
+        self.assertEqual(report['submitted_review'], 123)
+        self.assertEqual(report['reviewer_session']['id'], SESSION)
+        self.assertTrue((Path(report['reviewer_scratch']) / 'review.json').is_file())
+
     def assert_scratch_owned_by_runner(self, implementation, reviewer, flag):
         result, report, state = self.invoke(implementation)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -299,6 +318,18 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(os.path.lexists(tree))
         self.assertTrue((outside / 'keep').is_file())
         self.assertEqual(outside.stat().st_mode & 0o777, 0o500)
+
+    def test_remove_tree_leaves_scratch_root_symlink_target_untouched(self):
+        outside = self.root / 'outside'
+        child = outside / 'child'
+        child.mkdir(parents=True)
+        child.chmod(0o755)
+        tree = self.root / 'scratch'
+        tree.symlink_to(outside, target_is_directory=True)
+
+        self.assertFalse(rt.remove_tree(tree))
+        self.assertTrue(tree.is_symlink())
+        self.assertEqual(child.stat().st_mode & 0o777, 0o755)
 
     def test_cli_success_without_review_blocks(self):
         result, report, _ = self.invoke(mode='no-review')

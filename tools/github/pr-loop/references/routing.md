@@ -153,7 +153,8 @@ together with the whole shell call that held it. The runner removes the director
 after a verified review and keeps a non-empty one after a BLOCKED round. The
 reviewer's stdout and stderr go, with the reviewer token redacted, to
 `reviewer.stdout.txt` and `reviewer.stderr.txt` in the report directory, never to
-the runner's output.
+the runner's output. A failed diagnostic write is reported on stderr and leaves
+review verification running.
 
 A BLOCKED report can carry three pointers besides `reason`, all non-secret:
 
