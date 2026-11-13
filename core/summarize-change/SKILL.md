@@ -1,7 +1,7 @@
 ---
 name: summarize-change
-version: 0.2.1
-description: Brief a change by intent — its source, approach and constraints, the diff checked against that intent, sensitive ranges, blast radius, an evidence-based eval with real gate exit codes, the decision needed. Refuses file-by-file narration and line counts. Use when asked to "summarize this PR", "what did we do here", "give me a high-level summary of this branch", "brief me on this change", or "/summarize-change [branch | PR | commit range | paths] [--tight]". (kstack)
+version: 0.3.0
+description: Brief a change in chat, leading with the decision and key caveats and backing them with intent, impact, and observed verification. Use when asked to "summarize this PR", "what did we do here", "give me a high-level summary of this branch", "brief me on this change", or "/summarize-change [branch | PR | commit range | paths] [--tight]". (kstack)
 ---
 
 # summarize-change — brief a change by its intent, in chat
@@ -40,12 +40,10 @@ says "ship it".
 
 `/summarize-change [branch | PR number | commit range | file paths] [--tight]`.
 With no target, summarize the current branch against its merge base.
-`--tight` emits the same seven parts under per-part caps, at most 250 words — see
-step 3. It changes only what is emitted; steps 1 and 2 run in full either way.
+`--tight` emits one compact paragraph. Gather the same evidence in either mode.
 
-**Resolve the argument to concrete revisions and state them before summarizing
-anything.** A briefing on the wrong range is worse than none, and unlike a
-wrong file reference nothing downstream will catch it.
+**Resolve the argument to concrete revisions before investigating.** State the
+target and revision range in the briefing, after the opening decision.
 
 ```bash
 BASE=$(git merge-base --fork-point HEAD origin/main || git merge-base HEAD origin/main)
@@ -113,9 +111,9 @@ exactly five things:
 - **The intent.** The problem, who has it, and what done means, from the first
   intent source in the order above.
 - **The approach.** The system-level choice the change makes to meet the
-  intent, and the alternative visibly not taken. Name the system constraints it
-  relies on or changes: a contract with another component, an invariant, an
-  access rule, a data shape, which component owns a piece of state. These are
+  intent, and any alternative the evidence shows was considered. Name the system
+  constraints it relies on or changes: a contract with another component, an
+  invariant, an access rule, a data shape, or which component owns state. These are
   the choices a reviewer is most likely to reject — an agent will follow a
   local pattern that breaks one, such as reconstructing state from a log
   instead of querying the component that owns it.
@@ -141,74 +139,39 @@ on this.
 
 ## 3. Emit the briefing
 
-Seven parts, in this order, 15–25 lines total. Longer than that is a page, and a
-page is `/explain-diff-html`.
+### Default
 
-| Part | Carries |
-|---|---|
-| **Intent** | 1–3 sentences: the problem, who has it, what done means. Ends with its source — issue key, spec path, "PR body" — or "inferred from the diff; no stated intent". |
-| **Approach** | The system-level choice, the alternative not taken, and the system constraints it relies on or changes. |
-| **Diff vs intent** | Three labelled lines — `Delivered:`, `Beyond intent:`, `Short of intent:` — each item a behavioral area citing `file:line`. An empty group says "none"; it is never dropped. |
-| **Sensitive vs mechanical** | `Sensitive:` the `file:line` ranges a reviewer must read. `Mechanical:` the rest, by kind. |
-| **Blast radius** | Callers affected, data-shape and migration changes. |
-| **Eval** | Evaluate the change against its intent using observed test, gate, or other evidence; state results and meaningful gaps. Include observed exit codes for gates, and say when evidence is unavailable. |
-| **Decision needed** | The one call the human has to make on this change; when none is pending, the next action, concrete and doable now. |
-
-Four rules carry the skill, and each is the one most often broken:
-
-**The Intent line states a purpose, not a behavior.** "`cache.get` falls back
-to the origin on a miss" is a behavior. "Pages stop returning 500 while the
-cache tier restarts" is an intent. If the Intent line could have been written
-from the diff alone, it is a behavior: go back to the intent sources, or label
-it inferred.
-
-**Beyond intent is checked, not assumed empty.** Agents add validation,
-fallbacks, and abstractions the intent never asked for, and a briefing that
-lists only delivered work hides them from the one reader who would remove
-them. Write "none" only after sorting every behavioral area.
-
-**Diff vs intent items are behavioral areas, never files.** One area routinely
-spans four files; one file routinely carries two unrelated areas. An item whose
-subject is a filename is a file list, not a behavioral area.
-
-**Short of intent names what the reader will wrongly assume is done.** A
-handover reader assumes the change completes its intent; this line says where
-it does not. If the change genuinely completes it, write "none" rather than
-inventing a gap.
-
-**Eval is required in every briefing**, even when no checks ran: state what was
-verified, what remains unverified, and the implications of the evidence without
-inventing results or issuing a merge verdict.
-
-Gate results go in Eval **only with the exit code you observed**. Report each
-configured `gates.lint` and `gates.test` from `.agents/stack.yml` that was not
-run as "not run in this session" — never imply a green suite you did not see.
+- **Decision and key caveats.** Open with the specific call the reader has to
+  make or the next concrete action. Put the blockers, conditions, scope gaps,
+  and policy choices that could change that call in the opening. If no action
+  is pending, say so and lead with the outcome.
+- **Change and impact.** Identify the target and revision range. State what
+  changed and why, cite the intent source or label the intent as inferred, and
+  distinguish what this change delivers from any wider completion criteria.
+  Include the approach, affected callers or data, and departures from intent
+  where they matter to the reader. Omit empty categories and mechanical detail.
+  Add a precise `file:line` reference only where the reader has a concrete
+  reason to inspect the implementation, such as a spend gate, data write, or
+  consequential departure from the agreed scope.
+- **Verification.** State what was verified at the stated revision and what
+  remains unverified. Name the local gates and their observed exit codes,
+  giving the exact commands when known. Include material test, CI, and review
+  results when available. Distinguish local checks from CI, and report pending
+  or failed checks explicitly. Say which configured `gates.lint` and
+  `gates.test` in `.agents/stack.yml` were not run in this session.
+  Report the limits of replay or offline evidence when
+  the intended outcome depends on live behavior.
 
 ### `--tight`
 
-The same seven parts, in the same order, at most **250 words** in total as
-`wc -w` counts them, the range statement from Inputs included. The budget is in
-words, not lines, because a line has no length limit.
-
-| Part | Cap |
-|---|---|
-| **Intent** | 2 sentences, 40 words, source kept |
-| **Approach** | 2 sentences, 40 words, naming at most 2 system constraints |
-| **Diff vs intent** | 3 items per group, each 12 words plus its `file:line` |
-| **Sensitive vs mechanical** | 4 sensitive ranges, each a `file:line` plus 6 words; mechanical as one line of kinds |
-| **Blast radius** | 30 words |
-| **Eval** | 40 words, evidence gaps and gate exit codes kept |
-| **Decision needed** | 1 sentence |
-
-When a cap drops items, keep the ones most likely to change the reader's
-decision and state how many were dropped: `Beyond intent: …; …; … (+2 more)`.
-The count is the whole record of a dropped item; describing it in parentheses
-spends the words the cap removed. The reader can ask for the full briefing.
-The caps never drop the intent's source, the "inferred" label, a gate exit
-code, or a group's "none".
-
-Count before emitting. Over 250 words, cut the lowest-ranked items and raise
-their counts; do not shorten citations to fit.
+Write one compact paragraph without headings, lists, file references, or
+omission counts. Aim for three to five sentences. Lead with the decision or
+next action and the caveats that affect it. Identify the target and revision
+range, and state what changed and why, with a short intent source or an
+explicit inference. Close with the verification that bears on the decision.
+Keep observed exit codes for any local
+gates cited and state which configured gates were unrun, grouping them when
+possible. Keep material verification gaps even if no checks ran.
 
 ## 4. What this skill refuses
 
@@ -222,21 +185,13 @@ their counts; do not shorten citations to fit.
 - **Changed lines, commit count, and file count as a measure of the work.**
   Report them as scale when scale matters to the reader's next action; never as
   a score. Inherited verbatim from `/delivery-retro` and CONVENTIONS.md §6.
-- **A gate claim with no exit code.**
-- **Under `--tight`, an item dropped without a count.**
+- **A local gate claim with no observed exit code.**
 - **A summary of a range it did not state.** See Inputs.
 - **A merge verdict.** Beyond intent and short of intent are facts for the
   reviewer, not a ruling on them — see When to invoke.
 
 ## Enforcement
 
-**Prompt-level, entirely.** The deliverable is text in a session: there is no
-artifact to validate, so the validator model that gates `/explain-diff-html`
-does not transfer here and no hook is involved. Nothing but this procedure
-keeps the briefing at seven parts, Eval present, the intent sourced, the diff
-sorted against it, and the gate claims honest.
-
-The one check that is available costs a second and is worth taking: reading
-only the Intent line and the Decision needed line, does the asker know what the
-change is for and what they have to decide? If not, those two lines are the
-ones to fix.
+**Prompt-level.** Before sending, check that the opening tells the reader what
+to decide or do and which caveats affect it. Check that the briefing identifies
+the revisions and gives observed verification or states the evidence gap.
