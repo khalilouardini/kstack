@@ -1,6 +1,6 @@
 ---
 name: review-claude-pr
-version: 0.7.0
+version: 0.8.0
 description: Review an open agent-built PR (Codex- or Claude-attributed, including maintainer-opened PRs) and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
@@ -83,8 +83,10 @@ the post-submit verification checks after the fact. Treat them as hard rules.
 
 - Make no repository edits. Do not implement fixes, commit, push, resolve
   threads, merge, approve, dismiss, or edit the PR description. Temporary proof
-  artifacts may live only in a disposable checkout or temporary directory and
-  must be removed.
+  artifacts and the review payload live only outside the repository, in a
+  disposable checkout or temporary directory (under run-review, the scratch
+  directory it names). Their cleanup follows "Temporary files and cleanup" (§2)
+  and is never a required step.
 - After standalone bootstrap, use `$REVIEWER` for every GitHub read and write. Resolve its stored credential
   once with `gh auth token --user "$REVIEWER"`, pass it only through `GH_TOKEN` on
   each `gh` invocation, and never call `gh auth switch`. Never post from
@@ -188,19 +190,38 @@ Make every disposable checkout, including one for a proof run, with one of these
 commands. The clone keeps Git data; the archive holds files only.
 
 ```bash
-REVIEW_COPY=$(mktemp -d)
+REVIEW_COPY=$(mktemp -d "${REVIEW_SCRATCH:-${TMPDIR:-/tmp}}/review.XXXXXX")
 git clone --quiet --shared --no-checkout "$(git rev-parse --show-toplevel)" "$REVIEW_COPY"
 git -C "$REVIEW_COPY" checkout --quiet --detach "$REVIEW_HEAD"
 ```
 
 ```bash
-REVIEW_COPY=$(mktemp -d)
+REVIEW_COPY=$(mktemp -d "${REVIEW_SCRATCH:-${TMPDIR:-/tmp}}/review.XXXXXX")
 git archive "$REVIEW_HEAD" | tar -x -C "$REVIEW_COPY"
 ```
 
 Never run `git worktree add` for this. It writes a record into the repository's
 shared `.git`, which a Codex sandbox denies, and the review then stops without
 posting.
+
+### Temporary files and cleanup
+
+Keep every temporary file outside the repository: disposable checkouts,
+proof-only tests and their output, and the review payload. Under run-review, put
+them in the scratch directory its prompt names, also given as `$REVIEW_SCRATCH`;
+the commands above already do.
+
+- **Under run-review, delete nothing.** The runner created that directory and
+  removes it after the round, or keeps it for inspection after a BLOCKED round.
+  A host can refuse a delete command outright (a Codex host has rejected
+  `rm -rf` together with the whole shell call that held it), and a refused
+  command is a denial you must not work around.
+- **Standalone, remove what you created only after the review is submitted and
+  verified, in a shell call of its own.** A refused or failed removal is not
+  BLOCKED and changes nothing in the report except one line naming the leftover
+  path.
+- Cleanup is never a required step, and never shares a shell call with the
+  review submission or its verification.
 
 For every changed path:
 
@@ -238,6 +259,7 @@ A denied optional probe does not block the review:
 A denied required step (the reviewer identity check, GitHub reads, the review
 submission, the diff, `gates.test`, or the project proof gate) still stops the
 review without posting; under run-review the final report is `{"status":"BLOCKED"}`.
+Cleanup is never a required step: see "Temporary files and cleanup".
 
 This rule is prompt-level. Under run-review the runner still blocks a Claude round
 whose JSON envelope records any tool denial (`../pr-loop/references/routing.md`),
@@ -272,7 +294,7 @@ Applying the project proof gate adds its proof requirement to the general review
 - Post defects on gated paths only when backed by a failing test, verifier
   rejection, schema error, or demonstrated invariant violation.
 - Keep proof-only test files outside the repository or in the disposable
-  checkout, and remove them after collecting the output.
+  checkout; "Temporary files and cleanup" says who removes them, and when.
 - Downgrade unproven suspicions on gated paths to clearly labeled non-blocking
   questions; do not phrase them as defects or use them alone to request changes.
 
@@ -351,6 +373,12 @@ infer `REQUEST_CHANGES` from P0/P1/P2 findings. Re-check
 `GH_TOKEN="$REVIEWER_TOKEN" gh api user --jq .login` immediately before the write
 and compare it against `$REVIEWER`; a mismatch at that moment stops the post.
 
+Write the review payload to a file first (in the scratch directory under
+run-review), then submit it with `gh api --method POST … --input <file>` in a
+shell call that holds only that identity re-check and the post. A host that
+refuses one command rejects its whole shell call, so no other command (a
+cleanup, a probe, the verification below) shares it. Verify in a later call.
+
 If an explicitly requested `REQUEST_CHANGES` review is rejected because
 `$REVIEWER` owns the PR, verify that no review with the idempotency marker was
 created, retry once as `COMMENT`, and state the fallback in the report back.
@@ -372,7 +400,8 @@ After posting, fetch the submitted review and verify all of the following:
 
 When launched by run-review, honor its final JSON report format with actual
 submitted review_id and head (or status BLOCKED); include human details in the
-GitHub review body. Standalone, return the PR URL, review URL or ID, event, and counts by
+GitHub review body. Once the review is submitted and verified, report its
+review_id: nothing that follows, cleanup included, turns it into BLOCKED. Standalone, return the PR URL, review URL or ID, event, and counts by
 priority. State that no code was changed or pushed, and whether the project proof
 gate ran, was absent (`review_gate.skill_path: null`), or failed closed. If
 posting failed, say so plainly and include the blocking error; never imply that a

@@ -145,6 +145,28 @@ status/HEAD afterward. A prose “done” is not a report.
 The reviewer no-write boundary is still prompt-level: the status check detects
 changes after the fact, not sandbox isolation or all possible side effects.
 
+The runner owns the reviewer's scratch directory. It creates one per round under
+`$TMPDIR` (blocking if that lies inside the repository), names it in the prompt and
+in `$REVIEW_SCRATCH`, and tells the reviewer to keep every temporary file there and
+delete nothing: a host can refuse a delete command, and Codex has rejected `rm -rf`
+together with the whole shell call that held it. The runner removes the directory
+after a verified review and keeps a non-empty one after a BLOCKED round. The
+reviewer's stdout and stderr go, with the reviewer token redacted, to
+`reviewer.stdout.txt` and `reviewer.stderr.txt` in the report directory, never to
+the runner's output.
+
+A BLOCKED report can carry three pointers besides `reason`, all non-secret:
+
+- `reviewer_session`: the reviewer CLI's own session (`engine`, `id`, and `log`, the
+  session log path when found: Codex's `sessions/…/rollout-*-<id>.jsonl` under
+  `$CODEX_HOME`, Claude's `projects/*/<id>.jsonl` under `$CLAUDE_CONFIG_DIR`). It
+  outlives the report directory, which the controller's exit trap removes.
+- `reviewer_scratch`: the kept scratch directory.
+- `submitted_review`: a review the reviewer posted before the round failed (a refused
+  later command, a crash, a timeout, a BLOCKED report), verified at this head by the
+  same evidence rules as reuse. The round stays BLOCKED; a later run-review at this
+  head reuses that review without a paid launch.
+
 Verified local CLI surfaces: Claude Code 2.1.290 and codex-cli 0.160.1. Claude
 uses `--print --output-format json --permission-prompts none --model ... --effort
 ...`, after `claude auth status` reports loggedIn. Exact-head reuse does not need a

@@ -14,9 +14,27 @@ s['calls'].append({'name': name, 'args': args, 'cwd': os.getcwd(),
                    'has_other_token': 'GITHUB_TOKEN' in os.environ,
                    'host_markers': {key: os.environ[key] for key in
                                     ('CODEX_SESSION_ID', 'CODEX_THREAD_ID',
-                                     'CLAUDE_CODE_CHILD_SESSION') if key in os.environ}})
+                                     'CLAUDE_CODE_CHILD_SESSION') if key in os.environ},
+                   'review_scratch': os.environ.get('REVIEW_SCRATCH')})
 state_path.write_text(json.dumps(s))
 mode = s.get('mode', '')
+# Real CLIs: codex exec ends its stderr header with this line; claude --print's JSON
+# envelope carries session_id.
+SESSION = '01a1d23a-9629-7140-ba62-31b523963ec6'
+if name == 'codex' and '-o' in args:
+    print('--------\nworkdir: fixture\nsession id: ' + SESSION + '\n--------', file=sys.stderr)
+
+
+def draft_in_scratch():
+    """Keep a draft payload and a read-only checkout in the runner's scratch, as the
+    contract asks, and never delete them: the runner owns that cleanup."""
+    scratch = Path(os.environ['REVIEW_SCRATCH'])
+    assert scratch.is_dir() and str(scratch) in args[-1]
+    (scratch / 'review.json').write_text('{"event": "COMMENT"}')
+    checkout = scratch / 'checkout'
+    checkout.mkdir()
+    (checkout / 'proof.py').write_text('assert True\n')
+    checkout.chmod(0o555)
 
 
 def emit(value):
@@ -84,8 +102,15 @@ assert 'GITHUB_TOKEN' not in os.environ
 assert args[-1].find(s['route']['head']) >= 0
 assert 'https://github.com/example/repo/pull/16' in args[-1]
 assert str(Path(s['skill']).resolve()) in args[-1]
+draft_in_scratch()
 s['posted'] = mode != 'no-review'
 state_path.write_text(json.dumps(s))
+if mode == 'posted-then-crash':
+    print('fixture-secret', file=sys.stderr)
+    sys.exit(1)
+if mode == 'hang':
+    import time
+    time.sleep(30)
 if mode == 'empty':
     sys.exit(0)
 if mode == 'malformed':
@@ -95,6 +120,7 @@ report = {'status': 'BLOCKED' if mode == 'blocked-report' else 'REVIEW_SUBMITTED
           'review_id': 999 if mode == 'wrong-report-id' else 123, 'head': 'a' * 40}
 if name == 'claude':
     emit({'type': 'result', 'subtype': 'success', 'is_error': mode == 'error-envelope',
+          'session_id': SESSION,
           'permission_denials': [{'tool_name': 'Bash'}] if mode == 'denied' else [], 'result': json.dumps(report)})
 if name == 'codex':
     Path(args[args.index('-o') + 1]).write_text(json.dumps(report))
