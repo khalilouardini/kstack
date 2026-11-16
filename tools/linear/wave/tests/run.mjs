@@ -126,6 +126,7 @@ const localArgs=(f,a)=>{
     response.ancestor_exit=0;response.merge_tree_exit=0;
     response.head_sha=f.responses['B1 build '+t.issue_id].head_sha;
     response.admission_report=JSON.stringify(a.graph_admission[0]);
+    response.local_graph_audit=JSON.stringify(a.approved_local_graph);
   }
 };
 const tests=[
@@ -868,6 +869,36 @@ tests.push(
    }
  },
  async()=>{
+   const plan=await run('plan',localArgs);
+   const built=await run('build',(f,a)=>{
+     localArgs(f,a);a.plan_record=plan.result;
+     a.approved_local_graph.manifest_digest='sha256:'+'9'.repeat(64);
+     for(const report of a.graph_admission) report.local_graph.manifest_digest=a.approved_local_graph.manifest_digest;
+     for(const t of f.tracks) {
+       const response=f.responses['B3 admission '+t.issue_id];
+       response.admission_report=JSON.stringify(a.graph_admission[0]);
+       response.local_graph_audit=JSON.stringify(a.approved_local_graph);
+     }
+   });
+   assert.equal(built.result.state,'COMPLETE','unrelated local graph changes must not stop all tracks');
+   assert.ok(built.result.tracks.every(t=>t.state==='CLEAN'));
+ },
+ async()=>{
+   const plan=await run('plan',localArgs);
+   const built=await run('build',(f,a)=>{
+     localArgs(f,a);a.plan_record=plan.result;
+     const response=f.responses['B3 admission T-1'];
+     const fresh=JSON.parse(response.admission_report);
+     fresh.local_graph.manifest_digest='sha256:'+'9'.repeat(64);
+     response.admission_report=JSON.stringify(fresh);
+     response.local_graph_audit=JSON.stringify({...a.approved_local_graph,manifest_digest:fresh.local_graph.manifest_digest});
+   });
+   assert.equal(built.result.tracks[0].state,'CLEAN','an unrelated graph update must not block review');
+   const review=built.calls.find(c=>c.label==='B3 review T-1');
+   assert.ok(review.prompt.includes('admission supersede those digests for the affected ticket'));
+   assert.ok(review.prompt.includes('sha256:'+'9'.repeat(64)));
+ },
+ async()=>{
    for(const mutate of [a=>a.selection.push(...localFlags),
      a=>{a.approved_local_graph.index_path='/tmp/other/orchestration/index.json';},
      a=>{delete a.approved_local_graph;},a=>{a.approved_local_graph.index_digest='invalid';},
@@ -904,10 +935,21 @@ tests.push(
  },
  async()=>{
    const plan=await run('plan',localArgs);
-   for(const change of ['missing','pins','closure']){
+   for(const change of ['missing','pins','closure','missing_audit','audit_source','audit_validation','audit_stale','audit_project']){
      const r=await run('build',(f,a)=>{localArgs(f,a);a.plan_record=plan.result;
        const response=f.responses['B3 admission T-1'];
        if(change==='missing') response.admission_report=null;
+       else if(change.startsWith('audit_') || change==='missing_audit') {
+         if(change==='missing_audit') response.local_graph_audit=null;
+         else {
+           const audit=JSON.parse(response.local_graph_audit);
+           if(change==='audit_source') audit.source_revision='f'.repeat(40);
+           if(change==='audit_validation') audit.validation_exit=1;
+           if(change==='audit_stale') audit.checked_at='2026-10-04T12:00:00Z';
+           if(change==='audit_project') audit.project_ids=['bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'];
+           response.local_graph_audit=JSON.stringify(audit);
+         }
+       }
        else {const fresh=JSON.parse(response.admission_report);
          if(change==='pins') fresh.local_graph.manifest_digest='sha256:'+'9'.repeat(64);
          else fresh.candidates[0].closure_evidence_digest='sha256:'+'9'.repeat(64);

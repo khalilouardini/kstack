@@ -141,6 +141,17 @@ membership must be a canonical UUID in the complete snapshot. A project absent
 from the index can be projected using its verified membership and the same original
 approved scope citation; project name or Todo status never authorizes scope.
 
+For an already mapped issue whose live Linear project changed, retain its
+original graph nodes and every dependency and human gate. With
+`live_relations: true`, supply a `live_project_moves` entry containing
+`issue_id`, `from_project_id`, `to_project_id`, `scope_confirmed: true`,
+`scope_dependencies_complete: true`, `authorization_source` and the same
+source-backed `scope` citation structure as a live unit. Verify the old graph
+membership, current Linear membership, complete original and destination scope,
+exclusions and owner decisions; a move never authorizes new scope. The helper
+records the original graph project and current Linear project, retaining the old
+closure. If either membership or scope is uncertain, hold that candidate.
+
 The generated node ID is `live_` followed by the issue UUID with hyphens replaced
 by underscores; a newly projected project key uses `livep_` plus its similarly
 transformed project UUID. The helper derives the new node proof from the issue and
@@ -308,9 +319,11 @@ original authorized decisions; the flag cannot manufacture them.
    local_graph index/manifest/provenance pins, and full local_scope_sources in
    evidence for later scope comparison. A structural graph alone is not readiness.
 4. Pin index_path, manifest_path, index_digest, manifest_digest and source_revision
-   in the checkpoint handoff. Graph/index/source changes require a new plan and
-   human approval; fresh closure evidence is still needed when pins match. Compare
-   full relevant scope sections and exclusions against the saved local snapshots.
+   in the checkpoint handoff. Revalidate changed digests and compare fresh
+   candidate closure and evidence with the approved snapshot. Unrelated graph
+   changes do not require a new plan. A changed source identity or relevant
+   approved conditions require renewed authorization. Compare full relevant scope
+   sections and exclusions against the saved local snapshots.
    Never claim local files existed at the implementation main SHA.
 5. Repeat validation/admission before A3/A4 writes, B1 and each B3 review/fix,
    even when main is unchanged. Forward only the human's current explicit flag
@@ -327,7 +340,10 @@ is 0, coverage_exit is 0/1 matching CURRENT/UPDATE_REQUIRED, and checked_at matc
 the fresh graph_publication timestamp. Set each affected project to APPROVED_LOCAL.
 Plan keeps tokens in selection; build uses graph_update_flags. The script binds
 local_graph pins to graph_publication evidence and each full helper report, then
-compares both runs before B1. Existing record.evidence arrays retain all observations;
+compares each candidate's conditions before B1. For B3 the observer returns a
+fresh validation and coverage audit in local_graph_audit and a matching admission
+report; their digests need not match Run B if the candidate is unchanged.
+Existing record.evidence arrays retain all observations;
 RUN_A/WAVE_REPORT schemas do not change. Default published/maintenance paths remain
 unchanged when the flag is absent. These rules are prompt-level except helper
 validation, wave caller/pin checks and B3 admission comparisons.

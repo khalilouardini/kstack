@@ -72,8 +72,10 @@ For a local roadmap, explicitly pass `--local-graph`
 to wave plan and repeat it on wave build alongside --approve. This uses fresh local
 indexed/candidate admission without graph publication to GitHub or Linear. Scope,
 native blockers, dependencies, evidence and human plan/merge decisions still apply.
-Changed local index/manifest/provenance pins require a new plan; source_revision
-remains the original adoption provenance across compatible stack upgrades.
+Revalidate changed local digests and compare the candidate closure; unrelated
+changes do not require a new plan. A changed source identity or relevant approved
+conditions require renewed authorization. source_revision remains the original
+adoption provenance across compatible stack upgrades.
 
 ## Manifest fields
 

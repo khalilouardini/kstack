@@ -217,6 +217,18 @@ test('missing review evidence and new unselected edges hold only affected tracks
   const q=await c.reviewQueue('run');assert.deepEqual(q.completed,['T-1']);
   assert.deepEqual(q.blocked.map(x=>x.issue_id),['T-2']);assert.match(q.blocked[0].reason,/evidence unavailable/);
 });
+test('malformed review dependency holds only its target and dependents',async()=>{
+  const a=makeAdapter(),c=controller('review-malformed',a);
+  await c.create(input('run',['T-1','T-2']));
+  for(const id of ['T-1','T-2']) {
+    let t=await c.start('run',id);t=await c.plan('run',id,plan(t));await c.beginBuild('run',id);await c.review('run',id);
+  }
+  a.reviewEdges=[{from:'outside',from_event:'merge',to:'T-2',to_event:'review',source:''}];
+  const q=await c.reviewQueue('run');
+  assert.deepEqual(q.completed,['T-1']);
+  assert.deepEqual(q.blocked.map(x=>x.issue_id),['T-2']);
+  assert.match(q.blocked[0].reason,/invalid/);
+});
 test('a new review cycle blocks its own tracks but not independent completed reviews',async()=>{
   const a=makeAdapter(),c=controller('review-cycle',a);await c.create(input('run',['T-1','T-2','T-3']));
   for(const id of ['T-1','T-2','T-3']) {let t=await c.start('run',id);t=await c.plan('run',id,plan(t));await c.beginBuild('run',id);await c.review('run',id);}

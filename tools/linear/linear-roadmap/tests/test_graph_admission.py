@@ -544,6 +544,46 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'live issue/project membership'):
             self.audit()
 
+    def test_verified_project_move_keeps_old_closure_and_uses_current_project(self):
+        moved = self.request['selected'][0]
+        new_project = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+        issue = next(i for i in self.snapshot['projects'][0]['issues'] if i['id'] == moved)
+        self.snapshot['projects'][0]['issues'].remove(issue)
+        self.snapshot['projects'].append({'project_id': new_project, 'project_name': 'New milestone',
+                                          'view_path': 'docs/new-project.md', 'issues': [issue]})
+        for project in self.snapshot['projects']:
+            for item in project['issues']:
+                item['blocked_by'] = []
+        self.request['live_relations'] = True
+        self.request['live_project_moves'] = [{
+            'issue_id': moved, 'from_project_id': PID, 'to_project_id': new_project,
+            'scope_confirmed': True, 'scope_dependencies_complete': True,
+            'authorization_source': 'docs/scope.md:1',
+            'scope': {'path': 'docs/scope.md', 'line': 1, 'quote': QUOTE,
+                      'rationale': 'The moved issue remains inside the approved scope'}}]
+        report = self.audit()
+        candidate = report['candidates'][0]
+        self.assertEqual(report['state'], 'ELIGIBLE')
+        self.assertEqual(candidate['project_id'], new_project)
+        self.assertEqual(candidate['mode'], 'LIVE_RECONCILIATION')
+        self.assertIn('merge', candidate['closure'])
+        self.assertEqual(report['delta']['project_moves'][0]['issue_id'], moved)
+        self.request['transition'] = 'merge'
+        next(e for e in self.request['events'] if e['node_id'] == 'merge' and e['event'] == 'approve')['state'] = 'UNSATISFIED'
+        self.assertEqual(self.audit()['state'], 'BLOCKED')
+        move = self.request['live_project_moves'][0]
+        move['from_project_id'] = new_project
+        with self.assertRaisesRegex(ValueError, 'project move'):
+            self.audit()
+        move['from_project_id'] = PID
+        move['scope']['quote'] = 'Unapproved scope'
+        with self.assertRaisesRegex(ValueError, 'scope citation'):
+            self.audit()
+        move['scope']['quote'] = QUOTE
+        self.request['live_project_moves'][0]['scope_confirmed'] = False
+        with self.assertRaisesRegex(ValueError, 'scope'):
+            self.audit()
+
     def test_reconciliation_bound_and_no_unused_additions(self):
         graph = self.repair()
         graph['nodes'][-1]['issue_ref'] = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'

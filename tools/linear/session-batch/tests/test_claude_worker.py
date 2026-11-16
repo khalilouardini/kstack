@@ -114,6 +114,40 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(worker.verified_init)
                 self.assertIsNone(worker.plan)
 
+    async def test_hook_denied_plan_tool_does_not_discard_valid_plan(self):
+        original=self.client.receive_response
+        async def response():
+            async for message in original():
+                if isinstance(message,System):
+                    yield message
+                    denied=await self.worker.pre_tool_use({'tool_name':'Bash'},'tool-1',None)
+                    self.assertEqual(denied['hookSpecificOutput']['permissionDecision'],'deny')
+                else:
+                    message.permission_denials=[{'tool_name':'Bash','tool_use_id':'tool-1'}]
+                    yield message
+        self.client.receive_response=response
+        await self.worker.run_plan()
+        self.assertEqual(self.worker.state,'PLAN_READY')
+        self.assertEqual(self.worker.status()['plan_denied_tools'],1)
+        self.assertIn('read-only',self.client.queries[0][0].lower())
+
+    async def test_unverified_or_build_denials_fail_closed(self):
+        original=self.client.receive_response
+        async def response():
+            async for message in original():
+                if isinstance(message,Result):
+                    message.permission_denials=[{'tool_name':'Bash','tool_use_id':'unverified'}]
+                yield message
+        self.client.receive_response=response
+        await self.worker.run_plan()
+        self.assertEqual(self.worker.state,'ERROR')
+        worker=Worker(self.config,Fake(self.config,bad='denial'),System,Result)
+        worker.client.bad=None
+        await worker.run_plan()
+        worker.client.bad='denial'
+        await worker.run_build('build')
+        self.assertEqual(worker.state,'ERROR')
+
     async def test_only_stopped_error_can_be_closed(self):
         self.worker.client=Fake(self.config,bad='error')
         self.worker.task=asyncio.create_task(self.worker.run_plan())

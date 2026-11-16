@@ -72,6 +72,9 @@ def live_reconcile(base, snapshot, request):
     entries = request.get('live_units', [])
     if not isinstance(entries, list) or len(entries) > 1000 or (not entries and request.get('live_relations') is not True):
         raise ValueError('live reconciliation requires unit or relation evidence')
+    moves = request.get('live_project_moves', [])
+    if not isinstance(moves, list) or (moves and request.get('live_relations') is not True):
+        raise ValueError('project moves require complete live relation evidence')
     if request.get('repairs'):
         raise ValueError('live units and a maintenance reconciliation cannot be mixed')
     graph = copy.deepcopy(base)
@@ -200,6 +203,36 @@ def live_reconcile(base, snapshot, request):
                     added_edges.append(edge)
     if any(node['id'] not in closure for _, node in by_id.values()):
         raise ValueError('live units must belong to the selected dependency closure')
+    recorded_moves = []
+    seen_moves = set()
+    for move in moves:
+        if not isinstance(move, dict):
+            raise ValueError('project move must be an evidence object')
+        iid = move.get('issue_id')
+        mapped = [n for n in base['nodes'] if n['issue_ref'] == iid]
+        old_projects = {p['key']: p for p in base['projects']}
+        entry = issue_entries.get(iid)
+        if (iid in seen_moves or not mapped or not any(n['id'] in closure for n in mapped) or
+                entry is None or move.get('from_project_id') == move.get('to_project_id') or
+                entry[0]['project_id'] != move.get('to_project_id') or
+                any(old_projects[n['project']]['linear_id'] != move.get('from_project_id') for n in mapped)):
+            raise ValueError('project move requires unique matching old graph and live project membership in the closure')
+        if move.get('scope_confirmed') is not True or move.get('scope_dependencies_complete') is not True:
+            raise ValueError('project move requires verified scope and complete scope dependencies')
+        scope = move.get('scope', {})
+        COVERAGE['safe_path'](scope.get('path'))
+        required_text(scope.get('quote'), 'approved move scope quote')
+        required_text(scope.get('rationale'), 'move scope applicability rationale')
+        if type(scope.get('line')) is not int or scope['line'] < 1:
+            raise ValueError('approved move scope line must be a positive integer')
+        authority = required_text(move.get('authorization_source'), 'original move scope authorization source')
+        if authority != f"{scope['path']}:{scope['line']}" and not re.match(r'^https://[^/\s]+/\S+', authority):
+            raise ValueError('move scope authorization source needs the cited file line or original HTTPS decision')
+        if any(p['linear_id'] == move['to_project_id'] and p['authorization'] != 'recorded'
+               for p in base['projects']):
+            raise ValueError('REVIEWED_PUBLICATION_REQUIRED: destination scope authorization is draft')
+        recorded_moves.append({**copy.deepcopy(move), 'node_ids': sorted(n['id'] for n in mapped)})
+        seen_moves.add(iid)
     GRAPH['validate'](graph)
 
     # Existing cited evidence must exactly match the immutable base; add only
@@ -231,7 +264,7 @@ def live_reconcile(base, snapshot, request):
         elif issue.get('prerequisites') not in (None, []):
             raise ValueError('unmapped issue cannot claim published graph prerequisites')
         issue['prerequisites'] = [e for e in graph['edges'] if e['to'] in mapped_keys]
-    return graph, working, enriched, new_projects, new_nodes, added_edges
+    return graph, working, enriched, new_projects, new_nodes, added_edges, recorded_moves
 
 
 def ancestors(graph, roots):
@@ -343,12 +376,12 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, 
     if transition not in ('plan', 'build', 'merge'):
         raise ValueError('transition must be plan, build or merge')
     live_input = None
-    live_projects, live_nodes, live_edges = [], [], []
-    if request.get('live_units') or request.get('live_relations') is True:
+    live_projects, live_nodes, live_edges, live_moves = [], [], [], []
+    if request.get('live_units') or request.get('live_relations') is True or request.get('live_project_moves'):
         if proposed is not None:
             raise ValueError('live units cannot be mixed with a proposed maintenance manifest')
         live_input = {'issues': copy.deepcopy(snapshot), 'request': copy.deepcopy(request)}
-        graph, snapshot, request, live_projects, live_nodes, live_edges = live_reconcile(base, snapshot, request)
+        graph, snapshot, request, live_projects, live_nodes, live_edges, live_moves = live_reconcile(base, snapshot, request)
     else:
         graph = copy.deepcopy(base) if proposed is None else GRAPH['validate'](proposed)
     added, origins = ([], {})
@@ -366,6 +399,7 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, 
             issue_edges.setdefault(nodes[edge['to']]['issue_ref'], []).append(edge)
     projects = {p['key']: p for p in graph['projects']}
     issues = {i['id']: (p, i) for p in snapshot['projects'] for i in p['issues']}
+    moves_by_issue = {m['issue_id']: m for m in live_moves}
     proof_list = request.get('nodes', [])
     proofs = {p['node_id']: p for p in proof_list}
     if len(proofs) != len(proof_list):
@@ -414,8 +448,20 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, 
                 raise ValueError('complete prerequisite evidence must match the dependency closure')
             if n['issue_ref']:
                 entry = issues.get(n['issue_ref'])
-                if entry is None or entry[0]['project_id'] != p['linear_id']:
+                move = moves_by_issue.get(n['issue_ref'])
+                if entry is None or (entry[0]['project_id'] != p['linear_id'] and
+                        (move is None or move['from_project_id'] != p['linear_id'] or
+                         move['to_project_id'] != entry[0]['project_id'] or key not in move['node_ids'])):
                     raise ValueError('complete live issue/project membership required throughout closure')
+                if move:
+                    move_scope = move['scope']
+                    move_text = read_source(move_scope['path'])
+                    if local_index and move_text is not None:
+                        local_scopes[move_scope['path']] = {'text': move_text,
+                            'digest': 'sha256:' + hashlib.sha256(move_text.encode()).hexdigest()}
+                    line, quote = move_scope['line'], move_scope['quote']
+                    if move_text is None or '\n'.join(move_text.splitlines()[line-1:line-1+len(quote.splitlines())]) != quote:
+                        raise ValueError('move scope citation must match exact lines on pinned graph source')
                 issue = entry[1]
                 for field in ('description', 'url', 'updated_at'):
                     required_text(issue.get(field), 'live issue ' + field)
@@ -442,6 +488,13 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, 
             def prerequisites(edges):
                 selected_edges = [e for e in edges if (e['to'], e['to_event']) in candidate_events]
                 return semantic_edges(selected_edges) if semantic else selected_edges
+            relevant_moves = [m for m in live_moves if any(key in keys for key in m['node_ids'])]
+            if semantic:
+                relevant_moves = [{**{field: m[field] for field in ('issue_id', 'from_project_id', 'to_project_id', 'node_ids')},
+                    'scope': {field: m['scope'][field] for field in ('path', 'quote')},
+                    'authorization_source': m['scope']['path'] if m['authorization_source'] ==
+                        f"{m['scope']['path']}:{m['scope']['line']}" else m['authorization_source']}
+                    for m in relevant_moves]
             return digest({
                 'nodes': [{'node_id': key,
                            'scope': {field: proofs[key]['scope'][field] for field in ('path', 'quote')},
@@ -453,14 +506,17 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, 
                             'prerequisites': prerequisites(issues[nodes[k]['issue_ref']][1]['prerequisites'])}
                            for k in sorted(keys) if nodes[k]['issue_ref']],
                 'events': [{'node_id': key, 'event': event, 'state': observed[(key, event)]['state']}
-                           for key, event in sorted(required_events)]})
+                           for key, event in sorted(required_events)],
+                **({'project_moves': relevant_moves} if relevant_moves else {})})
         # Audit and retain the origin while a repair is local. Publication may
         # drop that extra closure only when both of the repair's own digests match.
         published_required = {e for e in ancestors(graph, {(node['id'], transition)}) if e[0] != node['id']}
         live_affected = live_input is not None and (any(n['id'] in closure for n in live_nodes) or
+            any(key in closure for m in live_moves for key in m['node_ids']) or
             any((e['to'], e['to_event']) in closure_events for e in live_edges))
         candidates.append({'issue_id': iid, 'identifier': issues[iid][1]['identifier'],
-                           'project_id': projects[node['project']]['linear_id'],
+                           'project_id': issues[iid][0]['project_id'],
+                           'graph_project_id': projects[node['project']]['linear_id'],
                            'state': 'BLOCKED' if unmet else 'ELIGIBLE',
                            'mode': 'LIVE_RECONCILIATION' if live_affected else 'APPROVED_LOCAL' if local_index else 'LOCAL_RECONCILIATION' if origin else 'PUBLISHED',
                            'node_id': node['id'], 'closure': sorted(closure),
@@ -488,7 +544,8 @@ def audit(repo, ref, snapshot, request, proposed=None, now=None, main_ref=None, 
                 **({'live_input': live_input} if live_input is not None else {}),
                 **({'local_scope_sources': local_scopes} if local_index else {})},
             'delta': {'added_nodes': added, 'changed_edges': [], 'repairs': request.get('repairs', []),
-                      **({'kind': 'LIVE_RECONCILIATION', 'added_projects': live_projects, 'added_edges': live_edges} if live_input is not None else {})},
+                      **({'kind': 'LIVE_RECONCILIATION', 'added_projects': live_projects, 'added_edges': live_edges,
+                          'project_moves': live_moves} if live_input is not None else {})},
             'candidates': candidates, 'state': 'ELIGIBLE' if all(c['state'] == 'ELIGIBLE' for c in candidates) else 'BLOCKED'}
 
 

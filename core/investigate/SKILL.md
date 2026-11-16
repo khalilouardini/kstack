@@ -194,7 +194,9 @@ candidate/closure admission; scope, native blockers, evidence, human decisions
 and plan/merge approvals remain mandatory. Forward this invocation's explicit
 flag and canonical owner/index/manifest pins through composed execution skills.
 Recheck the owner files before writes; never substitute an older dispatch-worktree
-copy. Changed pins require a new plan. Reject repeated local flags and mixed
+copy. Revalidate changed digests and compare the selected closure; unrelated
+graph changes do not require a new plan. A changed source identity or relevant
+approved conditions require renewed authorization. Reject repeated local flags and mixed
 local/PR graph sources. No graph publication or extra tracker writes are granted.
 
 

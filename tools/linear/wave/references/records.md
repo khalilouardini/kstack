@@ -68,6 +68,10 @@ directory's kstack/waves subtree. Partial runs can recover existing remote PRs.
 READMISSION is the read-only B3 observation immediately before a pr-loop.
 Always return actual main/head SHAs, checked_at, ancestry/merge-tree exit codes
 and a complete fresh admission_report string, including on unchanged main.
+For a local graph, also return local_graph_audit as a JSON string containing the
+fresh indexed validation, coverage, provenance, project IDs and digests; its
+pins must match that admission report. Unrelated digest changes are permitted
+only after the candidate's conditions are rechecked.
 Main movement alone is insufficient to detect Linear or human-gate changes.
 The script accepts publication on main with equal candidate conditions and drops
 obsolete pending flags. No-change retries require evidence refresh, not approval.
@@ -489,6 +493,12 @@ base SHA and participant-specific seam rows at the exact reviewed commits.
         ]
       },
       "admission_report": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "local_graph_audit": {
         "type": [
           "string",
           "null"

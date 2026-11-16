@@ -36,6 +36,7 @@ class Worker:
         self.task: asyncio.Task | None = None
         self.shutdown_requested = False
         self.guard = asyncio.Lock()
+        self.denied_plan_calls: set[tuple[str, str]] = set()
 
     async def pre_tool_use(self, data: dict[str, Any], _tool_use_id: Any, _context: Any) -> dict[str, Any]:
         tool = data.get('tool_name')
@@ -46,6 +47,8 @@ class Worker:
                 pass
         # Read-only is a host-enforced Plan boundary, not a model instruction.
         if not self.verified_init or (self.phase == 'PLAN' and tool not in READ_TOOLS):
+            if self.verified_init and self.phase == 'PLAN' and isinstance(tool, str) and isinstance(_tool_use_id, str) and _tool_use_id:
+                self.denied_plan_calls.add((tool, _tool_use_id))
             return {'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny',
                     'permissionDecisionReason': 'Session mode is unverified or plan is read-only.'}}
         return {}
@@ -53,7 +56,8 @@ class Worker:
     def status(self) -> dict[str, Any]:
         return {'state': self.state, 'phase': self.phase, 'session_id': self.config['session_id'],
                 'issue_id': self.config['issue_id'], 'worktree': self.config['worktree'],
-                'verified_init': self.verified_init, 'error': self.error}
+                'verified_init': self.verified_init, 'error': self.error,
+                'plan_denied_tools': len(self.denied_plan_calls)}
 
     def observe_init(self, message: Any, expected_mode: str) -> None:
         data = message.data
@@ -70,6 +74,7 @@ class Worker:
     async def turn(self, prompt: str, expected_mode: str) -> Any:
         self.verified_init = False
         self.init_event.clear()
+        self.denied_plan_calls.clear()
         await self.client.query(prompt, session_id=self.config['session_id'])
         result = None
         async for message in self.client.receive_response():
@@ -78,7 +83,12 @@ class Worker:
             elif isinstance(message, self.result_type):
                 if not self.verified_init or message.session_id != self.config['session_id']:
                     raise ValueError('response has no matching verified initialization')
-                if message.is_error or getattr(message, 'permission_denials', None):
+                denials = getattr(message, 'permission_denials', None)
+                verified_plan_denials = (self.phase == 'PLAN' and isinstance(denials, list)
+                    and all(isinstance(d, dict) and
+                            (d.get('tool_name'), d.get('tool_use_id')) in self.denied_plan_calls
+                            for d in denials))
+                if message.is_error is not False or (denials and not verified_plan_denials):
                     raise ValueError('Claude reported a failure or denied permission')
                 result = message
         if result is None:
@@ -96,7 +106,9 @@ class Worker:
 
     async def run_plan(self, prompt: str | None = None) -> None:
         try:
-            result = await self.turn(prompt or self.config['plan_prompt'], 'plan')
+            instruction = ('Plan read-only: use Read, Glob, Grep or LS only. '
+                           'Do not use shell, editing, delegation or tracker-writing tools.\n')
+            result = await self.turn(instruction + (prompt or self.config['plan_prompt']), 'plan')
             body = self.content(result)
             if not isinstance(body.get('text'), str) or not body['text'].strip():
                 raise ValueError('plan text required')
@@ -147,7 +159,8 @@ class Worker:
             return self.status()
         if command == 'plan':
             if self.state == 'PLAN_READY':
-                return {'state': 'READY', 'session_id': self.config['session_id'], 'plan': self.plan}
+                return {'state': 'READY', 'session_id': self.config['session_id'], 'plan': self.plan,
+                        'plan_denied_tools': len(self.denied_plan_calls)}
             return {'state': 'WAIT' if self.state in ('STARTING', 'PLAN_STARTING', 'PLAN_RUNNING') else 'UNKNOWN', 'status': self.status()}
         if command == 'idle':
             return {'state': 'IDLE' if self.state in ('PLAN_READY', 'BUILD_DONE', 'REVIEW_DONE') else 'UNKNOWN',

@@ -101,11 +101,12 @@ function reviewedGraph(proof, ids, requireAll=false) {
     proof.issues && typeof proof.issues==='object' && Array.isArray(proof.edges) &&
     proof.edges.every(e=>e && text(e.to)) && (!requireAll || [...ids].every(id=>isHash(proof.issues[id]))),
     'fresh per-ticket review graph evidence required');
-  // Structural ambiguity is global, but a newly introduced cycle is checked
-  // separately for each track so it cannot freeze unrelated reviews. An edge
-  // targeting an unselected ticket cannot be an incoming edge of this batch.
+  // An edge without a target is globally ambiguous. Once a target is known,
+  // validate its complete incoming closure per track so an invalid sibling edge
+  // cannot freeze unrelated reviews. Initial selection still validates all edges.
+  // An unselected target cannot be an incoming edge of this batch.
   const edges=proof.edges.filter(e=>ids.has(e.to));
-  validateEdges(edges,ids,false);
+  if (requireAll) validateEdges(edges,ids,false);
   return {...proof,edges};
 }
 class Controller {
