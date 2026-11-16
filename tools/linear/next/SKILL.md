@@ -602,21 +602,28 @@ under `--parallel` the batch *is* the answer and there is no #1.
 
 ### Implementation kickoff
 
-Put this sequence in every paste-ready implementation paragraph, including when
-`--parallel` collapses to one track. The implementation session records truthful
-Codex or Claude commit attribution per
-[`pr-loop` routing](../../github/pr-loop/references/routing.md) and uses `/land`
-to open its PR. Use the resulting PR URL to verify the number and open state
-for that branch on GitHub, then immediately run `/pr-loop <PR#>` in the same
-session and worktree. Forward any explicit `--accept-graph-update` or
-`--local-graph` flag and its graph evidence and pins to both skills. Start the
-loop without waiting for sibling PRs, CI, or another user prompt. Let `pr-loop`
-run to its stop condition and report the result with the PR. Do not pass
-`--merge` or mark the issue complete. If landing stops before a PR is open,
-report the blocker instead of starting a loop.
+End every paste-ready implementation paragraph with direct instructions like
+these, including when `--parallel` collapses to one track. Fill in any explicit
+`--accept-graph-update` or `--local-graph` flags, graph evidence, and pins for
+both skills so the paragraph can be pasted on its own.
+
+> Preserve truthful Codex or Claude commit attribution. Use `/land` to open your
+> PR. Verify the PR number and open state for your branch on GitHub and immediately
+> run `/pr-loop <PR#>` in this session and worktree. Start without waiting for
+> sibling PRs, CI, or another prompt. Report the loop result with the PR. If
+> landing stops before the PR opens, report the blocker. Omit `--merge` and
+> leave the issue open.
+
+When emitting multiple implementation kickoffs, include the same concrete
+`--review-slots N` in every loop command. Read `N` from the repository's
+`wave.review_concurrency`, using and announcing the default of 1 when missing
+or null. Report malformed values and use 1 for these kickoffs. The permit
+bounds paid reviewer processes. Each controller still starts as soon as its own
+PR opens. Single implementation kickoffs omit the slot argument.
 
 `next` only writes the kickoff. The receiving implementation session runs the
-loop. `/wave` consumes `next` selection and starts review through its own B3 step.
+loop. Plan-only and human kickoffs omit these instructions. `/wave` consumes
+`next` selection and starts review through its own B3 step.
 
 ## Output
 
