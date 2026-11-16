@@ -14,6 +14,7 @@ from test_route import HEAD, commit, pr, route, review, rt
 
 BIN = Path(__file__).resolve().parents[1] / 'bin'
 FAKE = Path(__file__).with_name('fake_cli.py').read_text()
+SESSION = '01a1d23a-9629-7140-ba62-31b523963ec6'  # the fixture CLI's session id
 
 
 class RunnerTests(unittest.TestCase):
@@ -29,8 +30,13 @@ class RunnerTests(unittest.TestCase):
             p.chmod(0o755)
         self.skill = self.root / 'canonical skill.md'
         self.skill.write_text('review only')
+        self.tmp = self.root / 'tmp'; self.tmp.mkdir()
+        self.codex_home = self.root / 'codex home'
+        self.claude_home = self.root / 'claude home'
         self.env = dict(os.environ, PATH=str(self.fake), REVIEW_FAKE_STATE=str(self.root / 'state.json'),
-                        GITHUB_TOKEN='ambient-wrong-token', GH_TOKEN='ambient-wrong-token')
+                        GITHUB_TOKEN='ambient-wrong-token', GH_TOKEN='ambient-wrong-token',
+                        TMPDIR=str(self.tmp), CODEX_HOME=str(self.codex_home),
+                        CLAUDE_CONFIG_DIR=str(self.claude_home))
 
     def invoke(self, engine='Codex', mode='', reuse=False, extra=None, modify=None, host=None):
         value = route(engine)
@@ -66,9 +72,9 @@ class RunnerTests(unittest.TestCase):
             scratch = Path(state['scratch'])
             def remove_test_scratch():
                 if scratch.is_symlink(): scratch.unlink()
-                elif scratch.exists(): shutil.rmtree(scratch)
+                elif scratch.exists(): rt.remove_tree(scratch)
                 moved = scratch.with_name(scratch.name + '-moved')
-                if moved.exists(): shutil.rmtree(moved)
+                if moved.exists(): rt.remove_tree(moved)
             self.addCleanup(remove_test_scratch)
         self.assertNotIn('fixture-secret', result.stdout + result.stderr)
         return result, json.loads(result.stdout), state
@@ -76,6 +82,9 @@ class RunnerTests(unittest.TestCase):
     def assert_blocked(self, result, report):
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertEqual(report['status'], 'BLOCKED')
+
+    def scratches(self):
+        return sorted(self.tmp.glob('review-scratch-*'))
 
     def test_claude_review_of_codex_implementation(self):
         result, report, state = self.invoke()
@@ -97,8 +106,8 @@ class RunnerTests(unittest.TestCase):
         launch = next(c for c in state['calls'] if c['name'] == reviewer and flag in c['args'])
         scratch = Path(launch['review_tmpdir'])
         self.assertEqual(launch['tmpdir'], str(scratch))
-        self.assertEqual(scratch.parent, Path(tempfile.gettempdir()).resolve())
-        self.assertFalse(scratch.is_relative_to(self.root.resolve()))
+        self.assertEqual(scratch.parent, self.tmp.resolve())
+        self.assertFalse(scratch.is_relative_to(self.repo.resolve()))
         self.assertFalse(scratch.exists(), 'controller must remove only its own scratch after the reviewer exits')
         self.assertEqual(outside.read_text(), 'keep')
         self.assertTrue((self.root / 'reports' / 'report.txt').is_file())
@@ -120,11 +129,11 @@ class RunnerTests(unittest.TestCase):
         self.assertTrue((Path(state['scratch']) / 'owned-proof').is_file())
         self.assertIn('review scratch preserved at', report['reason'])
 
-    def test_denied_review_still_blocks_after_owned_cleanup(self):
+    def test_denied_review_still_blocks_and_preserves_owned_scratch(self):
         result, report, state = self.invoke(mode='scratch-denied')
         self.assert_blocked(result, report)
         self.assertIn('Claude tool permission denied: Bash', report['reason'])
-        self.assertFalse(Path(state['scratch']).exists())
+        self.assertTrue(Path(state['scratch']).exists())
 
     def test_timeout_preserves_owned_scratch(self):
         result, report, state = self.invoke(mode='scratch-timeout', extra=['--timeout', '1'])
@@ -139,7 +148,8 @@ class RunnerTests(unittest.TestCase):
                 rt.create_review_scratch(self.root / 'reports', self.repo.resolve())
 
     def test_scratch_cannot_be_inside_the_controller_report_tree(self):
-        self.env['TMPDIR'] = str(self.root)
+        (self.root / 'reports').mkdir()
+        self.env['TMPDIR'] = str(self.root / 'reports')
         result, report, state = self.invoke(mode='scratch')
         self.assert_blocked(result, report)
         self.assertIn('scratch overlaps', report['reason'])
@@ -151,8 +161,8 @@ class RunnerTests(unittest.TestCase):
         (outside / 'sentinel').write_text('keep')
         result, report, state = self.invoke(mode='scratch-symlink',
             modify=lambda s: s.update(outside=str(outside)))
-        self.assert_blocked(result, report)
-        self.assertIn('scratch identity changed', report['reason'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('scratch identity changed', result.stderr)
         self.assertEqual((outside / 'sentinel').read_text(), 'keep')
         self.assertTrue(Path(state['scratch']).is_symlink())
 
@@ -270,6 +280,133 @@ class RunnerTests(unittest.TestCase):
     def test_nonzero_exit_does_not_leak_stderr(self):
         result, report, _ = self.invoke(mode='nonzero')
         self.assert_blocked(result, report)
+        # Kept privately for diagnosis, with the credential redacted.
+        self.assertEqual((self.root / 'reports/reviewer.stderr.txt').read_text(), '[REDACTED]\n')
+        self.assertTrue(Path(report['reviewer_scratch']).is_dir())
+
+    def test_unwritable_diagnostics_do_not_block_verification(self):
+        result, report, _ = self.invoke('Claude', mode='unwritable-diagnostics')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(report['status'], 'REVIEW_CLEAR')
+        self.assertEqual(report['review_id'], 123)
+        self.assertIn('reviewer diagnostics not saved: reviewer.stdout.txt', result.stderr)
+        self.assertIn(SESSION, (self.root / 'reports/reviewer.stderr.txt').read_text())
+        self.assertEqual(self.scratches(), [])
+
+    def test_unwritable_report_preserves_posted_review_and_scratch(self):
+        report_path = self.root / 'reports' / 'report.txt'
+        result, report, _ = self.invoke(mode='unwritable-report',
+                                        modify=lambda state: state.update(report_path=str(report_path)))
+        self.assert_blocked(result, report)
+        self.assertIn('cannot read or save the captured reviewer report', report['reason'])
+        self.assertEqual(report['submitted_review'], 123)
+        self.assertEqual(report['reviewer_session']['id'], SESSION)
+        self.assertTrue((Path(report['reviewer_scratch']) / 'review.json').is_file())
+
+    def assert_scratch_owned_by_runner(self, implementation, reviewer, flag):
+        result, report, state = self.invoke(implementation)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        launch = next(c for c in state['calls'] if c['name'] == reviewer and flag in c['args'])
+        scratch = Path(launch['review_scratch'])
+        self.assertEqual(scratch.parent, self.tmp.resolve())
+        self.assertIn(str(scratch), launch['args'][-1])
+        # The reviewer left a payload and a read-only checkout; the runner removed both.
+        self.assertFalse(scratch.exists())
+        self.assertEqual(self.scratches(), [])
+        self.assertNotIn('reviewer_scratch', report)
+
+    def test_runner_removes_codex_reviewer_scratch(self):
+        self.assert_scratch_owned_by_runner('Claude', 'codex', '-o')
+
+    def test_runner_removes_claude_reviewer_scratch(self):
+        self.assert_scratch_owned_by_runner('Codex', 'claude', '--print')
+
+    def test_scratch_inside_repository_blocks_before_commands(self):
+        inside = self.repo / 'tmp'; inside.mkdir()
+        self.env['TMPDIR'] = str(inside)
+        result, report, state = self.invoke()
+        self.assert_blocked(result, report)
+        self.assertIn('scratch must live outside the repository', report['reason'])
+        self.assertEqual(state['calls'], [])
+        self.assertEqual(list(inside.iterdir()), [])
+
+    def test_failure_after_post_names_the_review_and_keeps_scratch(self):
+        # A reviewer can post and then fail: a refused cleanup command, a BLOCKED
+        # report, a denial, a crash or a timeout. The round stays BLOCKED, but its
+        # posted review is named and the next run at this head reuses it unpaid.
+        cases = [('Claude', 'blocked-report', []), ('Codex', 'denied', []),
+                 ('Claude', 'posted-then-crash', []), ('Codex', 'posted-then-crash', []),
+                 ('Claude', 'hang', ['--timeout', '1'])]
+        for number, (implementation, mode, extra) in enumerate(cases):
+            with self.subTest(mode=mode, implementation=implementation):
+                reports = ['--report-dir', str(self.root / f'reports-{number}')]
+                result, report, _ = self.invoke(implementation, mode=mode, extra=extra + reports)
+                self.assert_blocked(result, report)
+                self.assertEqual(report['submitted_review'], 123)
+                self.assertIn('GitHub holds verified review 123 at this head', report['reason'])
+                scratch = Path(report['reviewer_scratch'])
+                self.assertEqual(scratch.parent, self.tmp.resolve())
+                self.assertTrue((scratch / 'review.json').is_file())
+                rerun, reused, state = self.invoke(
+                    implementation, extra=['--report-dir', str(self.root / f'rerun-{number}')],
+                    modify=lambda s: s.update(posted=True))
+                self.assertEqual(rerun.returncode, 0, rerun.stderr)
+                self.assertTrue(reused['reused'])
+                self.assertEqual(reused['review_id'], 123)
+                self.assertFalse(any('-o' in c['args'] or '--print' in c['args']
+                                     for c in state['calls']))
+        self.assertIn('timed out', report['reason'])
+
+    def test_blocked_round_points_at_codex_session_log(self):
+        log = self.codex_home / 'sessions/2026/11/13' / f'rollout-2026-11-13T01-06-58-{SESSION}.jsonl'
+        log.parent.mkdir(parents=True); log.write_text('{}\n')
+        result, report, _ = self.invoke('Claude', mode='posted-then-crash')
+        self.assert_blocked(result, report)
+        self.assertEqual(report['reviewer_session'], {'engine': 'codex', 'id': SESSION, 'log': str(log)})
+        stderr = (self.root / 'reports/reviewer.stderr.txt').read_text()
+        self.assertIn('session id: ' + SESSION, stderr)
+        self.assertIn('[REDACTED]', stderr)
+        self.assertNotIn('fixture-secret', stderr)
+
+    def test_blocked_round_points_at_claude_session_log(self):
+        log = self.claude_home / 'projects/-fixture-repository' / f'{SESSION}.jsonl'
+        log.parent.mkdir(parents=True); log.write_text('{}\n')
+        result, report, _ = self.invoke(mode='denied')
+        self.assert_blocked(result, report)
+        self.assertIn('Claude tool permission denied: Bash', report['reason'])
+        self.assertEqual(report['reviewer_session'], {'engine': 'claude', 'id': SESSION, 'log': str(log)})
+
+    def test_session_pointer_without_log_keeps_the_id(self):
+        result, report, _ = self.invoke('Claude', mode='posted-then-crash')
+        self.assertEqual(report['reviewer_session'], {'engine': 'codex', 'id': SESSION, 'log': None})
+
+    def test_remove_tree_clears_read_only_dirs_without_following_links(self):
+        tree = self.root / 'scratch'
+        (tree / 'checkout/sub').mkdir(parents=True)
+        (tree / 'checkout/sub/proof.py').write_text('x')
+        outside = self.root / 'outside'; outside.mkdir()
+        (outside / 'keep').write_text('k')
+        outside.chmod(0o500)
+        self.addCleanup(outside.chmod, 0o700)
+        (tree / 'link').symlink_to(outside, target_is_directory=True)
+        (tree / 'checkout/sub').chmod(0o555)
+        (tree / 'checkout').chmod(0o555)
+        self.assertTrue(rt.remove_tree(tree))
+        self.assertFalse(os.path.lexists(tree))
+        self.assertTrue((outside / 'keep').is_file())
+        self.assertEqual(outside.stat().st_mode & 0o777, 0o500)
+
+    def test_remove_tree_leaves_scratch_root_symlink_target_untouched(self):
+        outside = self.root / 'outside'
+        child = outside / 'child'
+        child.mkdir(parents=True)
+        child.chmod(0o755)
+        tree = self.root / 'scratch'
+        tree.symlink_to(outside, target_is_directory=True)
+
+        self.assertFalse(rt.remove_tree(tree))
+        self.assertTrue(tree.is_symlink())
+        self.assertEqual(child.stat().st_mode & 0o777, 0o755)
 
     def test_cli_success_without_review_blocks(self):
         result, report, _ = self.invoke(mode='no-review')
@@ -305,9 +442,15 @@ class RunnerTests(unittest.TestCase):
         result, report, state = self.invoke(implementation)
         self.assertEqual(result.returncode, 0, result.stderr)
         launch = next(c for c in state['calls'] if c['name'] == reviewer and flag in c['args'])
+        prompt = launch['args'][-1]
         self.assertIn('Make any disposable checkout with git clone --shared --no-checkout or '
-                      'git archive in a temporary directory, never git worktree add',
-                      launch['args'][-1])
+                      f'git archive in your scratch directory {launch["review_scratch"]} (also '
+                      '$REVIEW_SCRATCH), never git worktree add', prompt)
+        # A host may refuse a delete; cleanup is the runner's, never a reviewer step.
+        self.assertIn('Never delete anything (no rm, no cleanup step)', prompt)
+        self.assertIn('Cleanup is never a required step.', prompt)
+        self.assertIn('Submit the review in a shell call that holds only the identity '
+                      're-check and the post', prompt)
 
     def test_codex_prompt_forbids_git_worktree_add(self):
         self.assert_checkout_rule_in_prompt('Claude', 'codex', '-o')

@@ -16,12 +16,19 @@ import stat
 
 
 class Blocked(ValueError):
-    pass
+    """A refusal. `detail` holds non-secret pointers for the BLOCKED report."""
+
+    def __init__(self, message, **detail):
+        super().__init__(message)
+        self.detail = detail
 
 
 ENGINES = {'codex', 'claude'}
 SHA = re.compile(r'[0-9a-f]{40}')
 TRAILER = re.compile(r'^Co-Authored-By: (Codex|Claude)\b[^\n]*<[^<>\s]+@[^<>\s]+>\s*$', re.I)
+UUID = re.compile(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}')
+# codex exec prints its config header to stderr, ending with this line.
+CODEX_SESSION = re.compile(r'^session id: (' + UUID.pattern + r')\s*$', re.M)
 
 
 def pages(value):
@@ -221,31 +228,101 @@ def run(argv, *, cwd, env=None, timeout=60, pass_fds=()):
 
 
 def create_review_scratch(report_dir, repo):
-    """Create one private, parent-owned directory for a paid reviewer."""
+    """The reviewer's private directory for disposable files. The runner, not the
+    reviewer, removes it: a host can refuse a delete command, and the reviewer
+    contract treats a refused command as the end of the review."""
     if not getattr(shutil.rmtree, 'avoids_symlink_attacks', False):
         raise Blocked('safe review scratch cleanup is unsupported on this host')
     try:
-        # Keep failed work outside the caller's report tree: the loop's exit
-        # trap may remove that tree even when a reviewer is still running.
-        scratch = Path(tempfile.mkdtemp(prefix='kstack-review-')).resolve()
-        if repo in scratch.parents or report_dir.parent in scratch.parents:
-            scratch.rmdir()  # still empty; no child has launched
-            raise Blocked('review scratch overlaps the repository or controller report tree')
+        scratch = Path(tempfile.mkdtemp(prefix='review-scratch-')).resolve()
+        if scratch == repo or repo in scratch.parents:
+            scratch.rmdir()
+            raise Blocked('reviewer scratch must live outside the repository')
+        if scratch == report_dir or report_dir in scratch.parents or scratch in report_dir.parents:
+            scratch.rmdir()
+            raise Blocked('review scratch overlaps the controller report tree')
         info = scratch.lstat()
     except OSError as exc:
         raise Blocked('cannot create private review scratch') from exc
     return scratch, (info.st_dev, info.st_ino)
 
 
-def cleanup_review_scratch(scratch, identity):
-    """Delete only the exact directory we created, without following symlinks."""
+def remove_tree(path, identity=None):
+    """Delete a scratch tree without following a link out of it. False if it remains."""
+    if not shutil.rmtree.avoids_symlink_attacks:
+        return False
     try:
-        info = scratch.lstat()
-        if not stat.S_ISDIR(info.st_mode) or (info.st_dev, info.st_ino) != identity:
-            raise Blocked(f'review scratch identity changed; preserved at {scratch}')
-        shutil.rmtree(scratch)
+        info = path.lstat()
+        if not stat.S_ISDIR(info.st_mode) or (identity is not None and
+                (info.st_dev, info.st_ino) != identity):
+            return False
+        # Repair read-only checkouts by descriptor. fwalk skips symlinks, including the root.
+        for _, _, _, fd in os.fwalk(path, follow_symlinks=False):
+            os.fchmod(fd, 0o700)
+        shutil.rmtree(path)
+    except OSError:
+        return not os.path.lexists(path)
+    return True
+
+
+def reviewer_session(engine, stdout, stderr, environ=None):
+    """Name the reviewer CLI's own session log by ID and path, never by its content."""
+    environ = os.environ if environ is None else environ
+    if engine == 'codex':
+        match = CODEX_SESSION.search(stderr)
+        session = match[1] if match else None
+        root = Path(environ.get('CODEX_HOME') or Path.home() / '.codex') / 'sessions'
+        pattern = f'*/*/*/rollout-*-{session}.jsonl'
+    else:
+        try:
+            data = json.loads(stdout)
+        except ValueError:
+            data = None
+        session = data.get('session_id') if isinstance(data, dict) else None
+        if not (isinstance(session, str) and UUID.fullmatch(session)):
+            session = None
+        root = Path(environ.get('CLAUDE_CONFIG_DIR') or Path.home() / '.claude') / 'projects'
+        pattern = f'*/{session}.jsonl'
+    if not session:
+        return None
+    try:
+        logs = sorted(str(path) for path in root.glob(pattern))
+    except OSError:
+        logs = []
+    return dict(engine=engine, id=session, log=logs[0] if logs else None)
+
+
+def launch(argv, *, engine, cwd, env, timeout, pass_fds, report_dir, secret):
+    """Run the paid reviewer. Its redacted streams go to the private report
+    directory, never to this runner's output; the session pointer goes to both."""
+    def keep(stdout, stderr):
+        streams = {}
+        for name, text in (('stdout', stdout), ('stderr', stderr)):
+            if isinstance(text, bytes):
+                text = text.decode('utf-8', 'replace')
+            streams[name] = (text or '').replace(secret, '[REDACTED]')
+            filename = f'reviewer.{name}.txt'
+            try:
+                with (report_dir / filename).open('x', encoding='utf-8') as stream:
+                    stream.write(streams[name])
+            except OSError:
+                print(f'reviewer diagnostics not saved: {filename}', file=sys.stderr)
+        session = reviewer_session(engine, streams['stdout'], streams['stderr'])
+        return {'reviewer_session': session} if session else {}
+
+    try:
+        result = subprocess.run(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                                capture_output=True, text=True, timeout=timeout,
+                                pass_fds=pass_fds)
+    except subprocess.TimeoutExpired as exc:
+        raise Blocked(f'{argv[0]} timed out; no verified review',
+                      **keep(exc.stdout, exc.stderr)) from exc
     except OSError as exc:
-        raise Blocked(f'review scratch cleanup failed; preserved at {scratch}') from exc
+        raise Blocked('command unavailable: ' + argv[0]) from exc
+    detail = keep(result.stdout, result.stderr)
+    if result.returncode:
+        raise Blocked(f'{argv[0]} exited {result.returncode}; no verified review', **detail)
+    return result.stdout, detail
 
 
 def decode(text):
@@ -279,7 +356,52 @@ def cli_report(engine, text):
     return report
 
 
+def name_posted_review(exc, observed):
+    """A reviewer can fail after it posted (a refused cleanup, a crash). Name a verified
+    review at this head instead of hiding it. Never accept it here: the next run-review
+    at this head reuses it through the ordinary skip-check."""
+    try:
+        posted = observed()
+    except Blocked:
+        return exc
+    if not posted:
+        return exc
+    named = Blocked(f'{exc}; GitHub holds verified review {posted["review_id"]} at this head, '
+                    'which the next run-review at this head reuses without a new review',
+                    **dict(exc.detail, submitted_review=posted['review_id']))
+    named.__cause__ = exc
+    return named
+
+
+def holds_files(path):
+    try:
+        return any(path.iterdir())
+    except OSError:
+        return False
+
+
 def execute(args):
+    """One review round. The runner owns the reviewer's scratch directory: it removes
+    it after a verified review and keeps a non-empty one after a BLOCKED round."""
+    repo = Path(args.repo_root).resolve(strict=True)
+    scratch, identity = create_review_scratch(Path(args.report_dir).resolve(), repo)
+    detail, kept = {}, False
+    try:
+        return review_round(args, scratch, detail)
+    except Blocked as exc:
+        exc.detail = dict(detail, **exc.detail)
+        if holds_files(scratch) or detail.get('_review_launched'):
+            kept = True
+            exc.detail['reviewer_scratch'] = str(scratch)
+            exc.args = (f'{exc}; review scratch preserved at {scratch}',)
+        exc.detail.pop('_review_launched', None)
+        raise
+    finally:
+        if not kept and not remove_tree(scratch, identity):
+            print(f'reviewer scratch identity changed or cleanup failed; preserved at {scratch}', file=sys.stderr)
+
+
+def review_round(args, scratch, detail):
     repo = Path(args.repo_root).resolve(strict=True)
     skill = Path(args.skill)
     if not skill.is_absolute() or not skill.is_file():
@@ -360,13 +482,14 @@ def execute(args):
               'and review submission. Do not obtain or use a maintainer credential, and do not '
               'reset to the configured default reviewer. Recompute provenance with this same token. '
               'Make any disposable checkout with git clone --shared --no-checkout or git archive '
-              'in a temporary directory, never git worktree add: it writes to the shared .git, '
-              'which a sandboxed reviewer cannot write. '
-              'Put all temporary checkouts, scratch and test artifacts under the controller-owned '
-              'directory in KSTACK_REVIEW_TMPDIR. Do not delete temporary artifacts; the parent '
-              'cleans that directory after your process exits. Never create scratch elsewhere '
-              'or combine cleanup with GitHub verification commands. Do not leave background '
-              'processes or tools running after your response. '
+              f'in your scratch directory {scratch} (also $REVIEW_SCRATCH), never git worktree '
+              'add: it writes to the shared .git, which a sandboxed reviewer cannot write. '
+              'Keep every temporary file there, including the review payload before you post it. '
+              'Do not delete temporary artifacts. Do not leave background processes or tools '
+              'running after your response. Never delete anything (no rm, no cleanup step): the runner owns that directory '
+              'and its cleanup, and a host may refuse a delete command. Cleanup is never a '
+              'required step. Submit the review in a shell call that holds only the identity '
+              're-check and the post: a refused command rejects its whole call. '
               'Respect host permissions: never request, retry around or work around a denial. '
               'A denied required step (identity, GitHub reads or review submission, the diff, '
               'gates.test or the project proof gate), absent evidence or a moved head means '
@@ -388,6 +511,9 @@ def execute(args):
     reviewer_env = env.copy()
     for key in ('CODEX_SESSION_ID', 'CODEX_THREAD_ID', 'CLAUDE_CODE_CHILD_SESSION'):
         reviewer_env.pop(key, None)
+    reviewer_env['REVIEW_SCRATCH'] = str(scratch)
+    reviewer_env['KSTACK_REVIEW_TMPDIR'] = str(scratch)
+    reviewer_env['TMPDIR'] = str(scratch)
     slots = getattr(args, 'review_slots', None)
     if slots is not None:
         sys.path.insert(0, str(Path(__file__).resolve().parents[4] / 'core/land/lib'))
@@ -409,26 +535,29 @@ def execute(args):
                    run(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=repo))
         if current != before:
             raise Blocked('review checkout changed while waiting for a resource permit')
-        scratch, scratch_identity = create_review_scratch(report_dir, repo)
-        reviewer_env['TMPDIR'] = str(scratch)
-        reviewer_env['KSTACK_REVIEW_TMPDIR'] = str(scratch)
         started_at = time.monotonic()
+        detail['_review_launched'] = True
         try:
-            output = run(argv, cwd=repo, env=reviewer_env, timeout=args.timeout,
-                         pass_fds=() if fd is None else (fd,))
+            output, launched = launch(argv, engine=engine, cwd=repo, env=reviewer_env,
+                                      timeout=args.timeout, pass_fds=() if fd is None else (fd,),
+                                      report_dir=report_dir, secret=token)
         except Blocked as exc:
-            # A timeout or failed launcher may leave descendants alive. Do not
-            # delete their data or retry their operation automatically.
-            raise Blocked(f'{exc}; review scratch preserved at {scratch}') from exc
+            raise name_posted_review(exc, observed)
+        detail.update(launched)
         finished_at = time.monotonic()
-    if engine == 'claude':
-        report.write_text(output.replace(token, '[REDACTED]'))
-    cleanup_review_scratch(scratch, scratch_identity)
-    if not report.is_file():
-        raise Blocked('reviewer did not produce a captured report')
-    text = report.read_text()
-    report.write_text(text.replace(token, '[REDACTED]'))
-    submitted = cli_report(engine, text)
+    try:
+        if engine == 'claude':
+            report.write_text(output.replace(token, '[REDACTED]'))
+        if not report.is_file():
+            raise Blocked('reviewer did not produce a captured report')
+        text = report.read_text()
+        report.write_text(text.replace(token, '[REDACTED]'))
+        submitted = cli_report(engine, text)
+    except OSError as exc:
+        raise name_posted_review(Blocked('cannot read or save the captured reviewer report'),
+                                 observed) from exc
+    except Blocked as exc:
+        raise name_posted_review(exc, observed)
     after = (run(['git', 'rev-parse', 'HEAD'], cwd=repo),
              run(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=repo))
     if before != after:
@@ -440,7 +569,7 @@ def execute(args):
     if submitted['head'] != args.head or submitted['review_id'] != evidence['review_id']:
         raise Blocked('captured report does not match submitted GitHub evidence')
     fresh()
-    return dict(evidence, reused=False, cli_version=version, scratch_cleanup='REMOVED',
+    return dict(evidence, reused=False, cli_version=version,
                 timing=dict(slot_wait_seconds=acquired_at-queued_at,
                             reviewer_process_seconds=finished_at-started_at))
 
@@ -524,5 +653,5 @@ def review_main():
         print(json.dumps(dict(status='SLOT_WAIT_TIMEOUT', reason=str(exc))))
         raise SystemExit(75)
     except (Blocked, OSError, ValueError, TypeError, KeyError, AttributeError, TimeoutError) as exc:
-        print(json.dumps(dict(status='BLOCKED', reason=str(exc))))
+        print(json.dumps(dict(getattr(exc, 'detail', {}), status='BLOCKED', reason=str(exc))))
         raise SystemExit(2)

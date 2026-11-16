@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.11.2
+version: 0.12.0
 description: Drive an independent Codex↔Claude review/fix loop on one PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. The implementation session keeps fixes; the other engine reviews with verified GitHub identity and head evidence. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#>". (kstack)
 ---
 
@@ -471,7 +471,11 @@ with the selected model/effort and inspect its JSON and exit status. Pass an
 explicit `--slot-wait` through when supplied. A `SLOT_WAIT_TIMEOUT`/75 result
 is retryable queue expiry with no paid review; report it distinctly and stop.
 Other failures mean BLOCKED with no blind retry, engine substitution or
-self-review.
+self-review. Quote the BLOCKED JSON's `reason` and, when present, its
+`reviewer_session`, `reviewer_scratch` and `submitted_review` pointers
+(`references/routing.md`) in the loop's report. A `submitted_review` is a review
+the reviewer posted before the round failed: the round stays BLOCKED, and a rerun
+at the same head reads it through step 1 with no new paid review.
 
 **3. Read the findings.** Use the helper's verified review ID/head and structured
 findings (summary plus inline). Missing/malformed evidence is BLOCKED. Apply

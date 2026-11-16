@@ -105,8 +105,8 @@ class DisposableCheckoutTests(ShellCase):
             for name in files:
                 os.chmod(Path(parent) / name, file_mode)
 
-    def run_printed_command(self, argv, marker):
-        script = assignments(REVIEW_HEAD=self.head) + fence(marker, REVIEW_SKILL)
+    def run_printed_command(self, argv, marker, **values):
+        script = assignments(REVIEW_HEAD=self.head, **values) + fence(marker, REVIEW_SKILL)
         script += 'printf "%s\\n" "$REVIEW_COPY"\n'
         result = subprocess.run([*argv, '-c', script], cwd=self.worktree,
                                 capture_output=True, text=True)
@@ -133,6 +133,22 @@ class DisposableCheckoutTests(ShellCase):
     def test_archive_reaches_the_reviewed_head(self, argv):
         copy = self.run_printed_command(argv, 'git archive')
         self.assertFalse((copy / '.git').exists())
+
+    @each_shell
+    def test_copies_land_in_the_runner_scratch(self, argv):
+        scratch = self.root / 'runner scratch'
+        scratch.mkdir(exist_ok=True)
+        for marker in ('clone --quiet --shared', 'git archive'):
+            copy = self.run_printed_command(argv, marker, REVIEW_SCRATCH=scratch)
+            self.assertEqual(copy.parent, scratch)
+
+    def test_skill_never_makes_cleanup_a_reviewer_step_under_run_review(self):
+        text = ' '.join(REVIEW_SKILL.read_text().split())
+        self.assertIn('**Under run-review, delete nothing.**', text)
+        self.assertIn('Cleanup is never a required step', text)
+        self.assertIn('a shell call that holds only that identity re-check and the post', text)
+        self.assertNotIn('must be removed', text)
+        self.assertNotIn('remove them after collecting the output', text)
 
     def test_skill_offers_no_disposable_worktree(self):
         text = REVIEW_SKILL.read_text()
