@@ -1,6 +1,6 @@
 ---
 name: next
-version: 0.10.0
+version: 0.11.0
 description: Read Linear and recommend one scoped issue, or a bounded parallel batch with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. Explicit flags accept a reviewed pending PR or a local graph. Shared files warn; real dependencies constrain selection. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
@@ -558,9 +558,9 @@ still means one paragraph per issue. Additionally:
   no branch, no worktree. Propose the title; never create the ticket.
 - **An issue already owned by a live branch or PR is not a new track.** Mark it
   `already active` and hand off a resume instruction instead.
-- Each **READY_TO_BUILD or graphless engineering** kickoff ends with: open a PR, do not merge,
-  do not mark the issue complete. PLAN_ONLY uses the plan-only variant below and
-  is listed outside the N selected implementation tracks.
+- Include the **Implementation kickoff** instructions below in each READY_TO_BUILD
+  or graphless engineering track's own paragraph. PLAN_ONLY uses the plan-only
+  variant and is listed outside the N selected implementation tracks.
 
 ## Agent handoff
 
@@ -570,8 +570,8 @@ Code, Codex, whichever host they drive). This handoff follows the readiness stat
 
 - Write **one short paragraph for the #1 issue**. Use its tracker outcome and
   acceptance criteria, the contract boundary, known prerequisites, the relevant
-  validation, and, for READY_TO_BUILD or graphless engineering, the instruction to open a PR without
-  merging or marking the issue complete. For PLAN_ONLY, use: "Run
+  validation, and the **Implementation kickoff** instructions below for
+  READY_TO_BUILD or graphless engineering. For PLAN_ONLY, use: "Run
   `/dispatch-implementation <id> --plan-only`, honoring its scope/workspace rules.
   Produce the acceptance-cited plan and stop. No implementation or PR; build waits
   for <event, unmet condition, source>." Do not invent scope.
@@ -590,7 +590,8 @@ Code, Codex, whichever host they drive). This handoff follows the readiness stat
   sequence the work and do not emit a parallel kickoff.
 - For every runner-up proven safe to run concurrently, write **its own separate
   short paragraph** under `Parallel kickoffs`. Never combine two issues into one
-  paragraph. Name any required rebase or final integration order.
+  paragraph. Include the **Implementation kickoff** instructions for each
+  implementation runner-up and name any required rebase or final integration order.
 - Do not emit a new-session kickoff for a runner-up already owned by a live branch
   or PR; say `already active` in its ranking line instead.
 
@@ -598,6 +599,24 @@ Kickoff paragraphs do not turn runners-up into a menu. The #1 issue remains the
 decision; parallel paragraphs only explain how spare execution capacity can be
 used without delaying or conflicting with it. That holds for default mode only —
 under `--parallel` the batch *is* the answer and there is no #1.
+
+### Implementation kickoff
+
+Put this sequence in every paste-ready implementation paragraph, including when
+`--parallel` collapses to one track. The implementation session records truthful
+Codex or Claude commit attribution per
+[`pr-loop` routing](../../github/pr-loop/references/routing.md) and uses `/land`
+to open its PR. Use the resulting PR URL to verify the number and open state
+for that branch on GitHub, then immediately run `/pr-loop <PR#>` in the same
+session and worktree. Forward any explicit `--accept-graph-update` or
+`--local-graph` flag and its graph evidence and pins to both skills. Start the
+loop without waiting for sibling PRs, CI, or another user prompt. Let `pr-loop`
+run to its stop condition and report the result with the PR. Do not pass
+`--merge` or mark the issue complete. If landing stops before a PR is open,
+report the blocker instead of starting a loop.
+
+`next` only writes the kickoff. The receiving implementation session runs the
+loop. `/wave` consumes `next` selection and starts review through its own B3 step.
 
 ## Output
 
