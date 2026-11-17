@@ -322,14 +322,16 @@ line and escape any literal pipes.
   verified review clearance at the current head, and no holds. Use `No` for
   a confirmed blocker (including confirmed absence of current-head review)
   or non-candidate, even if other evidence is missing. Otherwise use `Unknown`
-  when missing or unstable evidence prevents deciding readiness.
+  when missing or unstable evidence prevents deciding readiness. Explain the
+  green check as a readiness recommendation. The maintainer authorizes merges
+  separately.
 - **Review needed?** Assess every open scored PR using the current-head
   review evidence from Step 2, regardless of its scope verdict or CI status.
   Use the first applicable status and name any other review holds in Rationale.
-  - `⚠️ ASAP` — Complete evidence shows the current head has no submitted
-    review that qualifies under the repo's policy. Explain why (for example,
-    no review or only stale reviews). Recommend a PR loop or an authorized
-    human review.
+  - `⚠️ ASAP` — Complete evidence shows the current head has no qualifying
+    submitted review under `references/pr-status.md`. Explain why (for
+    example, no review or only stale reviews). Recommend a PR loop or an
+    authorized human review.
   - `Yes · follow-up` — A blocking review finding or outstanding required
     approval needs action. Name the specific follow-up.
   - `⚠️ Verify ASAP` — Review evidence is incomplete or unstable. Name the
@@ -393,7 +395,7 @@ linked current body/files/diff. Cite scope and name supersession for CLOSE.>
 <State/draft and full head/base refs+SHAs; raw GitHub mergeStateStatus and mergeable;
 CI mode and named buckets/missing expected checks with links;
 reviewed SHA vs current SHA; posted loop verdict/source/head/date/rounds or
-UNKNOWN; separately derived Codex review assessment and stale history;
+UNKNOWN; separately derived agent review assessment and stale history;
 qualifying human approval, if any, with a link;
 P0/P1/P2/P3/unknown counts and appendix link; optional ledger availability;
 explicit dependency, evidence and human holds; snapshot time/stability.>
@@ -421,8 +423,8 @@ Always write the Filter line, including `none`. Before finalizing, recheck the
 selected PRs' state/head/base against collected snapshots as in the status
 reference. Reconcile scored/bucket totals, exclusions and merge-order coverage;
 unknown counts never become zero. The same evidence fields apply to every
-verdict, including CLOSE/PARK. Never collapse the three different facts
-GitHub `CLEAN`, pr-loop `CLEAN`, and human merge permission into one badge.
+verdict, including CLOSE/PARK. Record GitHub merge state, posted loop verdict,
+and any verified human merge authorization as distinct facts in PR details.
 
 Print the full PR overview table directly in the final response. Include measured
 counts, filters/exclusions, totals, applicable next actions, the actual proposal
