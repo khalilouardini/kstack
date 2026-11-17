@@ -49,6 +49,63 @@ class InventoryCommand(unittest.TestCase):
 
 
 class ReviewRegression(unittest.TestCase):
+    def test_reverse_route_claude_review_requires_the_resolved_actor_and_head(self):
+        facts = load_cases('reviews')[0]['facts']
+        facts.update(reviewer='claude-reviewer', reviewer_engine='claude')
+        review = facts['reviews'][0]['nodes'][0]
+        review['author'] = 'claude-reviewer'
+        review['body'] = review['body'].replace('Codex', 'Claude').replace('codex-review', 'claude-review')
+        clear = review_status(facts)
+        self.assertEqual(clear['review_needed'], 'No')
+        self.assertTrue(clear['merge_gate'])
+        for invalid in [{'author': 'codex-implementer'}, {'commit': 'b' * 40},
+                        {'commit': None}, {'state': 'APPROVED'}]:
+            with self.subTest(invalid=invalid):
+                facts['reviews'][0]['nodes'] = [dict(review, **invalid)]
+                result = review_status(facts)
+                self.assertEqual(result['review_needed'], '⚠️ ASAP')
+                self.assertFalse(result['merge_gate'])
+        facts['reviews'][0]['nodes'] = [review]
+        facts['reviewer'] = None
+        self.assertEqual(review_status(facts)['review_needed'], '⚠️ Verify ASAP')
+
+    def test_human_approval_requires_current_authorized_submitted_review(self):
+        facts = load_cases('reviews')[0]['facts']
+        facts.update(pr_author='pr-owner', agent_accounts=['review-agent', 'implementation-agent'])
+        approval = dict(author='human-reviewer', human=True, state='APPROVED', body='',
+                        commit=facts['head'], permission='write')
+        for changes, flag in [
+            ({}, 'No'),
+            ({'permission': 'admin'}, 'No'),
+            ({'permission': 'read'}, '⚠️ ASAP'),
+            ({'permission': None}, '⚠️ Verify ASAP'),
+            ({'author': 'pr-owner'}, '⚠️ ASAP'),
+            ({'author': 'implementation-agent'}, '⚠️ ASAP'),
+            ({'commit': 'b' * 40}, '⚠️ ASAP'),
+            ({'state': 'DISMISSED'}, '⚠️ ASAP'),
+            ({'state': 'CHANGES_REQUESTED'}, 'Yes · follow-up'),
+        ]:
+            with self.subTest(changes=changes):
+                facts['reviews'][0]['nodes'] = [dict(approval, **changes)]
+                result = review_status(facts)
+                self.assertEqual(result['review'], 'unknown')
+                self.assertEqual(result['review_needed'], flag)
+                self.assertEqual(result['merge_gate'], flag == 'No')
+
+        facts['reviews'][0]['nodes'] = [
+            approval, dict(approval, state='CHANGES_REQUESTED'),
+        ]
+        self.assertEqual(review_status(facts)['review_needed'], 'Yes · follow-up')
+
+    def test_unreviewed_draft_flags_review_even_with_green_ci(self):
+        facts = load_cases('reviews')[0]['facts']
+        facts['reviews'][0]['nodes'] = []
+        facts['draft'] = True
+        result = review_status(facts)
+        self.assertEqual(result['ci'], 'success')
+        self.assertEqual(result['review_needed'], '⚠️ ASAP')
+        self.assertFalse(result['merge_gate'])
+
     def test_pending_and_dismissed_reviews_do_not_clear_current_head(self):
         for state in ['PENDING', 'DISMISSED']:
             facts = deepcopy(load_cases('reviews')[0]['facts'])

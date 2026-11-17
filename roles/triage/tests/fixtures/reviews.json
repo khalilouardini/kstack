@@ -904,7 +904,8 @@
       },
       "expected": {
         "review": "no P0\u2013P2",
-        "merge_gate": true
+        "review_needed": "⚠️ ASAP",
+        "merge_gate": false
       }
     },
     {
