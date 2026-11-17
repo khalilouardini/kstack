@@ -53,6 +53,27 @@ forged membership, missing plan evidence and stale snapshot pins. Keep human
 approval separate from graph ELIGIBLE. Live connector collection still needs
 complete pagination, scope interpretation, ownership and actual dependency reads.
 
+## Implementation handoff cases
+
+- Recommend A alone, then with a compatible runner-up, then with `--parallel 2`,
+  and finally with only A eligible under `--parallel 2`. Every emitted
+  implementation paragraph instructs its receiving session to open its own PR
+  through `/land`, start `/pr-loop` for that PR immediately in the same worktree,
+  and report its result. The paragraph preserves commit attribution and any
+  explicit graph flags and pins. It grants neither merge nor issue closure.
+- Set `wave.review_concurrency: 2`. Every implementation kickoff in a
+  multi-session handoff includes `--review-slots 2`. Repeat with a missing,
+  null, or malformed value and verify the reported fallback to 1. A single
+  implementation kickoff omits the slot argument.
+- Simulate A opening PR #101 with CI pending while B is still coding. With the
+  default permit, A starts `/pr-loop 101 --review-slots 1` immediately. B
+  starts its own loop when its PR opens. If A's reviewer is still running,
+  only B's paid reviewer waits for the permit. If B never opens a PR, it
+  reports the blocker and starts no loop.
+- A PLAN_ONLY kickoff still stops at the plan. A human action gets no PR loop.
+  A live branch or PR receives a resume instruction without a duplicate session.
+  Wave selection alone starts no loop. Wave review stays in B3.
+
 ## Published graph admission cases
 
 21. Main's P1 graph omits unrelated maintenance D, dropping coverage from 11/11

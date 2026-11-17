@@ -1,6 +1,6 @@
 ---
 name: next
-version: 0.10.0
+version: 0.11.0
 description: Read Linear and recommend one scoped issue, or a bounded parallel batch with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. Explicit flags accept a reviewed pending PR or a local graph. Shared files warn; real dependencies constrain selection. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
@@ -558,9 +558,9 @@ still means one paragraph per issue. Additionally:
   no branch, no worktree. Propose the title; never create the ticket.
 - **An issue already owned by a live branch or PR is not a new track.** Mark it
   `already active` and hand off a resume instruction instead.
-- Each **READY_TO_BUILD or graphless engineering** kickoff ends with: open a PR, do not merge,
-  do not mark the issue complete. PLAN_ONLY uses the plan-only variant below and
-  is listed outside the N selected implementation tracks.
+- Include the **Implementation kickoff** instructions below in each READY_TO_BUILD
+  or graphless engineering track's own paragraph. PLAN_ONLY uses the plan-only
+  variant and is listed outside the N selected implementation tracks.
 
 ## Agent handoff
 
@@ -570,8 +570,8 @@ Code, Codex, whichever host they drive). This handoff follows the readiness stat
 
 - Write **one short paragraph for the #1 issue**. Use its tracker outcome and
   acceptance criteria, the contract boundary, known prerequisites, the relevant
-  validation, and, for READY_TO_BUILD or graphless engineering, the instruction to open a PR without
-  merging or marking the issue complete. For PLAN_ONLY, use: "Run
+  validation, and the **Implementation kickoff** instructions below for
+  READY_TO_BUILD or graphless engineering. For PLAN_ONLY, use: "Run
   `/dispatch-implementation <id> --plan-only`, honoring its scope/workspace rules.
   Produce the acceptance-cited plan and stop. No implementation or PR; build waits
   for <event, unmet condition, source>." Do not invent scope.
@@ -590,7 +590,8 @@ Code, Codex, whichever host they drive). This handoff follows the readiness stat
   sequence the work and do not emit a parallel kickoff.
 - For every runner-up proven safe to run concurrently, write **its own separate
   short paragraph** under `Parallel kickoffs`. Never combine two issues into one
-  paragraph. Name any required rebase or final integration order.
+  paragraph. Include the **Implementation kickoff** instructions for each
+  implementation runner-up and name any required rebase or final integration order.
 - Do not emit a new-session kickoff for a runner-up already owned by a live branch
   or PR; say `already active` in its ranking line instead.
 
@@ -598,6 +599,31 @@ Kickoff paragraphs do not turn runners-up into a menu. The #1 issue remains the
 decision; parallel paragraphs only explain how spare execution capacity can be
 used without delaying or conflicting with it. That holds for default mode only —
 under `--parallel` the batch *is* the answer and there is no #1.
+
+### Implementation kickoff
+
+End every paste-ready implementation paragraph with direct instructions like
+these, including when `--parallel` collapses to one track. Fill in any explicit
+`--accept-graph-update` or `--local-graph` flags, graph evidence, and pins for
+both skills so the paragraph can be pasted on its own.
+
+> Preserve truthful Codex or Claude commit attribution. Use `/land` to open your
+> PR. Verify the PR number and open state for your branch on GitHub and immediately
+> run `/pr-loop <PR#>` in this session and worktree. Start without waiting for
+> sibling PRs, CI, or another prompt. Report the loop result with the PR. If
+> landing stops before the PR opens, report the blocker. Omit `--merge` and
+> leave the issue open.
+
+When emitting multiple implementation kickoffs, include the same concrete
+`--review-slots N` in every loop command. Read `N` from the repository's
+`wave.review_concurrency`, using and announcing the default of 1 when missing
+or null. Report malformed values and use 1 for these kickoffs. The permit
+bounds paid reviewer processes. Each controller still starts as soon as its own
+PR opens. Single implementation kickoffs omit the slot argument.
+
+`next` only writes the kickoff. The receiving implementation session runs the
+loop. Plan-only and human kickoffs omit these instructions. `/wave` consumes
+`next` selection and starts review through its own B3 step.
 
 ## Output
 
