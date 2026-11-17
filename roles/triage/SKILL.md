@@ -306,10 +306,17 @@ Use the same table in the final response and the proposal, with one row per
 scored PR, including held candidates and state transitions. Keep cells on one
 line and escape any literal pipes.
 
-| PR | Mergeable now? | Review needed? | Rationale | PR summary | Merge order |
-|---|---|---|---|---|---|
+| PR | Project | Mergeable now? | Review needed? | Rationale | PR summary | Merge order |
+|---|---|---|---|---|---|---|
 
 - **PR** links the PR by number and title.
+- **Project** lists the exact project or milestone labels attached to the PR.
+  Recognize versioned MVP labels case-insensitively, including space and hyphen
+  forms such as `MVP 2.5` and `MVP-3.0`. Use the repository's label conventions
+  for additional project labels, and show all matches using their attached
+  spelling. Use `—` when the label list is complete and has no match, or
+  `Unknown` when label evidence is unavailable. This column reflects PR labels.
+  Step 2 still governs project selection.
 - **Mergeable now?** Use `✅ Yes` for an open, in-scope merge candidate with
   a stable snapshot, GitHub reporting `MERGEABLE`, passing applicable CI,
   verified review clearance at the current head, and no holds. Use `No` for
@@ -343,8 +350,8 @@ line and escape any literal pipes.
 If no PRs match, the PR pass is unavailable, or the invocation only covers
 branches/worktrees, print these same headers and one status row. Label the row
 `No matching PRs`, `PR pass unavailable`, or `PR pass skipped`. Give the reason
-in Rationale and use `—` for inapplicable cells. Show `Unknown` in
-Mergeable now?, Review needed?, and Merge order for an unavailable pass.
+in Rationale and use `—` for inapplicable cells. For an unavailable pass,
+show `Unknown` in Project, Mergeable now?, Review needed?, and Merge order.
 
 ### Proposal file
 
