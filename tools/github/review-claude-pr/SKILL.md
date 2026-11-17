@@ -84,9 +84,10 @@ the post-submit verification checks after the fact. Treat them as hard rules.
 - Make no repository edits. Do not implement fixes, commit, push, resolve
   threads, merge, approve, dismiss, or edit the PR description. Temporary proof
   artifacts and the review payload live only outside the repository, in a
-  disposable checkout or temporary directory (under run-review, the scratch
-  directory it names). Their cleanup follows "Temporary files and cleanup" (§2)
-  and is never a required step.
+  disposable checkout or temporary directory (under run-review, the controller-owned
+  `REVIEW_SCRATCH`, also `KSTACK_REVIEW_TMPDIR`). Let the runner handle cleanup;
+  do not delete or combine cleanup with GitHub verification. Cleanup follows
+  "Temporary files and cleanup" (§2) and is never a required step.
 - After standalone bootstrap, use `$REVIEWER` for every GitHub read and write. Resolve its stored credential
   once with `gh auth token --user "$REVIEWER"`, pass it only through `GH_TOKEN` on
   each `gh` invocation, and never call `gh auth switch`. Never post from

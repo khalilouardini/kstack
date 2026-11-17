@@ -1,0 +1,20 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const {createEvidenceBridge}=require('../lib/supervisor_evidence.cjs');
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'batch-evidence-'));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{try {
+  const b=createEvidenceBridge({stateRoot:root,interval:10,timeout:2000});
+  const args={run_id:'r',issue_id:'T-1',session_id:'7fcd9bad-c10a-487d-9405-b8d3957e0925'};
+  const a=b.prepareSession(args), c=b.prepareSession(args);
+  await sleep(30);const requests=b.pending('r');assert.equal(requests.length,1);
+  assert.deepEqual(b.pending('other'),[]);assert.throws(()=>b.respond('other',requests[0].id,{state:'PREPARED'}),/different run/);
+  b.respond('r',requests[0].id,{state:'PREPARED',source:'Linear and Git'});
+  assert.equal((await a).state,'PREPARED');assert.equal((await c).state,'PREPARED');
+  assert.throws(()=>b.respond('r',requests[0].id,{state:'ALTERED'}),/EEXIST/);
+  assert.equal((await b.prepareSession(args)).state,'PREPARED');
+  await assert.rejects(()=>b.prepareSession({...args,another:'different'}),/different bindings/);
+  const head=b.head({run_id:'r',pr:{url:'https://example.test'}});await sleep(30);const [next]=b.pending('r');
+  b.respond('r',next.id,{head_sha:'a'.repeat(40),source:'forge read',checked_at:new Date().toISOString()});assert.equal(await head,'a'.repeat(40));
+  console.log('PASS source-evidence bridge binds replies and deduplicates preparations');
+} finally {fs.rmSync(root,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exitCode=1;});

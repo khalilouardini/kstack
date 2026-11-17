@@ -36,9 +36,10 @@ Before Workflow starts, follow
 `tools/linear/linear-roadmap/references/publication-gate.md` from the physical
 stack root. Report project coverage warnings and require fresh candidate/closure
 admission for every selected/approved track before contract/worktree/tracker writes.
-Unrelated additions do not freeze mapped work. Bounded local maintenance repairs
-need no preliminary graph PR; retain their main SHA, full live evidence and exact
-delta. Semantic scope/dependency/release/human changes require reviewed publication.
+Unrelated additions do not freeze mapped work. Cited in-scope live units and
+native blockers use the helper's candidate-scoped projection without a separate
+graph PR; retain their main SHA, full live evidence and exact delta. Actual new
+scope needs the original owner decision; never weaken existing human or release gates.
 Only explicit --accept-graph-update can use a verified reviewed pending graph.
 Revalidate at A1, before A3/A4 writes, B1 implementation and B3 implementer fixes;
 Run A observations and --approve do not supply fresh evidence or a bypass.
@@ -56,14 +57,16 @@ evidence is rechecked at release; project membership alone is no start condition
 
 Use --local-graph on plan and repeat it explicitly
 on build alongside --approve. The default path is orchestration/index.json in
-the owning repository. Refresh it with /linear-roadmap "<project>" first when
-tickets, scope or dependencies changed; omit --publish to keep it local. Follow the shared gate's **Explicit approved local
+the owning repository. Newly in-scope tickets can use the shared gate's live
+projection without a graph PR; refresh the roadmap when useful and omit --publish
+to keep it local. Follow the shared gate's **Explicit approved local
 graph** procedure. It uses the owning local index/manifest without graph publication
 to GitHub or Linear. Scope, typed dependencies, native blockers, evidence, original
 human-decision proof, independence and both human checkpoints remain mandatory.
 This flag approves graph use only. Reject repeated local flags and mixed PR/local
-sources. Build compares saved index/manifest/provenance pins and still validates
-the approved candidates' closure digests; changed pins require a new plan.
+sources. Build revalidates the local source and compares each approved candidate's
+closure digests. Unrelated changes do not require a new plan; changed source
+identity or relevant approved conditions require renewed authorization.
 
 Supply approved_local_graph with canonical paths/digests, provenance, fresh UTC
 checked_at, validation_exit 0, coverage_exit/state and project_ids. Use project
@@ -71,7 +74,8 @@ state APPROVED_LOCAL and full graph-admission --local-index reports. Coverage ga
 remain warnings; only verified ELIGIBLE build candidates enter tracks. Local helper
 reports have graph_sha null and explicit local_graph pins; do not invent a Git SHA
 for uncommitted files. Preserve full local scope snapshots in report evidence.
-Before B3, obtain a fresh local admission report even if main has not moved.
+Before B3, obtain a fresh local validation and coverage audit and matching admission
+report even if main has not moved.
 Forward the explicit flag and absolute owner/pins through dispatch, land, pr-loop
 and review-comments. Host support below is unchanged.
 

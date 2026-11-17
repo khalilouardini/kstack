@@ -422,6 +422,12 @@ const schemas = {
           "null"
         ]
       },
+      "local_graph_audit": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
       "stop_reason": {
         "type": [
           "string",
@@ -2133,6 +2139,7 @@ const projectUUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const local=args.approved_local_graph;
 const localFields=['index_path','manifest_path','index_digest','manifest_digest','source_revision'];
 const sameLocalPins=(a,b)=>!!a && !!b && localFields.every(k=>a[k]===b[k]);
+const sameLocalSource=(a,b)=>!!a && !!b && ['index_path','manifest_path','source_revision'].every(k=>a[k]===b[k]);
 if (localIndex && (!local || local.index_path!==localIndex ||
     !/^orchestration\/[a-z][a-z0-9_-]*\.json$/.test(local.manifest_path || '') ||
     !/^sha256:[0-9a-f]{64}$/.test(local.index_digest || '') ||
@@ -2177,14 +2184,24 @@ const shaDigest=value=>/^sha256:[0-9a-f]{64}$/.test(value || '');
 if (!Array.isArray(admissions)) return refuse('graph admission: audit reports must be an array');
 // Apply the same build-report validation to live input and Run A's stored input.
 // Prior reports use their original invocation date, even when Run B is later.
+const validLiveDelta=r=>r.delta?.kind==='LIVE_RECONCILIATION' &&
+  r.evidence?.live_input?.issues?.complete===true && r.evidence?.live_input?.request &&
+  (Array.isArray(r.evidence.live_input.request.live_units) || r.evidence.live_input.request.live_relations===true) &&
+  Array.isArray(r.delta.added_projects) && Array.isArray(r.delta.added_edges) &&
+  (r.delta.project_moves===undefined || (Array.isArray(r.delta.project_moves) &&
+    r.delta.project_moves.every(m=>m && typeof m.issue_id==='string' &&
+      Array.isArray(m.node_ids) && m.node_ids.length && m.node_ids.every(id=>typeof id==='string')))) &&
+  r.delta.added_nodes.length<=1000 && r.delta.added_edges.every(e=>e &&
+    typeof e.from==='string' && typeof e.to==='string' && typeof e.from_event==='string' &&
+    typeof e.to_event==='string' && typeof e.type==='string' && typeof e.source==='string' && e.source.trim());
 const validAdmissionReports=(reports,pins,date,transition="build") => Array.isArray(reports) ? reports.filter(r=>
   r && r.schema_version===1 && r.main_sha===pins?.main_sha &&
   validUTC(r.checked_at) && r.checked_at.slice(0,10)===date &&
   shaDigest(r.graph_digest) && shaDigest(r.base_digest) && shaDigest(r.issue_evidence_digest) &&
   r.transition===transition && Array.isArray(r.candidates) &&
   r.evidence?.issues?.complete===true && r.evidence?.request && r.delta &&
-  Array.isArray(r.delta.added_nodes) && r.delta.added_nodes.length<=3 &&
-  Array.isArray(r.delta.changed_edges) && !r.delta.changed_edges.length
+  Array.isArray(r.delta.added_nodes) && Array.isArray(r.delta.changed_edges) && !r.delta.changed_edges.length &&
+  (r.delta.kind==='LIVE_RECONCILIATION' ? validLiveDelta(r) : r.delta.added_nodes.length<=3)
 ) : [];
 // Incomplete unrelated reports and plan-only reports cannot shadow eligible builds.
 const validAdmissions=validAdmissionReports(admissions,publication,args.date);
@@ -2207,21 +2224,26 @@ const candidateAdmission=(track,reports=validAdmissions,pins=publication,current
   const localProject=projects[0].state==='APPROVED_LOCAL';
   if (localProject && (!sameLocalPins(report.local_graph,pins.local_graph) ||
       (current && !sameLocalPins(report.local_graph,localPins)) ||
-      !report.evidence?.local_scope_sources || report.delta.added_nodes.length)) return null;
+      !report.evidence?.local_scope_sources || (report.delta.added_nodes.length && !validLiveDelta(report)))) return null;
   if (report.graph_sha!==(localProject ? null : projects[0].state==='ACCEPTED_UPDATE' ? projects[0].head_sha : pins.main_sha) ||
       report.transition!==transition || c.state!=='ELIGIBLE' ||
       typeof c.issue_id!=='string' || !c.issue_id || typeof c.node_id!=='string' || !c.node_id ||
-      !['PUBLISHED','LOCAL_RECONCILIATION','APPROVED_LOCAL'].includes(c.mode) ||
-      (c.mode==='APPROVED_LOCAL')!==localProject ||
+      !['PUBLISHED','LOCAL_RECONCILIATION','APPROVED_LOCAL','LIVE_RECONCILIATION'].includes(c.mode) ||
+      (c.mode==='APPROVED_LOCAL' && !localProject) ||
+      (localProject && !['APPROVED_LOCAL','LIVE_RECONCILIATION'].includes(c.mode)) ||
       !Array.isArray(c.closure) || !c.closure.includes(c.node_id) ||
       !shaDigest(c.closure_graph_digest) || !shaDigest(c.closure_evidence_digest) || !Array.isArray(c.unmet) || c.unmet.length ||
-      (c.mode==='LOCAL_RECONCILIATION' && !report.delta.added_nodes.some(n=>n.id===c.node_id && n.issue_ref===c.issue_id))) return null;
+      (c.mode==='LOCAL_RECONCILIATION' && !report.delta.added_nodes.some(n=>n.id===c.node_id && n.issue_ref===c.issue_id)) ||
+      (c.mode==='LIVE_RECONCILIATION' && (!validLiveDelta(report) ||
+       !(report.delta.added_nodes.some(n=>n.id===c.node_id && n.issue_ref===c.issue_id) ||
+         report.delta.added_edges.some(e=>c.closure.includes(e.to)) ||
+         (report.delta.project_moves || []).some(m=>m.node_ids.some(id=>c.closure.includes(id))))))) return null;
   return {report,candidate:c};
 };
 const candidateEligible=track => !!candidateAdmission(track);
 // Run A -> B1 and B1 -> B3 must preserve the same candidate conditions.
 const candidateChanges=(before,after) => {
-  const publishedRepair=before.mode==='LOCAL_RECONCILIATION' && after.mode==='PUBLISHED';
+  const publishedRepair=['LOCAL_RECONCILIATION','LIVE_RECONCILIATION'].includes(before.mode) && after.mode==='PUBLISHED';
   const comparisons=['issue_id','project_id','node_id'].map(field=>({field,prior:before[field],current:after[field]}));
   for (const field of ['closure_graph_digest','closure_evidence_digest']) {
     const semantic=Object.hasOwn(before,'semantic_'+(publishedRepair?'published_':'')+field);
@@ -2249,11 +2271,16 @@ const admissionProjection=(report,t)=>{
     note:'Context projection only; full unedited report is retained in the wave audit. Recollect full live evidence before writes.'};
 };
 const graphContext=(t=null,transition='build')=>`${localIndex ? `Explicit local graph approval from THIS invocation: ${JSON.stringify(graphFlags)}.
-Use only this owning local index/manifest: ${JSON.stringify(localPins)}. Re-run indexed
+Use only this owning local source identity: ${JSON.stringify(Object.fromEntries(['index_path','manifest_path','source_revision'].map(k=>[k,localPins[k]])))}.
+This invocation's initial graph snapshot is ${JSON.stringify(localPins)}; its digests
+are observations, not permanent constraints. A fresh matching local audit and
+admission supersede those digests for the affected ticket. Re-run indexed
 validation, local coverage and graph-admission --local-index ${localIndex} --main-ref <fresh main>
 before every transition. Use the saved local scope snapshots for Run A comparison;
 re-read full current scope sections, exclusions and original human decisions.
-Changed index/manifest/provenance pins require a new plan and human approval.
+Compare current pins to each current audit; retain the original and fresh snapshots.
+Changes outside a candidate's scope and dependency closure do not require a new plan.
+Changed source identity or relevant approved conditions require fresh authorization.
 No graph PR, graph on main or Linear document publication is required or authorized.
 The flag approves graph use only, never scope, a human_decision event, a plan or a merge.
 Keep native blockers, typed event dependencies, independent tracks and human checkpoints.
@@ -2511,8 +2538,8 @@ const priorEvidence=a.evidence?.find(e=>e.startsWith('Graph publication evidence
 let priorPublication;
 try { priorPublication=priorEvidence && JSON.parse(priorEvidence.slice('Graph publication evidence: '.length)); }
 catch { return refuse('graph publication: invalid Run A SHA evidence'); }
-if ((localIndex || priorPublication?.local_graph) && (!localIndex || !sameLocalPins(priorPublication?.local_graph,localPins)))
-  return refuse('local graph: build requires renewed explicit approval of unchanged Run A index/manifest/provenance pins; repeat the plan');
+if ((localIndex || priorPublication?.local_graph) && (!localIndex || !sameLocalSource(priorPublication?.local_graph,localPins)))
+  return refuse('local graph: build requires the explicitly approved Run A owner, manifest path and provenance');
 let priorAdmissions;
 try { priorAdmissions=JSON.parse(a.evidence?.find(e=>e.startsWith('Graph admission evidence: '))?.slice('Graph admission evidence: '.length)); }
 catch { return refuse('graph admission: missing Run A candidate evidence'); }
@@ -2669,8 +2696,11 @@ Always refresh full live Linear closure evidence, even when main is unchanged.
 Record exact exit codes: git -C ${t.worktree} merge-base --is-ancestor ${publication.main_sha} <live main>
 as ancestor_exit, and git -C ${t.worktree} merge-tree --write-tree <live main> <PR head>
 as merge_tree_exit. Record the actual PR head as head_sha.
-${localIndex ? `For the explicitly approved local graph, re-read its canonical owner index/manifest
-and require the same local pins. Run graph-admission --local-index ${localIndex}
+${localIndex ? `For the explicitly approved local graph, re-read its canonical owner index/manifest,
+validate the index, collect fresh local coverage and return its complete audit as JSON
+in local_graph_audit, including index_path, manifest_path, index_digest, manifest_digest,
+source_revision, checked_at, validation_exit, coverage_exit, coverage_state and project_ids.
+Run graph-admission --local-index ${localIndex}
 --main-ref <live main> with fresh full closure evidence and scope snapshots.
 Never switch this local source to main or to a graph PR.` : `For this track's accepted graph PR, re-read its state. If MERGED, audit the graph
 on live main and drop its obsolete pending-graph flag. If OPEN, require the same
@@ -2708,8 +2738,25 @@ Return STOPPED with evidence when a command or evidence is unavailable.`, schema
   }
   const livePins={...publication,main_sha:obs.main_sha,checked_at:obs.checked_at,
     projects:publication.projects.map(p=>p.project_id===project.project_id?liveProject:p)};
+  if (localIndex) {
+    let audit;
+    try { audit=JSON.parse(obs.local_graph_audit); } catch { return stop('has no fresh local graph validation and coverage audit'); }
+    if (!audit || !sameLocalSource(localPins,audit) ||
+        !/^sha256:[0-9a-f]{64}$/.test(audit.index_digest || '') ||
+        !/^sha256:[0-9a-f]{64}$/.test(audit.manifest_digest || '') ||
+        audit.validation_exit!==0 || ![0,1].includes(audit.coverage_exit) ||
+        audit.coverage_state!==(audit.coverage_exit===0?'CURRENT':'UPDATE_REQUIRED') ||
+        !validUTC(audit.checked_at) || Date.parse(audit.checked_at)<Date.parse(publication.checked_at) ||
+        Date.parse(audit.checked_at)>Date.parse(obs.checked_at) ||
+        Date.parse(obs.checked_at)-Date.parse(audit.checked_at)>3600000 ||
+        !Array.isArray(audit.project_ids) || !audit.project_ids.includes(project.project_id) ||
+        new Set(audit.project_ids).size!==audit.project_ids.length ||
+        audit.project_ids.some(id=>!projectUUID.test(id)) || !sameLocalPins(fresh?.local_graph,audit))
+      return stop('has invalid or mismatched fresh local graph validation');
+    livePins.local_graph=Object.fromEntries(localFields.map(k=>[k,audit[k]]));
+  }
   const now=candidateAdmission({...t,project:current.candidate.project_id},
-    validAdmissionReports([fresh],livePins,obs.checked_at.slice(0,10)),livePins);
+    validAdmissionReports([fresh],livePins,obs.checked_at.slice(0,10)),livePins,!localIndex);
   if (!now || Date.parse(now.report.checked_at)<Date.parse(publication.checked_at) ||
       Date.parse(now.report.checked_at)>Date.parse(obs.checked_at) ||
       Date.parse(obs.checked_at)-Date.parse(now.report.checked_at)>3600000)
@@ -2729,7 +2776,8 @@ Current graph flags ${JSON.stringify(flags)} supersede the earlier source/flags 
 Refresh admission at the start of every review round and before implementer writes.
 An unrelated main advance permits continuing after ancestry, clean merge, current
 scope and both candidate digests are revalidated. Preserve explicit local graph
-pins and --local-graph throughout local mode; changed local pins require a new plan.
+source identity and --local-graph throughout local mode. Revalidate changed pins;
+only changed relevant conditions require a new plan.
 For a pending graph PR only, if it reaches main, switch to main and drop its flag.
 Do not demand new plan approval solely
 for commit movement or publication. Retain the explicit Run A baseline.

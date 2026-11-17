@@ -14,9 +14,9 @@ to launch it. `refresh` updates the selected local view and opens it afterward.
 Neither mode schedules future refreshes. A recurring request uses the host's
 supported scheduler separately, with an explicit refresh instruction.
 
-This skill renders an existing roadmap. Changed scope, missing tickets or
-changed dependencies belong to `/linear-roadmap`; name the discrepancy and
-route there only when the user requests reconciliation. Opening the viewer
+This skill renders the indexed roadmap plus fresh live tickets. Unmapped issues
+remain visibly UNKNOWN. A validated live-admission report can be layered for
+display without publishing it; actual scope decisions remain in their sources. Opening the viewer
 does not require roadmap publication, scope approval or an execution source pin.
 This workflow reads Linear and writes only local viewer caches; no tracker
 writes, agent dispatch, merges or deployment authorization (prompt-level).
@@ -76,9 +76,9 @@ List the exact UUIDs needed before fetching tracker data:
 python3 <skill-dir>/bin/issue-graph requirements --config <binding.json> --project <key> --repo <consuming-root>
 ```
 
-Fetch fresh Linear details for every issue UUID in the selected project and
-its transitive incoming prerequisites. Include referenced completed, canceled
-and archived tickets. Read full descriptions, status/type, labels, assignee,
+Fetch the complete fresh project issue list and full Linear details for every
+issue UUID in the selected project and its transitive incoming prerequisites.
+Include referenced completed, canceled and archived tickets. Read full descriptions, status/type, labels, assignee,
 priority, project and timestamps. Use the connected tracker or an established
 read API; never scrape secrets out of another application's database. Normalize
 the results to the evidence format in the reference. Missing access/details
@@ -89,7 +89,15 @@ replace the roadmap's stage-specific edges.
 ```text
 python3 <skill-dir>/bin/issue-graph refresh --config <binding.json> --project <key> --repo <consuming-root> --issues <fresh-evidence.json>
 python3 <skill-dir>/bin/issue-graph refresh --config <binding.json> --project <key> --repo <consuming-root> --issues <fresh-evidence.json> --apply
+python3 <skill-dir>/bin/issue-graph refresh --config <binding.json> --project <key> --repo <consuming-root> --issues <fresh-evidence.json> --admission-report <live-report.json> --apply
 ```
+
+Repeat `--admission-report` for the individual candidate reports. Each is a
+display-only `LIVE_RECONCILIATION` delta. The helper validates each against the
+same unchanged base and effective digest, merges consistent additions, and labels
+them unpublished; unmatched live tickets are UNKNOWN. Conflicting deltas refuse
+rather than hiding a discrepancy. A configured
+batch may apply its own derived view as part of its authorized graph refresh.
 
 Inspect the preview before applying. An explicit refresh request authorizes the
 local cache replacement; no extra confirmation is required. The helper backs up

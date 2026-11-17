@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import stat
 
 
 class Blocked(ValueError):
@@ -226,22 +227,35 @@ def run(argv, *, cwd, env=None, timeout=60, pass_fds=()):
     return result.stdout
 
 
-def scratch_dir(repo):
+def create_review_scratch(report_dir, repo):
     """The reviewer's private directory for disposable files. The runner, not the
     reviewer, removes it: a host can refuse a delete command, and the reviewer
     contract treats a refused command as the end of the review."""
-    scratch = Path(tempfile.mkdtemp(prefix='review-scratch-')).resolve()
-    if scratch == repo or repo in scratch.parents:
-        scratch.rmdir()
-        raise Blocked('reviewer scratch must live outside the repository')
-    return scratch
+    if not getattr(shutil.rmtree, 'avoids_symlink_attacks', False):
+        raise Blocked('safe review scratch cleanup is unsupported on this host')
+    try:
+        scratch = Path(tempfile.mkdtemp(prefix='review-scratch-')).resolve()
+        if scratch == repo or repo in scratch.parents:
+            scratch.rmdir()
+            raise Blocked('reviewer scratch must live outside the repository')
+        if scratch == report_dir or report_dir in scratch.parents or scratch in report_dir.parents:
+            scratch.rmdir()
+            raise Blocked('review scratch overlaps the controller report tree')
+        info = scratch.lstat()
+    except OSError as exc:
+        raise Blocked('cannot create private review scratch') from exc
+    return scratch, (info.st_dev, info.st_ino)
 
 
-def remove_tree(path):
+def remove_tree(path, identity=None):
     """Delete a scratch tree without following a link out of it. False if it remains."""
     if not shutil.rmtree.avoids_symlink_attacks:
         return False
     try:
+        info = path.lstat()
+        if not stat.S_ISDIR(info.st_mode) or (identity is not None and
+                (info.st_dev, info.st_ino) != identity):
+            return False
         # Repair read-only checkouts by descriptor. fwalk skips symlinks, including the root.
         for _, _, _, fd in os.fwalk(path, follow_symlinks=False):
             os.fchmod(fd, 0o700)
@@ -370,18 +384,21 @@ def execute(args):
     """One review round. The runner owns the reviewer's scratch directory: it removes
     it after a verified review and keeps a non-empty one after a BLOCKED round."""
     repo = Path(args.repo_root).resolve(strict=True)
-    scratch, detail, kept = scratch_dir(repo), {}, False
+    scratch, identity = create_review_scratch(Path(args.report_dir).resolve(), repo)
+    detail, kept = {}, False
     try:
         return review_round(args, scratch, detail)
     except Blocked as exc:
         exc.detail = dict(detail, **exc.detail)
-        if holds_files(scratch):
+        if holds_files(scratch) or detail.get('_review_launched'):
             kept = True
             exc.detail['reviewer_scratch'] = str(scratch)
+            exc.args = (f'{exc}; review scratch preserved at {scratch}',)
+        exc.detail.pop('_review_launched', None)
         raise
     finally:
-        if not kept and not remove_tree(scratch):
-            print(f'reviewer scratch not removed: {scratch}', file=sys.stderr)
+        if not kept and not remove_tree(scratch, identity):
+            print(f'reviewer scratch identity changed or cleanup failed; preserved at {scratch}', file=sys.stderr)
 
 
 def review_round(args, scratch, detail):
@@ -468,7 +485,8 @@ def review_round(args, scratch, detail):
               f'in your scratch directory {scratch} (also $REVIEW_SCRATCH), never git worktree '
               'add: it writes to the shared .git, which a sandboxed reviewer cannot write. '
               'Keep every temporary file there, including the review payload before you post it. '
-              'Never delete anything (no rm, no cleanup step): the runner owns that directory '
+              'Do not delete temporary artifacts. Do not leave background processes or tools '
+              'running after your response. Never delete anything (no rm, no cleanup step): the runner owns that directory '
               'and its cleanup, and a host may refuse a delete command. Cleanup is never a '
               'required step. Submit the review in a shell call that holds only the identity '
               're-check and the post: a refused command rejects its whole call. '
@@ -494,6 +512,8 @@ def review_round(args, scratch, detail):
     for key in ('CODEX_SESSION_ID', 'CODEX_THREAD_ID', 'CLAUDE_CODE_CHILD_SESSION'):
         reviewer_env.pop(key, None)
     reviewer_env['REVIEW_SCRATCH'] = str(scratch)
+    reviewer_env['KSTACK_REVIEW_TMPDIR'] = str(scratch)
+    reviewer_env['TMPDIR'] = str(scratch)
     slots = getattr(args, 'review_slots', None)
     if slots is not None:
         sys.path.insert(0, str(Path(__file__).resolve().parents[4] / 'core/land/lib'))
@@ -516,6 +536,7 @@ def review_round(args, scratch, detail):
         if current != before:
             raise Blocked('review checkout changed while waiting for a resource permit')
         started_at = time.monotonic()
+        detail['_review_launched'] = True
         try:
             output, launched = launch(argv, engine=engine, cwd=repo, env=reviewer_env,
                                       timeout=args.timeout, pass_fds=() if fd is None else (fd,),

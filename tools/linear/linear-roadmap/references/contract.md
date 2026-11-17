@@ -55,12 +55,13 @@ The [publication gate](publication-gate.md) adds a fresh-main ticket coverage
 audit to roadmap and separates project coverage warnings from per-candidate
 execution eligibility. Missing unrelated tickets do not freeze mapped work.
 Selected units and their relevant dependency closure still require verified
-scope, prerequisites, ownership and acceptance. The contract permits an auditable
-local delta of at most three missing maintenance units within approved scope;
-this is an explicit isolated admission artifact, never an implicit index overlay.
-Semantic scope/dependency/release/human-gate changes require reviewed publication
-or an explicitly accepted reviewed graph PR. Schema compatibility and all condition and
-approval checks still apply. This Git PR step is separate from publishing a
+scope, prerequisites, ownership and acceptance. For newly observed in-scope units
+and native blockers, the helper constructs an auditable, candidate-scoped live
+delta automatically, without mutating the indexed graph or requiring a graph PR.
+It does not create scope authorization or relax any existing condition. A new owner
+decision, or a change that weakens an existing scope or gate, remains governed by
+the original authority and reviewed graph policy. Schema compatibility and all
+condition and approval checks still apply. This Git PR step is separate from publishing a
 Linear document, which remains the human maintainer's manual action below.
 Wave approval is tied to each mapped unit's relevant conditions, including its
 future merge gates. Fresh unrelated graph/main changes do not invalidate it;
@@ -71,8 +72,10 @@ For a local roadmap, explicitly pass `--local-graph`
 to wave plan and repeat it on wave build alongside --approve. This uses fresh local
 indexed/candidate admission without graph publication to GitHub or Linear. Scope,
 native blockers, dependencies, evidence and human plan/merge decisions still apply.
-Changed local index/manifest/provenance pins require a new plan; source_revision
-remains the original adoption provenance across compatible stack upgrades.
+Revalidate changed local digests and compare the candidate closure; unrelated
+changes do not require a new plan. A changed source identity or relevant approved
+conditions require renewed authorization. source_revision remains the original
+adoption provenance across compatible stack upgrades.
 
 ## Manifest fields
 

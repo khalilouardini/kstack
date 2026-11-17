@@ -105,6 +105,7 @@ half-day estimate, refuses to estimate what it cannot name),
 
 | Skill | Does | Enforcement |
 |---|---|---|
+| [`/session-batch`](tools/linear/session-batch/SKILL.md) | One supervisor, independent ticket sessions and ordered review | persistent SDK worker, source-evidence bridge and dependency-aware scheduler; live ticket validation pending |
 | [`/wave`](tools/linear/wave/SKILL.md) | One fixed batch; opt-in streaming build/review | prompt-level checkpoints; script checks approval and final heads; cooperative process limits; Codex selection only |
 | [`/dispatch-implementation`](tools/linear/dispatch-implementation/SKILL.md) | Starts one approved issue in an isolated worktree and automatically moves it to the contract's started status after the worktree exists | Linear write + mandatory read-back; prompt-level outside the skill |
 | [`/investigate`](core/investigate/SKILL.md) | Root-cause debugging: no fix before the cause is found; three failed attempts stops the run; every fix ships a fail-then-pass test | prompt + optional scope lock |
@@ -167,10 +168,16 @@ is explicit; installing the skill does not enable continuous synchronization.
 ## Choose a workflow
 
 For one existing ticket, use `/next` and then `/dispatch-implementation`.
-For a batch, `/wave plan` prepares plans and `/wave build` requires the recorded
-human approval. Claude Code runs the Workflow graph; Codex runs selection only.
-Legacy execution is the default; streaming build/review is an experimental opt-in
-with separate worker, review, and local-test limits.
+For delegated batches, `/session-batch` uses one supervisor, persistent independent
+Claude ticket sessions and dependency-ordered reviews. The supervisor supplies
+fresh tracker and forge evidence; the adapter checks local Git and actual SDK
+session initialization. Runtime fixtures pass offline; a live ticket evaluation
+remains pending. See the skill for one-time SDK setup and host limitations.
+
+Use `/wave` explicitly for its coordinated Workflow graph and human plan checkpoint.
+Claude Code runs the Workflow graph; Codex runs selection only. Legacy execution
+is the default; streaming build/review is an experimental opt-in with separate
+worker, review, and local-test limits.
 
 ### Select parallel work across projects
 
@@ -189,12 +196,11 @@ merge lanes. Neither recommendation is merge authorization.
 
 `/linear-roadmap` refreshes the local typed record and Mermaid view by default;
 use `--publish` explicitly to open or update a graph PR. Project-wide
-coverage warnings are separate from candidate eligibility: mapped work can
-proceed despite unrelated missing tickets, while small maintenance repairs
-within approved scope can use the bounded local reconciliation path. Semantic
-changes normally require reviewed publication; an explicitly approved
-`--local-graph` uses a validated local source under the same scope, dependency,
-evidence, and human-decision requirements. Repeat the flag on wave build.
+coverage warnings are separate from candidate eligibility. Newly observed tickets
+within verified approved scope can use an auditable, candidate-scoped live projection
+without a separate graph PR. Existing human and release gates are not waived. An
+explicitly approved `--local-graph` uses the owning local index under the same scope,
+dependency, evidence, and human-decision requirements. Repeat the flag on wave build.
 Read the [shared gate contract](tools/linear/linear-roadmap/references/publication-gate.md)
 for the exact conditions, local-source pins and pending-PR rules.
 

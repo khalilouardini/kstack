@@ -39,8 +39,8 @@ a previously prepared local update. An unchanged map needs no new PR or commit.
 Local updates do not rewrite an active wave's selected tickets, approved plans,
 saved admission artifacts or worktrees. New tickets enter a later selection.
 The execution baseline remains freshly audited main, an explicitly accepted
-reviewed graph PR, or the shared contract's bounded local reconciliation. A local
-map or its visualization alone cannot admit new scope or changed prerequisites.
+reviewed graph PR, or the shared contract's in-scope live projection. A local map
+or its visualization alone cannot admit new scope or verify prerequisites.
 
 ## Inputs and composition
 
@@ -87,10 +87,11 @@ On every existing-project or mapped-spec invocation, follow
 [references/publication-gate.md](references/publication-gate.md). Inspect the
 project's orchestration file on freshly fetched main and compare its graph nodes
 with the complete live Linear ticket list. Report missing membership as coverage
-warnings separately from selected candidate eligibility. Small missing maintenance
-units can use bounded local reconciliation without a preliminary PR. Scope,
-dependency, release/acceptance or human-gate changes require reviewed publication
-before affected execution. Report that requirement without opening a PR unless
+warnings separately from selected candidate eligibility. New verified in-scope
+units and cited additive native prerequisites can use a candidate-scoped live
+projection without a preliminary PR. Actual scope expansion and unverified human
+decisions still need owner decisions; never relax existing gates. Report any
+required graph publication without opening a PR unless
 `--publish` was supplied. Prompt-only DRAFT
 proposals remain local until tickets exist. Read-only Linear access is unchanged.
 The same contract defines the explicit execution bypass --accept-graph-update;
@@ -158,9 +159,9 @@ contract's existence, completeness or approval.
    to the shared lifecycle in root `ORCHESTRATION.md`. Before replacing an
    existing diagram, inspect its conditions and preserve unrelated content.
 6. Save the validated local artifacts. Publish only with explicit `--publish`,
-   using the graph-only repair exception to land. For semantic changes, report
-   reviewed publication as a requirement before affected execution. For small in-scope maintenance, the
-   shared contract's bounded local reconciliation can establish candidate admission;
+   using the graph-only repair exception to land. For unresolved scope or human decisions, report the required owner decision.
+   For verified in-scope live tickets and native blockers, the shared contract's
+   live projection can establish candidate-specific graph admission without a PR;
    retain the main SHA, full live evidence and exact delta. Coverage bookkeeping
    can accompany the implementation PR or a later requested roadmap refresh.
    A local draft without that audit is never execution admission.

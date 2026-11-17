@@ -173,14 +173,22 @@
   },
   {
     "number": 44,
-    "name": "local graph requires valid fresh explicit source approval at both checkpoints"
+    "name": "unrelated local graph changes do not stop approved builds"
   },
   {
     "number": 45,
-    "name": "local graph retains closure and human plan approval checks"
+    "name": "unrelated local graph changes do not stop reviews"
   },
   {
     "number": 46,
+    "name": "local graph requires valid fresh explicit source approval at both checkpoints"
+  },
+  {
+    "number": 47,
+    "name": "local graph retains closure and human plan approval checks"
+  },
+  {
+    "number": 48,
     "name": "local review requires a fresh matching graph audit even when main is unchanged"
   }
 ]

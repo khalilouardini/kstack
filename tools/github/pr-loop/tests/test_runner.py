@@ -2,6 +2,7 @@ import json
 import hashlib
 import fcntl
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -67,6 +68,14 @@ class RunnerTests(unittest.TestCase):
         result = subprocess.run(args + (extra or []), env=env, capture_output=True, text=True,
                                 stdin=subprocess.DEVNULL, timeout=15)
         state = json.loads((self.root / 'state.json').read_text())
+        if state.get('scratch'):
+            scratch = Path(state['scratch'])
+            def remove_test_scratch():
+                if scratch.is_symlink(): scratch.unlink()
+                elif scratch.exists(): rt.remove_tree(scratch)
+                moved = scratch.with_name(scratch.name + '-moved')
+                if moved.exists(): rt.remove_tree(moved)
+            self.addCleanup(remove_test_scratch)
         self.assertNotIn('fixture-secret', result.stdout + result.stderr)
         return result, json.loads(result.stdout), state
 
@@ -87,6 +96,75 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(launches[0]['cwd'], str(self.repo.resolve()))
         self.assertFalse(launches[0]['has_other_token'])
         self.assertEqual(json.loads((self.root / 'reports/report.txt').read_text())['type'], 'result')
+
+    def assert_controller_owned_scratch(self, implementation, reviewer, flag):
+        outside = self.root / 'unrelated-sentinel'
+        outside.write_text('keep')
+        result, report, state = self.invoke(implementation, mode='scratch')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(report['status'], 'REVIEW_CLEAR')
+        launch = next(c for c in state['calls'] if c['name'] == reviewer and flag in c['args'])
+        scratch = Path(launch['review_tmpdir'])
+        self.assertEqual(launch['tmpdir'], str(scratch))
+        self.assertEqual(scratch.parent, self.tmp.resolve())
+        self.assertFalse(scratch.is_relative_to(self.repo.resolve()))
+        self.assertFalse(scratch.exists(), 'controller must remove only its own scratch after the reviewer exits')
+        self.assertEqual(outside.read_text(), 'keep')
+        self.assertTrue((self.root / 'reports' / 'report.txt').is_file())
+        self.assertIn('Do not delete temporary artifacts', launch['args'][-1])
+        self.assertNotIn('--dangerously-skip-permissions', launch['args'])
+        self.assertNotIn('--allowedTools', launch['args'])
+        self.assertIn('Do not leave background processes', launch['args'][-1])
+
+    def test_claude_reviewer_uses_controller_owned_scratch(self):
+        self.assert_controller_owned_scratch('Codex', 'claude', '--print')
+
+    def test_codex_reviewer_uses_controller_owned_scratch(self):
+        self.assert_controller_owned_scratch('Claude', 'codex', '-o')
+
+    def test_failed_reviewer_preserves_scratch_for_reconciliation(self):
+        result, report, state = self.invoke(mode='scratch-nonzero')
+        self.assert_blocked(result, report)
+        shutil.rmtree(self.root / 'reports')
+        self.assertTrue((Path(state['scratch']) / 'owned-proof').is_file())
+        self.assertIn('review scratch preserved at', report['reason'])
+
+    def test_denied_review_still_blocks_and_preserves_owned_scratch(self):
+        result, report, state = self.invoke(mode='scratch-denied')
+        self.assert_blocked(result, report)
+        self.assertIn('Claude tool permission denied: Bash', report['reason'])
+        self.assertTrue(Path(state['scratch']).exists())
+
+    def test_timeout_preserves_owned_scratch(self):
+        result, report, state = self.invoke(mode='scratch-timeout', extra=['--timeout', '1'])
+        self.assert_blocked(result, report)
+        self.assertIn('review scratch preserved at', report['reason'])
+        shutil.rmtree(self.root / 'reports')
+        self.assertTrue((Path(state['scratch']) / 'owned-proof').is_file())
+
+    def test_unsafe_cleanup_implementation_refuses_before_creating_scratch(self):
+        with patch.object(rt.shutil.rmtree, 'avoids_symlink_attacks', False):
+            with self.assertRaisesRegex(rt.Blocked, 'safe review scratch cleanup is unsupported'):
+                rt.create_review_scratch(self.root / 'reports', self.repo.resolve())
+
+    def test_scratch_cannot_be_inside_the_controller_report_tree(self):
+        (self.root / 'reports').mkdir()
+        self.env['TMPDIR'] = str(self.root / 'reports')
+        result, report, state = self.invoke(mode='scratch')
+        self.assert_blocked(result, report)
+        self.assertIn('scratch overlaps', report['reason'])
+        self.assertFalse(any(c['name'] == 'claude' and '--print' in c['args'] for c in state['calls']))
+
+    def test_replaced_scratch_never_deletes_an_outside_directory(self):
+        outside = self.root / 'outside'
+        outside.mkdir()
+        (outside / 'sentinel').write_text('keep')
+        result, report, state = self.invoke(mode='scratch-symlink',
+            modify=lambda s: s.update(outside=str(outside)))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('scratch identity changed', result.stderr)
+        self.assertEqual((outside / 'sentinel').read_text(), 'keep')
+        self.assertTrue(Path(state['scratch']).is_symlink())
 
     def test_codex_review_of_claude_implementation(self):
         result, report, state = self.invoke('Claude', extra=['--fast'])
@@ -204,8 +282,7 @@ class RunnerTests(unittest.TestCase):
         self.assert_blocked(result, report)
         # Kept privately for diagnosis, with the credential redacted.
         self.assertEqual((self.root / 'reports/reviewer.stderr.txt').read_text(), '[REDACTED]\n')
-        self.assertNotIn('reviewer_scratch', report)  # nothing in it, so it is removed
-        self.assertEqual(self.scratches(), [])
+        self.assertTrue(Path(report['reviewer_scratch']).is_dir())
 
     def test_unwritable_diagnostics_do_not_block_verification(self):
         result, report, _ = self.invoke('Claude', mode='unwritable-diagnostics')
