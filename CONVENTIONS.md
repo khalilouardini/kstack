@@ -77,6 +77,8 @@ claude_review_model:             # Claude review rounds only; no Codex flags
   effort: high                  # null/missing → high
 ci:
   checks: <required|all|none>   # PR checks /pr-loop needs green before CLEAN
+merge:
+  method: <merge|squash|rebase|null>  # /decision-queue disables merge when unset
 identities:
   maintainer: <gh-login|null>   # human owner: opens PRs, governs, merges
   reviewer: <gh-login|null>     # review agent; Codex by default

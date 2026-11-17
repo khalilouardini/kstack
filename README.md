@@ -2,7 +2,7 @@
 
 # kstack
 
-A personal agent harness that travels across projects. Twenty-eight installable skills and four
+A personal agent harness that travels across projects. Twenty-nine installable skills and four
 role contracts, each defined once, pointed at by every host and every repo that
 uses them.
 
@@ -141,6 +141,7 @@ see [the identity configuration](CONVENTIONS.md#2-per-project-configuration--age
 | [`/land`](core/land/SKILL.md) | Branch → gates green → atomic commits → PR. Carries the concurrent-session guards. **Stops at the PR** |
 | [`/update-stack`](core/update-stack/SKILL.md) | Refreshes the recorded shared checkout from main, reinstalls both hosts, and audits installed targets and project copies |
 | [`/health`](core/health/SKILL.md) | Runs the project's own gates, scores them, reports the trend |
+| [`/decision-queue`](tools/github/decision-queue/SKILL.md) | Opens a local queue to merge, close or comment on the repository's open PRs as the maintainer |
 | [`/delivery-retro`](tools/github/delivery-retro/SKILL.md) | Was this period fruitful vs the previous equal period — refuses activity metrics |
 | [`/session-titles`](tools/github/session-titles/SKILL.md) | Retitles open agent sessions with their issue key and PR |
 | [`/sweep-schedules`](tools/github/sweep-schedules/SKILL.md) | Sets up recurring title and label sweeps; every three hours by default |

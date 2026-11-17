@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Decision queue</title>
+  <style nonce="__CSP_NONCE__">
+    :root {
+      color-scheme: light;
+      --canvas: #f2f5fa;
+      --paper: #fff;
+      --ink: #202940;
+      --muted: #535f77;
+      --indigo: #26345d;
+      --rule: #d9e0ed;
+      --selection: #eceeff;
+      --green: #146348;
+      --ochre: #825300;
+      --red: #953747;
+      font: 14px/1.45 Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--canvas);
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    [hidden] { display: none !important; }
+    button, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: default; }
+    :focus-visible { outline: 2px solid #4d5cbb; outline-offset: 3px; }
+
+    main {
+      max-width: 1432px;
+      margin-inline: auto;
+      padding: 34px clamp(16px, 4vw, 56px) 24px;
+    }
+
+    .masthead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      color: var(--indigo);
+      font-size: clamp(26px, 3vw, 34px);
+      font-weight: 690;
+      line-height: 1.16;
+      letter-spacing: -.045em;
+    }
+
+    .source {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 2px 14px;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    #repository { color: var(--indigo); font-weight: 580; overflow-wrap: anywhere; }
+    #count { font-variant-numeric: tabular-nums; }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 34px;
+      padding: 5px 11px;
+      border: 1px solid #c7d0e2;
+      border-radius: 6px;
+      color: var(--indigo);
+      background: var(--paper);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .button:hover:not(:disabled) { background: var(--selection); border-color: #a0abd5; }
+    .button:disabled { color: #65718a; background: #f5f7fb; border-color: #dce2ee; }
+    .button.primary { background: var(--indigo); color: var(--paper); border-color: var(--indigo); }
+    .button.primary:hover:not(:disabled) { background: #354777; }
+    .button.danger { background: var(--red); color: var(--paper); border-color: var(--red); }
+    .button.danger:hover:not(:disabled) { background: #7b2a3a; }
+
+    kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 19px;
+      height: 19px;
+      padding-inline: 4px;
+      border: 1px solid #d7deec;
+      border-radius: 4px;
+      color: var(--muted);
+      background: #f6f8fd;
+      font: 600 11px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .queue {
+      overflow: hidden;
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      background: var(--paper);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 20px;
+      min-height: 59px;
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .active-pr {
+      min-width: 113px;
+      margin: 0;
+      color: var(--indigo);
+      font-weight: 680;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+    .navigation { display: flex; align-items: center; gap: 4px; margin-left: auto; color: var(--muted); }
+    .navigation span { margin-left: 4px; font-size: 12px; }
+    .notice, .status, .empty { margin: 0; color: var(--muted); }
+    .notice { padding: 8px 16px; background: #f9f7f1; color: #745321; border-bottom: 1px solid #ebe2cf; }
+    .status:not(:empty) { padding: 8px 16px; border-bottom: 1px solid var(--rule); }
+    .status[data-error] { color: var(--red); }
+    .empty { padding: 32px 16px; }
+
+    .action-panel {
+      padding: 12px 16px;
+      border-bottom: 1px solid #d5daf0;
+      background: #f6f7ff;
+    }
+
+    .action-panel p { margin: 0 0 8px; }
+    .action-panel label { display: block; margin-bottom: 5px; font-weight: 620; }
+    .action-panel textarea {
+      display: block;
+      width: min(100%, 620px);
+      min-height: 70px;
+      margin: 0 0 10px;
+      padding: 7px 9px;
+      resize: vertical;
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid #bcc8df;
+      border-radius: 5px;
+    }
+
+    .table-scroll {
+      max-height: max(280px, calc(100dvh - 220px));
+      overflow: auto;
+      scrollbar-gutter: stable;
+    }
+
+    table { width: 100%; min-width: 755px; border-spacing: 0; text-align: left; }
+    th, td { padding: 9px 12px; vertical-align: middle; }
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      color: var(--muted);
+      background: #f5f7fc;
+      border-bottom: 1px solid var(--rule);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    thead th:first-child { padding-left: 16px; }
+    tbody td { border-bottom: 1px solid #e6ebf3; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #f8f9ff; }
+    tbody tr[data-selected] { background: var(--selection); }
+    tbody tr[data-selected] td:first-child { box-shadow: inset 3px 0 var(--indigo); }
+    tbody td:first-child { width: 47%; padding: 0; }
+    tbody td:last-child { padding-right: 16px; }
+    .age { width: 65px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .ci-column { width: 89px; }
+    .merge-column { width: 105px; }
+    .review-column { width: 180px; }
+    .media-column { width: 95px; }
+
+    .pr-choice {
+      display: block;
+      width: 100%;
+      padding: 10px 12px 10px 16px;
+      border: 0;
+      color: var(--ink);
+      background: transparent;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    .pr-choice:focus-visible { outline-offset: -4px; }
+    .pr-title { display: block; font-weight: 650; line-height: 1.4; }
+    .pr-meta, .detail {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .pr-meta { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+    .pr-number { font-variant-numeric: tabular-nums; }
+    .pr-head { font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .draft { color: #644a88; font-weight: 620; }
+
+    .ci {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 640;
+      white-space: nowrap;
+    }
+
+    .ci-detail { max-width: 135px; }
+    .ci-passing { color: var(--green); background: #e4f3eb; }
+    .ci-pending { color: var(--ochre); background: #fbefda; }
+    .ci-failing { color: var(--red); background: #fae8ed; }
+    .ci-unknown, .ci-skipped { color: var(--muted); background: #e9edf5; }
+    .merge-conflicting { color: var(--red); }
+    .review-value, .media-no { color: var(--muted); }
+    .review-value { font-size: 12px; font-weight: 630; }
+    .media-yes { color: var(--indigo); font-weight: 630; }
+
+    @media (max-width: 660px) {
+      main { padding-top: 23px; }
+      .masthead { margin-bottom: 17px; }
+      .toolbar { column-gap: 10px; }
+      .active-pr { min-width: 0; }
+      .navigation { margin-left: 0; }
+      .table-scroll { max-height: max(260px, calc(100dvh - 244px)); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="masthead">
+      <div>
+        <h1>Decision queue</h1>
+        <p class="source"><span id="repository"></span><span id="count"></span></p>
+      </div>
+      <button id="refresh" class="button" type="button" aria-keyshortcuts="R">Refresh <kbd aria-hidden="true">R</kbd></button>
+    </header>
+
+    <section class="queue" aria-label="Open pull requests">
+      <div class="toolbar">
+        <p id="active-pr" class="active-pr">Select a PR</p>
+        <div class="buttons" role="group" aria-label="Actions for the selected pull request">
+          <button id="merge" class="button" type="button" aria-keyshortcuts="M" disabled>Merge <kbd aria-hidden="true">M</kbd></button>
+          <button id="close" class="button" type="button" aria-keyshortcuts="X" disabled>Close <kbd aria-hidden="true">X</kbd></button>
+          <button id="comment" class="button" type="button" aria-keyshortcuts="C" disabled>Comment <kbd aria-hidden="true">C</kbd></button>
+        </div>
+        <div class="navigation" aria-label="Use J, K or the arrow keys to select a pull request">
+          <kbd aria-hidden="true">J</kbd><kbd aria-hidden="true">K</kbd><span aria-hidden="true">Select</span>
+        </div>
+      </div>
+
+      <p id="merge-notice" class="notice" hidden></p>
+      <p id="status" class="status" role="status"></p>
+
+      <section id="confirmation" class="action-panel" aria-label="Confirm action" hidden>
+        <p id="confirmation-label"></p>
+        <div class="buttons">
+          <button id="confirm" class="button primary" type="button" aria-describedby="confirmation-label">Confirm</button>
+          <button id="cancel-confirmation" class="button" type="button">Cancel <kbd aria-hidden="true">Esc</kbd></button>
+        </div>
+      </section>
+
+      <form id="comment-form" class="action-panel" hidden>
+        <label id="comment-label" for="note">Comment</label>
+        <textarea id="note" rows="2" required></textarea>
+        <div class="buttons">
+          <button id="post-comment" class="button primary" type="submit">Post comment</button>
+          <button id="cancel-comment" class="button" type="button">Cancel <kbd aria-hidden="true">Esc</kbd></button>
+        </div>
+      </form>
+
+      <p id="empty" class="empty">Loading pull requests…</p>
+      <div id="table-scroll" class="table-scroll" role="region" aria-label="Pull request table" aria-keyshortcuts="J K ArrowDown ArrowUp" tabindex="0" hidden>
+        <table aria-label="Pull request decisions">
+          <thead>
+            <tr>
+              <th scope="col">Pull request</th>
+              <th class="age" scope="col">Age</th>
+              <th class="ci-column" scope="col">CI</th>
+              <th class="merge-column" scope="col">Mergeability</th>
+              <th class="review-column" scope="col">Review loop</th>
+              <th class="media-column" scope="col">Screenshot</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script nonce="__CSP_NONCE__">
+    "use strict";
+
+    const token = new URLSearchParams(location.search).get("token") || "";
+    const elements = Object.fromEntries([
+      "refresh", "repository", "count", "active-pr", "merge", "close", "comment",
+      "merge-notice", "status", "confirmation", "confirmation-label", "confirm",
+      "cancel-confirmation", "comment-form", "comment-label", "note", "post-comment",
+      "cancel-comment", "empty", "table-scroll", "rows"
+    ].map(id => [id, document.getElementById(id)]));
+
+    const actionNames = {merge: "Merge", close: "Close", comment: "Comment"};
+    const ciNames = {
+      passing: "Passing", pending: "Pending", failing: "Failing",
+      unknown: "Unknown", skipped: "Skipped"
+    };
+    const mergeabilityNames = {MERGEABLE: "Mergeable", CONFLICTING: "Conflicting", UNKNOWN: "Unknown"};
+    let rows = [];
+    let rowElements = new Map();
+    let selected = -1;
+    let snapshotId = null;
+    let busy = false;
+    let pendingAction = null;
+    let commenting = false;
+    let returnFocus = null;
+
+    function node(tag, className, value) {
+      const element = document.createElement(tag);
+      if (className) element.className = className;
+      if (value !== undefined) element.textContent = value;
+      return element;
+    }
+
+    function setStatus(message, error = false) {
+      elements.status.textContent = message;
+      elements.status.toggleAttribute("data-error", error);
+    }
+
+    async function request(path, payload) {
+      const response = await fetch(path + "?token=" + encodeURIComponent(token), {
+        cache: "no-store",
+        ...(payload === undefined ? {} : {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Request failed (" + response.status + ").");
+      return result;
+    }
+
+    function selectedRow() {
+      return rows[selected];
+    }
+
+    function updateControls() {
+      const row = selectedRow();
+      const blocked = busy || pendingAction !== null || commenting;
+      elements["active-pr"].textContent = row ? "Selected #" + row.number : "Select a PR";
+      elements.refresh.disabled = blocked;
+      for (const action of Object.keys(actionNames)) {
+        elements[action].disabled = blocked || !row || !row.actions.includes(action);
+      }
+      elements.merge.hidden = Boolean(row && !row.actions.includes("merge") && elements["merge-notice"].hidden);
+      elements.confirm.disabled = busy;
+      elements["cancel-confirmation"].disabled = busy;
+      elements["post-comment"].disabled = busy;
+      elements["cancel-comment"].disabled = busy;
+      elements.note.readOnly = busy;
+    }
+
+    function age(createdAt) {
+      const days = Math.max(0, Math.floor((Date.now() - Date.parse(createdAt)) / 86400000));
+      return Number.isNaN(days) ? "Unknown" : days + "d";
+    }
+
+    function buildRow(row, index) {
+      const tr = node("tr");
+      const choice = node("button", "pr-choice");
+      choice.type = "button";
+      const title = node("span", "pr-title", row.title);
+      const metadata = node("span", "pr-meta");
+      metadata.append(node("span", "pr-number", "#" + row.number), node("span", "", row.author));
+      if (row.head_sha) {
+        const head = node("code", "pr-head", row.head_sha.slice(0, 8));
+        head.title = "Head " + row.head_sha;
+        metadata.append(head);
+      }
+      if (row.is_draft) metadata.append(node("span", "draft", "Draft"));
+      choice.append(title, metadata);
+      const pull = node("td");
+      pull.append(choice);
+
+      const ageCell = node("td", "age", age(row.created_at));
+      const ciCell = node("td");
+      const ci = Object.hasOwn(ciNames, row.ci) ? row.ci : "unknown";
+      ciCell.append(node("span", "ci ci-" + ci, ciNames[ci]));
+      if (row.ci_detail && (ci === "failing" || ci === "unknown")) {
+        ciCell.append(node("span", "detail ci-detail", row.ci_detail));
+      }
+      const mergeCell = node("td", row.mergeable === "CONFLICTING" ? "merge-conflicting" : "",
+        mergeabilityNames[row.mergeable] || "Unknown");
+      const reviewCell = node("td");
+      reviewCell.append(node("span", "review-value", row.review));
+      if (row.answered_findings) {
+        const findings = node("span", "detail", "Answered findings · " + row.answered_findings.toLowerCase());
+        reviewCell.append(findings);
+      }
+      const media = row.screenshot === true ? "Yes" : row.screenshot === false ? "No" : "Unknown";
+      const mediaCell = node("td", row.screenshot === true ? "media-yes" : "media-no", media);
+
+      tr.append(pull, ageCell, ciCell, mergeCell, reviewCell, mediaCell);
+      tr.addEventListener("click", () => {
+        if (busy || pendingAction || commenting) return;
+        select(index, true);
+      });
+      rowElements.set(row.number, {tr, choice});
+      return tr;
+    }
+
+    function markSelection(entry, active) {
+      if (!entry) return;
+      entry.tr.toggleAttribute("data-selected", active);
+      if (active) entry.choice.setAttribute("aria-current", "true");
+      else entry.choice.removeAttribute("aria-current");
+      entry.choice.tabIndex = active ? 0 : -1;
+    }
+
+    function select(index, focus = false) {
+      const current = selectedRow();
+      if (current) markSelection(rowElements.get(current.number), false);
+      selected = Math.min(Math.max(index, 0), rows.length - 1);
+      const row = selectedRow();
+      const entry = row && rowElements.get(row.number);
+      markSelection(entry, true);
+      updateControls();
+      if (focus && entry) {
+        entry.choice.focus({preventScroll: true});
+        const scroll = elements["table-scroll"];
+        const header = scroll.querySelector("thead").getBoundingClientRect().height;
+        const bounds = scroll.getBoundingClientRect();
+        const rowBounds = entry.tr.getBoundingClientRect();
+        if (rowBounds.top < bounds.top + header) scroll.scrollTop += rowBounds.top - bounds.top - header;
+        else if (rowBounds.bottom > bounds.bottom) scroll.scrollTop += rowBounds.bottom - bounds.bottom;
+      }
+    }
+
+    function renderRows(index) {
+      rowElements = new Map();
+      elements.rows.replaceChildren(...rows.map(buildRow));
+      elements.count.textContent = rows.length + (rows.length === 1 ? " open PR" : " open PRs");
+      elements.empty.textContent = "No open pull requests.";
+      elements.empty.hidden = rows.length > 0;
+      elements["table-scroll"].hidden = rows.length === 0;
+      select(index);
+    }
+
+    async function loadQueue() {
+      if (busy || pendingAction || commenting) return;
+      busy = true;
+      setStatus(snapshotId === null ? "" : "Refreshing pull requests…");
+      updateControls();
+      const current = selectedRow()?.number;
+      try {
+        const result = await request("/api/queue");
+        if (!Array.isArray(result.rows) || typeof result.snapshot_id !== "string") {
+          throw new Error("The queue returned an invalid response.");
+        }
+        snapshotId = result.snapshot_id;
+        rows = result.rows;
+        elements.repository.textContent = result.repository;
+        elements["merge-notice"].textContent = result.merge_notice || "";
+        elements["merge-notice"].hidden = !result.merge_notice;
+        renderRows(rows.findIndex(row => row.number === current));
+        setStatus("");
+      } catch (error) {
+        if (snapshotId === null) elements.empty.textContent = "Choose Refresh to try again.";
+        setStatus(error.message, true);
+      } finally {
+        busy = false;
+        updateControls();
+      }
+    }
+
+    function focusAfterAction(fallback = elements.refresh) {
+      const row = selectedRow();
+      const choice = row && rowElements.get(row.number)?.choice;
+      if (returnFocus && !returnFocus.disabled && returnFocus.isConnected) returnFocus.focus();
+      else (choice || fallback).focus();
+      returnFocus = null;
+    }
+
+    function dismissAction() {
+      if (busy) return;
+      pendingAction = null;
+      commenting = false;
+      elements.confirmation.hidden = true;
+      elements["comment-form"].hidden = true;
+      elements.note.value = "";
+      updateControls();
+      focusAfterAction();
+    }
+
+    async function startAction(action) {
+      const row = selectedRow();
+      if (!row || !row.actions.includes(action) || busy || pendingAction || commenting) return;
+      returnFocus = document.activeElement;
+      setStatus("");
+      if (action === "comment") {
+        commenting = true;
+        elements["comment-label"].textContent = "Comment on #" + row.number;
+        elements["comment-form"].hidden = false;
+        updateControls();
+        elements.note.focus();
+        return;
+      }
+
+      busy = true;
+      updateControls();
+      try {
+        const result = await request("/api/actions", {snapshot_id: snapshotId, number: row.number, action, note: ""});
+        if (!result.action_id) throw new Error("The server did not issue a confirmation.");
+        pendingAction = {id: result.action_id, action, number: row.number};
+        const label = elements["confirmation-label"];
+        label.textContent = actionNames[action] + " pull request #" + row.number + "?";
+        if (action === "merge") label.append(node("span", "detail", "Head " + row.head_sha));
+        elements.confirm.textContent = "Confirm " + action;
+        elements.confirm.className = "button " + (action === "close" ? "danger" : "primary");
+        elements.confirmation.hidden = false;
+      } catch (error) {
+        setStatus(error.message, true);
+      } finally {
+        busy = false;
+        updateControls();
+        if (pendingAction) elements.confirm.focus();
+        else focusAfterAction();
+      }
+    }
+
+    async function confirmAction() {
+      if (busy || !pendingAction) return;
+      const {id, action, number} = pendingAction;
+      busy = true;
+      updateControls();
+      try {
+        const result = await request("/api/actions", {action_id: id});
+        rows = rows.filter(row => row.number !== number);
+        renderRows(selected);
+        setStatus(result.message || (action === "merge" ? "Merged #" : "Closed #") + number + ".");
+      } catch (error) {
+        setStatus(error.message, true);
+      } finally {
+        busy = false;
+        dismissAction();
+      }
+    }
+
+    async function postComment(event) {
+      event.preventDefault();
+      if (busy || !commenting) return;
+      const row = selectedRow();
+      const note = elements.note.value;
+      if (!row || !note.trim()) {
+        setStatus("Enter a comment before posting.", true);
+        elements.note.focus();
+        return;
+      }
+
+      busy = true;
+      updateControls();
+      let posted = false;
+      try {
+        const result = await request("/api/actions", {snapshot_id: snapshotId, number: row.number, action: "comment", note});
+        setStatus(result.message || "Comment posted on #" + row.number + ".");
+        posted = true;
+      } catch (error) {
+        setStatus(error.message, true);
+      } finally {
+        busy = false;
+        if (posted) dismissAction();
+        else {
+          updateControls();
+          elements.note.focus();
+        }
+      }
+    }
+
+    elements.refresh.addEventListener("click", loadQueue);
+    for (const action of Object.keys(actionNames)) {
+      elements[action].addEventListener("click", () => startAction(action));
+    }
+    elements.confirm.addEventListener("click", confirmAction);
+    elements["cancel-confirmation"].addEventListener("click", dismissAction);
+    elements["comment-form"].addEventListener("submit", postComment);
+    elements["cancel-comment"].addEventListener("click", dismissAction);
+
+    document.addEventListener("keydown", event => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented || event.isComposing) return;
+      if (event.key === "Escape" && (pendingAction || commenting)) {
+        event.preventDefault();
+        dismissAction();
+        return;
+      }
+      if (busy || pendingAction || commenting || event.target.closest?.("textarea, input, [contenteditable]")) return;
+      const key = event.key.toLowerCase();
+      if (key === "j" || key === "arrowdown" || key === "k" || key === "arrowup") {
+        if (!rows.length) return;
+        event.preventDefault();
+        select(selected + (key === "j" || key === "arrowdown" ? 1 : -1), true);
+      } else if (!event.repeat && (key === "m" || key === "x" || key === "c" || key === "r")) {
+        event.preventDefault();
+        if (key === "r") loadQueue();
+        else startAction({m: "merge", x: "close", c: "comment"}[key]);
+      }
+    });
+
+    loadQueue();
+  </script>
+</body>
+</html>
