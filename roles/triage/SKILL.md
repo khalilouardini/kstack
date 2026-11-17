@@ -306,16 +306,30 @@ Use the same table in the final response and the proposal, with one row per
 scored PR, including held candidates and state transitions. Keep cells on one
 line and escape any literal pipes.
 
-| PR | Mergeable now? | Rationale | PR summary | Merge order |
-|---|---|---|---|---|
+| PR | Mergeable now? | Review needed? | Rationale | PR summary | Merge order |
+|---|---|---|---|---|---|
 
 - **PR** links the PR by number and title.
 - **Mergeable now?** Use `✅ Yes` for an open, in-scope merge candidate with
-  a stable snapshot, GitHub reporting `MERGEABLE`, applicable CI and
-  current-head review conditions satisfied, and no holds. Use `No` for a
-  confirmed blocker or non-candidate, even if other evidence is missing.
-  Otherwise use `Unknown` when missing or unstable evidence prevents deciding
-  readiness.
+  a stable snapshot, GitHub reporting `MERGEABLE`, passing applicable CI,
+  verified review clearance at the current head, and no holds. Use `No` for
+  a confirmed blocker (including confirmed absence of current-head review)
+  or non-candidate, even if other evidence is missing. Otherwise use `Unknown`
+  when missing or unstable evidence prevents deciding readiness.
+- **Review needed?** Assess every open scored PR using the current-head
+  review evidence from Step 2, regardless of its scope verdict or CI status.
+  Use the first applicable status and name any other review holds in Rationale.
+  - `⚠️ ASAP` — Complete evidence shows the current head has no submitted
+    review that qualifies under the repo's policy. Explain why (for example,
+    no review or only stale reviews). Recommend a PR loop or an authorized
+    human review.
+  - `Yes · follow-up` — A blocking review finding or outstanding required
+    approval needs action. Name the specific follow-up.
+  - `⚠️ Verify ASAP` — Review evidence is incomplete or unstable. Name the
+    gap and recommend a PR loop or human review if no review can be verified.
+  - `No` — Verified current-head review is clear of blocking findings and
+    all required review approvals are satisfied. Other merge holds can remain.
+  - `—` — PR closed or merged.
 - **Rationale** gives the scope verdict and citation, plus the decisive
   readiness evidence, blocker, or missing evidence. Name any prerequisite or
   condition that must be cleared.
@@ -330,7 +344,7 @@ If no PRs match, the PR pass is unavailable, or the invocation only covers
 branches/worktrees, print these same headers and one status row. Label the row
 `No matching PRs`, `PR pass unavailable`, or `PR pass skipped`. Give the reason
 in Rationale and use `—` for inapplicable cells. Show `Unknown` in
-Mergeable now? and Merge order for an unavailable pass.
+Mergeable now?, Review needed?, and Merge order for an unavailable pass.
 
 ### Proposal file
 
@@ -372,7 +386,8 @@ linked current body/files/diff. Cite scope and name supersession for CLOSE.>
 <State/draft and full head/base refs+SHAs; raw GitHub mergeStateStatus and mergeable;
 CI mode and named buckets/missing expected checks with links;
 reviewed SHA vs current SHA; posted loop verdict/source/head/date/rounds or
-UNKNOWN; separately derived review assessment and stale history;
+UNKNOWN; separately derived Codex review assessment and stale history;
+qualifying human approval, if any, with a link;
 P0/P1/P2/P3/unknown counts and appendix link; optional ledger availability;
 explicit dependency, evidence and human holds; snapshot time/stability.>
 

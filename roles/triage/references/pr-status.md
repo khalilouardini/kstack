@@ -154,8 +154,14 @@ history with SHAs and times. Within one head, use the latest valid review and
 retain earlier contradictory findings explicitly; never cherry-pick the clean
 summary. Earlier same-head summary-only P0–P2 findings retain an evidence hold
 until reconciled by linked reviewer/human disposition; a later empty summary
-alone does not erase them. Unmarked/human reviews can be linked context, not
-Codex clearance.
+alone does not erase them.
+
+For the PR overview, review clearance can come from verified Codex evidence
+with no blocking findings at the current head, or a submitted approval for
+that exact head from an authorized human reviewer where repository policy
+permits human review in its place. Link the review and the evidence that it
+qualifies. Report human approval separately from Codex and loop verdicts.
+Unresolved blocking findings and outstanding required approvals remain holds.
 
 Report three separate results:
 
@@ -167,7 +173,7 @@ Report three separate results:
    UNKNOWN. An unbound or stale report remains history. Plain text claiming
    "clean" without provenance is not verified loop evidence. No posted report
    means **UNKNOWN / no accessible loop report**, even if a review exists.
-2. **Derived current-head review assessment**: no P0–P2, P3-only, findings
+2. **Derived current-head Codex review assessment**: no P0–P2, P3-only, findings
    present, or UNKNOWN/no current review. Use the source severity definitions
    and complete findings body, including summary-only findings; do not infer a
    zero from empty threads. Derive whether the review and CI exit conditions
@@ -191,7 +197,10 @@ outdated is not fixed. A no-findings current-head review may coexist with older
 answered unresolved P2 threads: review exit conditions may pass, while pr-loop's
 **merge** gate fails. P3-only may satisfy CLEAN with passing/config-disabled CI
 and an open P3 thread; keep that thread visible without inventing a P2 hold.
-Zero threads with no current review is UNKNOWN, never CLEAN.
+Zero threads with no current Codex review is UNKNOWN for the Codex assessment.
+For the overview, distinguish a complete read that establishes no qualifying
+current-head review from an incomplete read that leaves its existence unknown.
+A missing loop report alone does not establish either condition.
 
 Optionally read the existing per-PR answered-findings ledger at the path defined
 in pr-loop's preflight, without creating/touching it. Record availability and
@@ -202,7 +211,7 @@ must not block unrelated facts or be replaced by guessed loop history.
 ## Explicit holds
 
 Name dependency holds (linked prerequisites and evidence of what must land),
-evidence holds (unknown review/CI/files/membership), and human holds (draft,
+evidence holds (unknown review clearance/CI/files/membership), and human holds (draft,
 design decision, required approval or author instruction) separately. Also name
 conflicts/red CI and unresolved P0–P2 findings. For a clean candidate say that
 human merge permission is **not granted by triage**. A GitHub CLEAN status, a
