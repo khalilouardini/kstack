@@ -1,6 +1,6 @@
 ---
 name: triage
-version: 0.4.0
+version: 0.5.0
 description: Score open work against scope and report PR intent, merge/CI, review-loop evidence and unresolved threads. Default PR-only; optional repeated project and label filters. Read-only proposal; never reviews, merges or closes. Use when asked to "triage the backlog", "clean up the open PRs", "which branches can we delete?", or "/triage [prs|branches|worktrees|all] [--project <name-or-ID>]... [--label <name>]...". (kstack)
 ---
 
@@ -15,6 +15,9 @@ disposition for each one. Invoke as
 (default `prs`). This skill produces **a proposal**; it never executes it. Not
 for deciding whether a *new* idea is in scope (that is the `spec` pipeline), and
 not for picking what to work on next.
+
+Every final response includes the Markdown PR overview table from Step 5,
+even when the PR pass is empty, unavailable, or skipped.
 
 ### Filters — PR selection only
 
@@ -297,6 +300,63 @@ git worktree list
 
 ## Step 5 — write the proposal
 
+### Required PR overview
+
+Use the same table in the final response and the proposal, with one row per
+scored PR, including held candidates and state transitions. Keep cells on one
+line and escape any literal pipes.
+
+| PR | Project | Mergeable now? | Review needed? | Rationale | PR summary | Merge order |
+|---|---|---|---|---|---|---|
+
+- **PR** links the PR by number and title.
+- **Project** lists the exact project or milestone labels attached to the PR.
+  Recognize versioned MVP labels case-insensitively, including space and hyphen
+  forms such as `MVP 2.5` and `MVP-3.0`. Use the repository's label conventions
+  for additional project labels, and show all matches using their attached
+  spelling. Use `—` when the label list is complete and has no match, or
+  `Unknown` when label evidence is unavailable. This column reflects PR labels.
+  Step 2 still governs project selection.
+- **Mergeable now?** Use `✅ Yes` for an open, in-scope merge candidate with
+  a stable snapshot, GitHub reporting `MERGEABLE`, passing applicable CI,
+  verified review clearance at the current head, and no holds. Use `No` for
+  a confirmed blocker (including confirmed absence of current-head review)
+  or non-candidate, even if other evidence is missing. Otherwise use `Unknown`
+  when missing or unstable evidence prevents deciding readiness. Explain the
+  green check as a readiness recommendation. The maintainer authorizes merges
+  separately.
+- **Review needed?** Assess every open scored PR using the current-head
+  review evidence from Step 2, regardless of its scope verdict or CI status.
+  Use the first applicable status and name any other review holds in Rationale.
+  - `⚠️ ASAP` — Complete evidence shows the current head has no qualifying
+    submitted review under `references/pr-status.md`. Explain why (for
+    example, no review or only stale reviews). Recommend a PR loop or an
+    authorized human review.
+  - `Yes · follow-up` — A blocking review finding or outstanding required
+    approval needs action. Name the specific follow-up.
+  - `⚠️ Verify ASAP` — Review evidence is incomplete or unstable. Name the
+    gap and recommend a PR loop or human review if no review can be verified.
+  - `No` — Verified current-head review is clear of blocking findings and
+    all required review approvals are satisfied. Other merge holds can remain.
+  - `—` — PR closed or merged.
+- **Rationale** gives the scope verdict and citation, plus the decisive
+  readiness evidence, blocker, or missing evidence. Name any prerequisite or
+  condition that must be cleared.
+- **PR summary** describes the main change in one sentence, grounded in Step 2.
+  Use `Unknown` if the intent evidence is insufficient.
+- **Merge order** gives every OPEN `MERGE` and `REBASE+MERGE` candidate its
+  step or independent lane from Step 3. Show held candidates at their
+  conditional place (for example, `2 · after #41 and CI passes`). Use
+  `Unknown` where the order cannot be verified and `—` for non-candidates.
+
+If no PRs match, the PR pass is unavailable, or the invocation only covers
+branches/worktrees, print these same headers and one status row. Label the row
+`No matching PRs`, `PR pass unavailable`, or `PR pass skipped`. Give the reason
+in Rationale and use `—` for inapplicable cells. For an unavailable pass,
+show `Unknown` in Project, Mergeable now?, Review needed?, and Merge order.
+
+### Proposal file
+
 Write `<parent of spec_output_dir>/triage-<YYYY-MM-DD>.md` (or the supplied
 path). **Never overwrite an existing proposal.** If occupied, use
 `triage-<YYYY-MM-DD>-<filter-slug>-<HHMMSS>-<unique-run-ID>.md`, with `all-prs`
@@ -324,19 +384,19 @@ Use a compact overview plus concrete per-PR paragraphs and a linked appendix:
 **Evidence gaps:** <surface/errors/caps/unstable reads, or none>
 
 ## PR overview
-| PR | Verdict + scope line / supersession | State/draft · head → base | Mergeability / CI | Posted loop / derived review | Open P0/P1/P2/P3 + unknown | Holds |
-|---|---|---|---|---|---|---|
-<one row per PR; link details and thread appendix; full SHAs in detail>
+
+<Required PR overview table>
 
 ## PR details
 ### <PR link and title> — <verdict>
 <One short paragraph: stated intent and main behavioral changes, grounded in
 linked current body/files/diff. Cite scope and name supersession for CLOSE.>
 
-<Full head/base refs+SHAs; mergeStateStatus distinct from mergeability;
+<State/draft and full head/base refs+SHAs; raw GitHub mergeStateStatus and mergeable;
 CI mode and named buckets/missing expected checks with links;
 reviewed SHA vs current SHA; posted loop verdict/source/head/date/rounds or
-UNKNOWN; separately derived review assessment and stale history;
+UNKNOWN; separately derived agent review assessment and stale history;
+qualifying human approval, if any, with a link;
 P0/P1/P2/P3/unknown counts and appendix link; optional ledger availability;
 explicit dependency, evidence and human holds; snapshot time/stability.>
 
@@ -363,12 +423,13 @@ Always write the Filter line, including `none`. Before finalizing, recheck the
 selected PRs' state/head/base against collected snapshots as in the status
 reference. Reconcile scored/bucket totals, exclusions and merge-order coverage;
 unknown counts never become zero. The same evidence fields apply to every
-verdict, including CLOSE/PARK. Never collapse the three different facts
-GitHub `CLEAN`, pr-loop `CLEAN`, and human merge permission into one badge.
+verdict, including CLOSE/PARK. Record GitHub merge state, posted loop verdict,
+and any verified human merge authorization as distinct facts in PR details.
 
-Print measured counts, filters/exclusions, totals, first three next actions,
-actual proposal path and remaining uncertainty. Stop at the proposal. Executing
-it requires a separate, explicit instruction naming the actions.
+Print the full PR overview table directly in the final response. Include measured
+counts, filters/exclusions, totals, applicable next actions, the actual proposal
+path if written, and remaining uncertainty. Stop at the proposal. Executing it
+requires a separate, explicit instruction naming the actions.
 
 ## Calibration note
 

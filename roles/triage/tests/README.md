@@ -11,8 +11,9 @@ The JSON fixtures use synthetic projects, canonical IDs, issues, reviewers and
 PRs. Each JSON document has shared `defaults`; case `facts` recursively override
 dictionaries and replace arrays. `fixture_model.py` is a small offline oracle over
 **normalized frozen facts**, not a production triage runner. Tests compare derived status, posted
-loop provenance, severity counts, selection IDs, exclusion arithmetic and
-refusals. It has no service clients or write capabilities. `bin/check-stack`
+loop provenance, severity counts, review flags, merge readiness, selection IDs,
+exclusion arithmetic and refusals. It has no service clients or write
+capabilities. `bin/check-stack`
 runs these cases and reports failures. The prompt remains the canonical live
 procedure; the model is intentionally isolated under tests.
 
@@ -24,7 +25,12 @@ multi-page reviews, threads and nested replies; repeated head movement;
 unavailable loop/ledger state (availability is reported, never clearance); partial API/pagination failures; copied markers;
 summary-only findings; explicit no-CI configuration; stale posted CLEAN; unknown
 CI expectations; red and pending CI; requested-changes reviews, null-commit
-conversation reviews and earlier same-head summary contradictions. Assertions also check rename intersections,
+conversation reviews and earlier same-head summary contradictions. Overview
+checks use normalized agent routes and repository permissions. They cover the
+reverse Claude route, authorized current-head human approvals and unreviewed
+drafts. Conversation-only evidence can inform the derived agent assessment.
+The overview's readiness check requires a qualifying submitted review.
+Assertions also check rename intersections,
 file count mismatch, cursor errors, resolved/unknown-severity threads and stale
 CI SHAs. "merge_gate" means the modeled technical conditions only; human
 permission is never inferred.

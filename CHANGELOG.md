@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+`triage` 0.5.0 always shows a PR table in the response and proposal with project
+labels, current merge readiness, review needed, rationale, a short change summary,
+and the complete recommended merge order. PRs without a qualifying review at
+the current head are flagged for review ASAP.
+
 `review-claude-pr` 0.8.0 and `pr-loop` 0.12.0: a reviewer under `run-review` never
 deletes anything, and cleanup is never a required step. The contract said temporary
 proof artifacts "must be removed", Codex's exec policy rejects `rm -rf` together with

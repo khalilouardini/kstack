@@ -16,6 +16,8 @@ review/fix/reply steps and merge command. Do not invoke the loop.
 
 Read `tools/github/review-claude-pr/SKILL.md` only for its exact-head marker,
 submitted review identity verification and severity definitions. Read
+`tools/github/pr-loop/references/routing.md` for read-only route resolution
+and submitted-evidence rules. Read
 `tools/github/review-comments/SKILL.md` only for **How to find the unanswered
 comments**, stopping before its filtering rules: reuse its three read surfaces
 and independent/nested pagination, but retain **all unresolved threads** rather
@@ -139,23 +141,44 @@ errors with partial data invalidate completeness. Request author/login, review
 state, review commit OID, body, IDs/URLs and timestamps. For threads request
 isResolved, isOutdated, path/line, original finding author/title/priority,
 review/commit association, and all reply authors/bodies/URLs/times. Null/deleted
-authors stay unknown. COMMENTED and explicitly requested CHANGES_REQUESTED
-reviews are submitted evidence; pending/dismissed reviews cannot clear the head.
-Approval alone never waives findings or the other gates.
+authors stay unknown.
 
-A current Codex review must be submitted by `identities.reviewer`, have the
-source contract's `Review performed by Codex` attribution and exact
-`<!-- codex-review head:<full-head-sha> -->` marker, and agree with its review
-commit OID when present. A copied marker by another author, a SHA prefix, a
-pending/dismissed review or conflicting commit evidence cannot clear the head.
-Apply the same identity/marker verification to a conversation-posted review,
-whose commit may be absent; label its surface. Retain earlier heads as linked
-history with SHAs and times. Within one head, use the latest valid review and
-retain earlier contradictory findings explicitly; never cherry-pick the clean
-summary. Earlier same-head summary-only P0–P2 findings retain an evidence hold
-until reconciled by linked reviewer/human disposition; a later empty summary
-alone does not erase them. Unmarked/human reviews can be linked context, not
-Codex clearance.
+### Qualifying current-head reviews
+
+Apply the following qualification rules to the PR overview's review flag and
+readiness check. Either review path can provide clearance on the current head,
+subject to the applicable review holds.
+
+- **Agent review.** Use the shared routing contract to resolve the independent
+  reviewer account and engine from complete PR commit evidence. Use explicit
+  routing options from a verified, attributable loop report for this head
+  when commit attribution alone is insufficient.
+  Accept a submitted `COMMENTED` or `CHANGES_REQUESTED` review by that account
+  with matching engine attribution, exact full-SHA marker (`codex-review` or
+  `claude-review`), and matching review commit OID. A qualifying review with
+  blocking findings or requested changes needs follow-up. Verified findings
+  showing no P0–P2 can clear review. If a potential review's route cannot be
+  verified, mark its qualification unknown.
+- **Human review.** Accept each eligible reviewer's latest decisive submitted review
+  (`APPROVED` or `CHANGES_REQUESTED`) by a human other than the PR author and
+  the configured agent accounts, at the exact current commit OID. Verify the
+  reviewer's repository access with
+  `GET /repos/{owner}/{repo}/collaborators/{login}/permission`.
+  Require `permission: write` or `admin`. Failed access checks leave
+  qualification unknown. Approval can clear review and
+  requested changes need follow-up. Link the review and record the permission
+  evidence. Check base protection and rulesets separately for requirements
+  such as additional or code-owner approvals.
+  [GitHub repository permissions API](https://docs.github.com/en/rest/collaborators/collaborators#get-repository-permissions-for-a-user).
+
+Pending and dismissed reviews cannot clear the head. A conversation-posted
+review with verified reviewer identity and an exact-head marker remains
+labelled evidence in the derived agent assessment. The overview requires
+submitted evidence. Retain earlier heads as linked history. Within one head,
+use the latest valid review and retain earlier contradictory findings.
+Earlier same-head summary-only P0–P2 findings retain an evidence hold
+until reconciled by linked reviewer/human disposition. Keep outstanding
+required approvals and unresolved blocking findings as separate holds.
 
 Report three separate results:
 
@@ -167,7 +190,7 @@ Report three separate results:
    UNKNOWN. An unbound or stale report remains history. Plain text claiming
    "clean" without provenance is not verified loop evidence. No posted report
    means **UNKNOWN / no accessible loop report**, even if a review exists.
-2. **Derived current-head review assessment**: no P0–P2, P3-only, findings
+2. **Derived current-head agent review assessment**: no P0–P2, P3-only, findings
    present, or UNKNOWN/no current review. Use the source severity definitions
    and complete findings body, including summary-only findings; do not infer a
    zero from empty threads. Derive whether the review and CI exit conditions
@@ -191,7 +214,10 @@ outdated is not fixed. A no-findings current-head review may coexist with older
 answered unresolved P2 threads: review exit conditions may pass, while pr-loop's
 **merge** gate fails. P3-only may satisfy CLEAN with passing/config-disabled CI
 and an open P3 thread; keep that thread visible without inventing a P2 hold.
-Zero threads with no current review is UNKNOWN, never CLEAN.
+Zero threads with no current agent review is UNKNOWN for the agent assessment.
+For the overview, distinguish a complete read that establishes no qualifying
+current-head review from an incomplete read that leaves its existence unknown.
+A missing loop report alone does not establish either condition.
 
 Optionally read the existing per-PR answered-findings ledger at the path defined
 in pr-loop's preflight, without creating/touching it. Record availability and
@@ -202,7 +228,7 @@ must not block unrelated facts or be replaced by guessed loop history.
 ## Explicit holds
 
 Name dependency holds (linked prerequisites and evidence of what must land),
-evidence holds (unknown review/CI/files/membership), and human holds (draft,
+evidence holds (unknown review clearance/CI/files/membership), and human holds (draft,
 design decision, required approval or author instruction) separately. Also name
 conflicts/red CI and unresolved P0–P2 findings. For a clean candidate say that
 human merge permission is **not granted by triage**. A GitHub CLEAN status, a

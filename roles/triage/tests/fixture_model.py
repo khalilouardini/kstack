@@ -54,18 +54,43 @@ def review_status(facts):
         priority = thread.get('priority')
         counts[priority if priority in {'P0', 'P1', 'P2', 'P3'} else 'unknown'] += 1
         last[thread['id']] = replies[-1]['author'] if replies else None
+    reviewer = facts['reviewer']
+    engine = facts.get('reviewer_engine', 'codex')
+    marker = re.compile(rf'<!-- {engine}-review head:([a-f0-9]{{40}}) -->')
     valid = []
+    submitted = []
     history = []
+    unknown_qualification = False
     for review in reviews:
-        match = re.search(r'<!-- codex-review head:([a-f0-9]{40}) -->', review['body'])
-        if (review['author'] != facts['reviewer']
-                or review['state'] not in {'COMMENTED', 'CHANGES_REQUESTED', 'APPROVED'}
-                or 'Review performed by Codex' not in review['body'] or not match
-                or (review.get('commit') or match[1]) != match[1]):
+        match = marker.search(review['body'])
+        conversation = review.get('surface') == 'conversation'
+        if (not match or f'Review performed by {engine.title()}' not in review['body']
+                or review['state'] not in {'COMMENTED', 'CHANGES_REQUESTED'}):
+            continue
+        commit = review.get('commit')
+        if commit != match[1] and not (conversation and commit is None):
+            continue
+        if reviewer is None:
+            unknown_qualification |= not conversation and commit == head
+        if review['author'] != reviewer or reviewer is None:
             continue
         history.append(match[1])
         if match[1] == head:
             valid.append(review)
+            if not conversation:
+                submitted.append(review)
+    agents = facts.get('agent_accounts', [reviewer])
+    human_reviews = {
+        review['author']: review for review in reviews
+        if review.get('human') and review['author'] != facts.get('pr_author')
+        and review['author'] not in agents and review.get('commit') == head
+        and review.get('surface') != 'conversation'
+        and review['state'] in {'APPROVED', 'CHANGES_REQUESTED'}
+    }
+    human_states = {review['state'] for review in human_reviews.values()
+                    if review.get('permission') in {'write', 'admin'}}
+    unknown_qualification |= any(review.get('permission') is None
+                                 for review in human_reviews.values())
     earlier_findings = [priority for review in valid[:-1] for priority in review['findings']
                         if priority in {'P0', 'P1', 'P2'}]
     assessment = 'unknown'
@@ -100,14 +125,35 @@ def review_status(facts):
     loop_head = posted.get('head') if posted and posted['attributable'] else None
     clean_conditions = (assessment in ['no P0–P2', 'P3-only']
                         and (ci_status == 'success' or ci['mode'] == 'none'))
+    submitted_review = bool(submitted or human_states)
+    current_blocking_review = 'CHANGES_REQUESTED' in human_states or (
+        bool(submitted) and (
+            submitted[-1]['state'] == 'CHANGES_REQUESTED'
+            or any(p in {'P0', 'P1', 'P2'} for p in submitted[-1]['findings'])
+        )
+    )
+    blocking_review = (
+        current_blocking_review or bool(earlier_findings)
+        or any(counts[p] for p in ['P0', 'P1', 'P2'])
+        or facts.get('required_approval_outstanding', False)
+    )
+    conclusive = stable and complete and not unknown_qualification and not counts['unknown']
+    if conclusive and not submitted_review:
+        review_needed = '⚠️ ASAP'
+    elif blocking_review:
+        review_needed = 'Yes · follow-up'
+    elif not conclusive:
+        review_needed = '⚠️ Verify ASAP'
+    else:
+        review_needed = 'No'
     holds = []
     if not stable:
         holds.append('unstable')
     if not complete:
         holds.append('incomplete')
-    if assessment == 'unknown':
+    if not submitted_review:
         holds.append('no current review evidence')
-    if assessment == 'findings present':
+    if current_blocking_review:
         holds.append('current findings')
     if earlier_findings:
         holds.append('earlier same-head findings need reconciliation')
@@ -117,11 +163,14 @@ def review_status(facts):
         holds.append('unknown severity')
     if ci_status != 'success' and ci['mode'] != 'none':
         holds.append('CI ' + ci_status)
+    if facts.get('draft'):
+        holds.append('draft')
     return dict(review=assessment, loop=loop, loop_head=loop_head, ci=ci_status,
                 counts=dict(counts), last_authors=last, history=history,
                 earlier_same_head_findings=earlier_findings,
                 ledger_status='available' if facts['ledger_available'] else 'unavailable',
-                clean_conditions=clean_conditions, merge_gate=clean_conditions and not holds,
+                clean_conditions=clean_conditions, review_needed=review_needed,
+                merge_gate=review_needed == 'No' and not holds,
                 holds=holds, complete=complete, stable=stable)
 
 
