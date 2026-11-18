@@ -143,9 +143,9 @@ here, because each checks the review's author against its own `identities.review
 refusing. The reason is the asymmetry: an unset gate command silently passes a check that
 never ran, while an unset review model can safely use a documented, pinned
 default rather than inheriting the host's interactive setting. Refusing there
-would cost more than defaulting. The default is `gpt-6.1-sol`/`high`. On the
+would cost more than defaulting. The default is `gpt-6.2-sol`/`high`. On the
 first review of a PR,
-configured risk triggers select `gpt-6-astra`/`high`; later heads return to
+configured risk triggers select `gpt-6.2-astra`/`high`; later heads return to
 the base lane unless `--model` explicitly pins Astra. Raw size triggers are
 disabled by default because generated data and fixtures can inflate them.
 `--model gpt-6-luna --effort high` is the economy override. The skill states

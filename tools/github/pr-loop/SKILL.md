@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.12.0
+version: 0.12.1
 description: Drive an independent Codex↔Claude review/fix loop on one PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. The implementation session keeps fixes; the other engine reviews with verified GitHub identity and head evidence. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#>". (kstack)
 ---
 
@@ -112,8 +112,8 @@ JSON object when it does: those logins replace the block, and the final report s
   which model runs the reviewer round and at what reasoning effort. This is the
   model the review agent runs on, not the account it posts under
   (`identities.reviewer`). **The one block that defaults instead of refusing**
-  (CONVENTIONS.md §2): missing or null → `gpt-6.1-sol` at `high`. On the first
-  review of a PR, configured risk triggers select `gpt-6-astra` at `high`;
+  (CONVENTIONS.md §2): missing or null → `gpt-6.2-sol` at `high`. On the first
+  review of a PR, configured risk triggers select `gpt-6.2-astra` at `high`;
   the raw-size triggers default to disabled, and `escalate_paths` defaults to
   empty. Subsequent heads use the base lane. Use `--model gpt-6-luna
   --effort high` for a lower-cost pass, or explicitly pin Astra when another
@@ -253,9 +253,9 @@ CLAUDE_BASE_EFFORT="<claude_review_model.effort, or high>"
 # Codex reviewers only: resolve this routing again before each paid review,
 # because the first-review exception expires after round 1. Precedence per
 # slot: invocation flag > first-review escalation > base config > default.
-BASE_MODEL="<review_model.slug, or gpt-6.1-sol>"
+BASE_MODEL="<review_model.slug, or gpt-6.2-sol>"
 BASE_EFFORT="<review_model.effort, or high>"
-ESCALATED_MODEL="<review_model.escalated_slug, or gpt-6-astra>"
+ESCALATED_MODEL="<review_model.escalated_slug, or gpt-6.2-astra>"
 ESCALATED_EFFORT="<review_model.escalated_effort, or high>"
 ESCALATE_ABOVE="<review_model.escalate_above_lines, or empty>"
 ESCALATE_FILES="<review_model.escalate_above_files, or empty>"
@@ -463,7 +463,7 @@ count or an unreadable path list exits 2, which blocks the round: an empty count
 the base model under bash and counts as a first review under zsh. Size thresholds are raw GitHub counts if a project opts
 in; generated files and fixtures are not filtered from those optional counts.
 On a follow-up head, even a high-risk path uses the base model unless the
-invocation explicitly pins `--model gpt-6-astra`. This prevents an automatic
+invocation explicitly pins `--model gpt-6.2-astra`. This prevents an automatic
 Astra charge for each small fix while allowing a deliberate deep re-review.
 
 For Claude, skip the Codex escalation block entirely. Run `bin/run-review`
@@ -628,8 +628,8 @@ something you concede to in an unattended round. That call is the user's.
 Every verdict report also carries the review-model routing for **each paid
 round** — model, effort, fired risk trigger (if any), whether this was the
 first review, the source of each slot, and whether `--fast` was requested —
-for example: *"round 1: gpt-6-astra / high (first review; stack.yml path
-trigger: bin/install); round 2: gpt-6.1-sol / high (follow-up); fast requested:
+for example: *"round 1: gpt-6.2-astra / high (first review; stack.yml path
+trigger: bin/install); round 2: gpt-6.2-sol / high (follow-up); fast requested:
 no"*.
 Without it the escalation is invisible and the next reader cannot tell a cheap
 round from an expensive one.

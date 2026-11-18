@@ -83,7 +83,7 @@ review_gate:
 #
 # Normal lane: Sol/high. Use --model gpt-6-luna --effort high for a lower-cost
 # pass. Astra/high is reserved for the first review of a PR when a configured
-# risk trigger fires, or for an explicit --model gpt-6-astra invocation.
+# risk trigger fires, or for an explicit --model gpt-6.2-astra invocation.
 # Follow-up heads use Sol/high even if the same risk path remains in the PR.
 # Raw changed-line/file counts include generated data and fixtures, so both
 # size triggers are disabled by default. Add project-specific high-risk paths
@@ -93,9 +93,9 @@ review_gate:
 # in its report. This block never refuses: an unset review model can use a
 # pinned default rather than inheriting an unknown host setting.
 review_model:
-  slug: gpt-6.1-sol                # normal independent-review lane
+  slug: gpt-6.2-sol              # normal independent-review lane
   effort: high                   # low | medium | high | xhigh | max
-  escalated_slug: gpt-6-astra    # first review only, when a risk trigger fires
+  escalated_slug: gpt-6.2-astra  # first review only, when a risk trigger fires
   escalate_above_lines: null    # optional; raw additions + deletions
   escalate_above_files: null    # optional; changed-file count
   escalate_paths: []            # project-specific fnmatch globs; [] disables
