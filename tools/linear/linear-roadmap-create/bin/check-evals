@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Validate ticket-level eval contract coverage; never execute evals or access Linear."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+FIELDS = (
+    "claim", "method", "inputs", "baseline", "procedure", "pass_condition",
+    "evidence", "failure_check", "runner",
+)
+PLACEHOLDERS = {"todo", "tbd", "unknown", "pending", "n/a", "...", "?"}
+
+
+def concrete(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and value.strip().lower() not in PLACEHOLDERS
+        and not value.strip().lower().startswith(("todo:", "tbd:"))
+    )
+
+
+def check(plan: object) -> tuple[list[str], int, int, int]:
+    errors: list[str] = []
+    if not isinstance(plan, dict) or not isinstance(plan.get("tickets"), list):
+        return ["plan.tickets must be an array"], 0, 0, 0
+    tickets = plan["tickets"]
+    if not tickets:
+        return ["plan.tickets must contain the complete nonempty ticket inventory"], 0, 0, 0
+    keys: set[str] = set()
+    covered = proposed = 0
+    for index, ticket in enumerate(tickets):
+        where = f"tickets[{index}]"
+        before = len(errors)
+        if not isinstance(ticket, dict):
+            errors.append(f"{where} must be an object")
+            continue
+        for field in ("key", "kind", "outcome"):
+            if not concrete(ticket.get(field)):
+                errors.append(f"{where}.{field} requires concrete text")
+        key = ticket.get("key")
+        if isinstance(key, str):
+            key = key.strip()
+            if key in keys:
+                errors.append(f"{where}.key duplicates {key!r}")
+            keys.add(key)
+        evals = ticket.get("evals")
+        if not isinstance(evals, list) or not evals:
+            errors.append(f"{where}.evals requires at least one eval for every ticket kind")
+            continue
+        ids: set[str] = set()
+        for number, evaluation in enumerate(evals):
+            at = f"{where}.evals[{number}]"
+            if not isinstance(evaluation, dict):
+                errors.append(f"{at} must be an object")
+                continue
+            for field in ("id", *FIELDS):
+                if not concrete(evaluation.get(field)):
+                    errors.append(f"{at}.{field} requires concrete text")
+            eval_id = evaluation.get("id")
+            if isinstance(eval_id, str):
+                eval_id = eval_id.strip()
+                if eval_id in ids:
+                    errors.append(f"{at}.id duplicates {eval_id!r} within this ticket")
+                ids.add(eval_id)
+            source = evaluation.get("threshold_source")
+            if not isinstance(source, dict):
+                errors.append(f"{at}.threshold_source requires status and source")
+            else:
+                if source.get("status") not in ("accepted", "proposed"):
+                    errors.append(f"{at}.threshold_source.status must be accepted or proposed")
+                if not concrete(source.get("source")):
+                    errors.append(f"{at}.threshold_source.source requires concrete text")
+                proposed += source.get("status") == "proposed"
+        covered += len(errors) == before
+    return errors, covered, len(tickets), proposed
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("plan", type=Path)
+    args = parser.parse_args()
+    try:
+        plan = json.loads(args.plan.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 2
+    errors, covered, total, proposed = check(plan)
+    for error in errors:
+        print(f"ERROR: {error}", file=sys.stderr)
+    print(f"Eval contracts: {covered}/{total} tickets structurally complete; {proposed} proposed criteria.")
+    print("This checks the supplied inventory only; no eval was run and no scope or threshold was approved.")
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

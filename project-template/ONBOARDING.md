@@ -55,7 +55,7 @@ skills that need it and leaves the rest working.
 | `ci.checks` | `/pr-loop`'s `CLEAN` verdict: which PR checks must be green at the reviewed head (`required`, `all`, or `none`). `/pr-loop` refuses without it. |
 | `review_model` + `claude_review_model` + `review_engines` | `/pr-loop` resolves the reviewer engine and pins its model and effort. Missing settings use the documented, announced defaults in the template. |
 | `review_gate.skill_path` + `review_gate.scope` | stack review skills defer to your project's own review gate on the paths it claims. |
-| `workspace_contract` | `/dispatch-implementation`, `/linear-steward`, `/linear-feature-intake`, `/linear-release-audit` need the tracker's status and mutation rules. Without it they refuse writes. |
+| `workspace_contract` | `/dispatch-implementation`, `/linear-steward`, `/linear-feature-intake`, `/linear-roadmap-create`, `/linear-release-audit` need the tracker's status and mutation rules. Without it they refuse writes. |
 | `issue_prefix` | `/session-titles` labels by issue key, and `/next` resolves issue references. |
 | `issue_graph.config` | `/issue-graph open` and `status` use an existing local viewer; `refresh` also needs the indexed roadmap and fresh Linear reads. A saved host-local binding under `${KSTACK_STATE:-$HOME/.kstack}/projects/<project>/issue-graph.json` also works. See [the binding format](../tools/linear/issue-graph/references/binding.md). |
 | `protected_branches` | `/triage` stops proposing CLOSE on branches that carry unextracted work. |
@@ -221,6 +221,17 @@ approved tickets. For new work, `/spec` supplies the verdict and
 `/linear-feature-intake` creates the approved records first. Prompt-only input
 can produce a draft, with no launch authorization.
 
+For a whole new tracker roadmap, use
+`/linear-roadmap-create <brief|spec|plan> [--team <team>] [--dry-run]`.
+It creates or reuses projects, milestones, tickets, dependencies and a project
+roadmap document. Every ticket, including documentation, decisions and release
+gates, needs a reproducible eval contract with meaningful pass criteria and
+retained evidence. The bundled checker rejects incomplete eval fields; semantic
+quality and scope authority remain explicit reviews. The creator reconciles
+necessary MVP scope and ADR changes, checks duplicates and verifies saved records.
+`--dry-run` prepares the complete proposal without Linear writes. Creating the
+roadmap grants no implementation or release authorization.
+
 Keep the shared lifecycle at the installed stack's root; copy/adapt
 [`ORCHESTRATION.md`](ORCHESTRATION.md) and [`orchestration.json`](orchestration.json)
 into the consuming root and the one active `orchestration/<slug>.json`. Adapt
@@ -259,7 +270,8 @@ Changed local index/manifest/provenance pins require a new plan; source_revision
 remains the original adoption provenance across compatible stack upgrades.
 
 The human maintainer manually publishes/links the shared team-owned Linear contract
-under the workspace rules and verifies read-back; the roadmap skill never writes it. Keep
+under the workspace rules and verifies read-back. The mapper never writes it;
+`/linear-roadmap-create` can separately publish the project roadmap document. Keep
 each pilot document with its project. Publishing a graph does not execute it;
 the persistent-session controller remains an experimental integration requirement.
 

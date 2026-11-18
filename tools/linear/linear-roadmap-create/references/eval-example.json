@@ -1,0 +1,44 @@
+{
+  "tickets": [
+    {
+      "key": "unit-idempotence",
+      "kind": "unit",
+      "outcome": "Retrying the same import does not duplicate stored records.",
+      "evals": [
+        {
+          "id": "retry-once",
+          "claim": "Two imports of the same input yield the same canonical record set.",
+          "method": "Integration test planned in this unit.",
+          "inputs": "A temporary database and a frozen three-record fixture, including two aliases of one identity.",
+          "baseline": "Record the current import's row counts before the fix; no measured baseline is claimed yet.",
+          "procedure": "Implement tests/integration/test_import_retry.py, then run python3 -m pytest tests/integration/test_import_retry.py. Import the fixture twice and compare canonical IDs, content and counts.",
+          "pass_condition": "First import stores exactly two canonical records; second import preserves their IDs and content and adds zero rows.",
+          "threshold_source": {"status": "accepted", "source": "Illustrative requirement: the same import must be idempotent; duplicate aliases share one identity."},
+          "failure_check": "Deliberately bypassing deduplication must make the retry assertion fail; also test an empty import and an interrupted retry.",
+          "runner": "Implementer; reviewer inspects the recorded results.",
+          "evidence": "Ticket-linked test output with revision, fixture digest, command, counts, exit code and timestamp."
+        }
+      ]
+    },
+    {
+      "key": "gate-import",
+      "kind": "release",
+      "outcome": "App users can retry an interrupted import without losing or duplicating data.",
+      "evals": [
+        {
+          "id": "app-retry",
+          "claim": "The deployed app's real import entry point preserves idempotence and isolation on recovery.",
+          "method": "Recorded session-local release drill; no permanent script required.",
+          "inputs": "Candidate deployment revision, isolated test workspace, the same frozen three-record fixture and a second authorized control workspace.",
+          "baseline": "Compare to a clean uninterrupted import of the fixture at the same candidate revision.",
+          "procedure": "From the app, interrupt import after the first acknowledged record, resume with the same input, then repeat a completed import. Compare stored IDs, content and app-visible counts with the uninterrupted control. Record steps and clean up the isolated data.",
+          "pass_condition": "Recovery and both retries leave exactly the same two canonical records as the control, expose no other workspace's data and report no false completion while interrupted.",
+          "threshold_source": {"status": "proposed", "source": "Illustrative release rubric, to ratify before the acceptance run."},
+          "failure_check": "An injected retry that writes a duplicate must fail the count/ID comparison. Confirm the authorized control workspace can still import successfully.",
+          "runner": "Release verifier; product owner ratifies the proposed rubric and signs release separately.",
+          "evidence": "Ticket-linked session transcript, deployment SHA, fixture digest, before/after records, observed counts, outcome and explicit signoff or unresolved decision."
+        }
+      ]
+    }
+  ]
+}
