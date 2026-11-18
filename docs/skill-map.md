@@ -52,6 +52,7 @@ flowchart LR
       next["/next"]
       triage["/triage"]
       intake["/linear-feature-intake"]
+      creator["/linear-roadmap-create"]
       roadmap["/linear-roadmap"]
       roles["product-manager · tech-lead<br/>designer · qa"]
     end
@@ -98,7 +99,7 @@ flowchart LR
     classDef phase fill:#ddeeec,stroke:#1d6a63,color:#16292b
     classDef stopStyle fill:#f6dee5,stroke:#a04360,color:#16292b
     class router route
-    class spec,next,triage,intake,roadmap,roles,dispatch,wave,investigate,controls,explain,summarize,produce,respond,loop,landSkill,updateStack,health,retro,titles,labels,schedules,steward,audit,issueGraph,digest phase
+    class spec,next,triage,intake,creator,roadmap,roles,dispatch,wave,investigate,controls,explain,summarize,produce,respond,loop,landSkill,updateStack,health,retro,titles,labels,schedules,steward,audit,issueGraph,digest phase
     class human stopStyle
 ```
 
@@ -123,7 +124,7 @@ flowchart TB
     gates --> gatedCore["land · health"]
     scope --> roleSkills["spec · triage<br/>four role contracts"]
     identities --> githubSkills["review skills · delivery-retro<br/>session-titles · pr-label-sweep<br/>sweep-schedules with desktop tools"]
-    workspace --> linearSkills["next · dispatch-implementation · wave<br/>feature-intake · linear-roadmap<br/>steward · release-audit · issue-graph refresh"]
+    workspace --> linearSkills["next · dispatch-implementation · wave<br/>feature-intake · linear-roadmap · linear-roadmap-create<br/>steward · release-audit · issue-graph refresh"]
     runtime["Node + network"] --> externalSkills["follow-builders"]
 
     classDef source fill:#f6e6cf,stroke:#b8690c,color:#16292b
@@ -144,7 +145,7 @@ flowchart TB
 | Core | Git + local filesystem | [`/investigate`](../core/investigate/SKILL.md), [`/careful`](../core/careful/SKILL.md), [`/freeze`](../core/freeze/SKILL.md), [`/unfreeze`](../core/unfreeze/SKILL.md), [`/explain-diff-html`](../core/explain-diff-html/SKILL.md), [`/summarize-change`](../core/summarize-change/SKILL.md), [`/land`](../core/land/SKILL.md), [`/health`](../core/health/SKILL.md), [`/update-stack`](../core/update-stack/SKILL.md) |
 | Roles | `scope_doc` | [`/spec`](../roles/spec/SKILL.md), [`/triage`](../roles/triage/SKILL.md), [`product-manager`](../roles/product-manager.md), [`tech-lead`](../roles/tech-lead.md), [`designer`](../roles/designer.md), [`qa`](../roles/qa.md) |
 | GitHub | `gh`; review identities and CI policy where required; desktop tools for scheduling | [`/review-claude-pr`](../tools/github/review-claude-pr/SKILL.md), [`/review-comments`](../tools/github/review-comments/SKILL.md), [`/pr-loop`](../tools/github/pr-loop/SKILL.md), [`/delivery-retro`](../tools/github/delivery-retro/SKILL.md), [`/session-titles`](../tools/github/session-titles/SKILL.md), [`/pr-label-sweep`](../tools/github/pr-label-sweep/SKILL.md), [`/sweep-schedules`](../tools/github/sweep-schedules/SKILL.md) |
-| Linear | Tracker rules and scope; local viewer operations need no tracker | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/wave`](../tools/linear/wave/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-roadmap`](../tools/linear/linear-roadmap/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md), [`/issue-graph`](../tools/linear/issue-graph/SKILL.md) |
+| Linear | Tracker rules and scope; local viewer operations need no tracker | [`/next`](../tools/linear/next/SKILL.md), [`/dispatch-implementation`](../tools/linear/dispatch-implementation/SKILL.md), [`/wave`](../tools/linear/wave/SKILL.md), [`/linear-feature-intake`](../tools/linear/linear-feature-intake/SKILL.md), [`/linear-roadmap-create`](../tools/linear/linear-roadmap-create/SKILL.md), [`/linear-roadmap`](../tools/linear/linear-roadmap/SKILL.md), [`/linear-steward`](../tools/linear/linear-steward/SKILL.md), [`/linear-release-audit`](../tools/linear/linear-release-audit/SKILL.md), [`/issue-graph`](../tools/linear/issue-graph/SKILL.md) |
 | External | Node, network, and the vendored skill's dependencies | [`/follow-builders`](../tools/external/follow-builders/SKILL.md) |
 
 [`/issue-graph`](../tools/linear/issue-graph/SKILL.md) opens an existing local viewer
@@ -167,6 +168,7 @@ flowchart TD
     question -->|What to start next| next["/next"]
     question -->|What to do with open work| triage["/triage"]
     question -->|Record an existing verdict| intake["/linear-feature-intake"]
+    question -->|Create a whole roadmap in Linear| creator["/linear-roadmap-create"]
     question -->|Map a project or subunit| roadmap["/linear-roadmap"]
 
     one -->|Is it in scope?| pm[product-manager]
@@ -183,9 +185,20 @@ flowchart TD
     classDef action fill:#ece0f4,stroke:#7a4b9c,color:#16292b
     classDef stopStyle fill:#f6dee5,stroke:#a04360,color:#16292b
     class question,one,verdict decision
-    class spec,next,triage,intake,roadmap,pm,tl,design,qa,gate,fanout action
+    class spec,next,triage,intake,creator,roadmap,pm,tl,design,qa,gate,fanout action
     class rejected stopStyle
 ```
+
+For a whole new tracker roadmap, use
+`/linear-roadmap-create <brief|spec|plan> [--team <team>] [--dry-run]`.
+It creates or reuses projects, milestones, tickets, dependencies and a project
+roadmap document. Every ticket, including documentation, decisions and release
+gates, needs a reproducible eval contract with meaningful pass criteria and
+retained evidence. The bundled checker rejects incomplete eval fields; semantic
+quality and scope authority remain explicit reviews. The creator reconciles
+necessary MVP scope and ADR changes, checks duplicates and verifies saved records.
+`--dry-run` prepares the complete proposal without Linear writes. Creating the
+roadmap grants no implementation or release authorization.
 
 `/linear-roadmap` consumes existing tickets or drafts proposed work; it validates
 a local typed record and generates its Mermaid view without launching sessions.

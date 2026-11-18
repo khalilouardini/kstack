@@ -2,7 +2,7 @@
 
 # kstack
 
-A personal agent harness that travels across projects. Twenty-eight installable skills and four
+A personal agent harness that travels across projects. Twenty-nine installable skills and four
 role contracts, each defined once, pointed at by every host and every repo that
 uses them.
 
@@ -71,6 +71,7 @@ inspect an installed viewer without reading Linear.
 | [`/triage`](roles/triage/SKILL.md) | PR intent, merge/CI and review/thread evidence against scope; optional project/label filters; branches/worktrees on request | Reviewing, posting, merging, closing or tracker writes |
 | [`/next`](tools/linear/next/SKILL.md) | Recommends one scoped issue or a configurable parallel batch with separate planning capacity | Inventing a ticket; any write |
 | [`/linear-feature-intake`](tools/linear/linear-feature-intake/SKILL.md) | Turns a scope verdict into the right tracker records | Forming a verdict of its own |
+| [`/linear-roadmap-create`](tools/linear/linear-roadmap-create/SKILL.md) | Creates complete Linear roadmaps with evals for every ticket, aligned MVP scope/ADRs, duplicate search and verified writes | Inventing scope approval, starting implementation or Linear writes with `--dry-run` |
 | [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) | Creates or updates the product scope contract; maps work, validates JSON and generates Mermaid | Creating tickets, granting scope or launching sessions |
 
 `/triage` defaults to PRs only. Use
@@ -82,7 +83,18 @@ current-head CI/review evidence, linked unresolved threads and complete merge
 lanes. [Offline fixtures](roles/triage/tests/README.md) check frozen evidence
 interpretation; the live procedure and read-only boundary remain prompt-level.
 
-For new work, compose `/spec` → `/linear-feature-intake` → `/linear-roadmap`.
+For a whole new tracker roadmap, use
+`/linear-roadmap-create <brief|spec|plan> [--team <team>] [--dry-run]`.
+It creates or reuses projects, milestones, tickets, dependencies and a project
+roadmap document. Every ticket, including documentation, decisions and release
+gates, needs a reproducible eval contract with meaningful pass criteria and
+retained evidence. The bundled checker rejects incomplete eval fields; semantic
+quality and scope authority remain explicit reviews. The creator reconciles
+necessary MVP scope and ADR changes, checks duplicates and verifies saved records.
+`--dry-run` prepares the complete proposal without Linear writes. Creating the
+roadmap grants no implementation or release authorization.
+
+For individual new features, compose `/spec` → `/linear-feature-intake` → `/linear-roadmap`.
 For existing approved tickets, start with `/linear-roadmap`. A simple prompt can
 produce a draft graph and scope contract; scope approval and ticket creation remain separate steps.
 Every roadmap run checks the product scope contract, updating it or creating one
@@ -91,8 +103,9 @@ gates and impact on the whole product; its title and filename are flexible.
 The shared lifecycle lives once at the stack root, with a versioned schema and
 one indexed manifest containing each repo's projects/subunits. Indexed validation
 checks supported schemas and source cleanliness; the pin records adoption provenance; `/next` gives plan-only work a planning kickoff and excludes
-it from wave batches. The human publishes Linear views manually under workspace
-rules. Preparing a roadmap grants no execution permission.
+it from wave batches. The human publishes the shared central Linear lifecycle
+manually under workspace rules; the creator can publish a separate project
+roadmap document. Preparing a roadmap grants no execution permission.
 
 The four **role contracts** are dispatched as subagents, not invoked as slash
 commands: [`product-manager`](roles/product-manager.md) (one verdict, cited,

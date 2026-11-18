@@ -27,7 +27,7 @@ It records adoption provenance; preserve it across stack upgrades. The commands
 check supported schemas and clean source and emit the exact manifest SHA256.
 An installed HEAD mismatch alone needs no repin. `/linear-roadmap` updates the one
 manifest with all projects/subunits; `unit_of` groups do not create sessions. An
-approved spec needs intake-created executable tickets before mapping. Prompt-only
+approved spec needs persisted executable tickets before mapping. Prompt-only
 input can produce DRAFT. Refuse writes if consuming root equals stack root.
 This example has no tracker IDs or execution permission.
 
@@ -36,6 +36,14 @@ open or update its graph PR. Local graph/Markdown changes do not grant execution
 admission. An existing wave keeps its selected mapped tickets and approved plans.
 Fresh unrelated ticket, graph or main changes do not invalidate those plans;
 changed relevant prerequisites/conditions stop only affected tracks for reapproval.
+
+For a complete new tracker roadmap, use
+`/linear-roadmap-create <brief|spec|plan> [--team <team>] [--dry-run]`.
+Every ticket needs a reproducible eval contract, including scope/ADR decisions
+and release gates. The creator aligns necessary documentation changes with
+recorded authority, checks duplicates, verifies writes and keeps a resumable
+ledger. Its project document is separate from the maintainer-published shared
+lifecycle. Creation grants no execution permission; dry runs make no Linear writes.
 
 ## Project graph
 

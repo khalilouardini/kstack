@@ -46,6 +46,8 @@ flowchart LR
   PROMPT["Simple prompt"] --> DRAFT["/linear-roadmap: DRAFT proposal"]
   PROMPT --> SPEC["/spec: scope verdict and spec"]
   SPEC --> INTAKE["/linear-feature-intake: approved tracker records"]
+  NEW["Whole roadmap brief, spec or plan"] --> CREATE["/linear-roadmap-create: verified Linear records"]
+  CREATE --> MAP
   EXISTING["Existing approved Linear project or subunit"] --> MAP["/linear-roadmap: MAPPED record"]
   INTAKE --> MAP
   DRAFT --> CHECK["Validate typed JSON and generate Mermaid"]
@@ -58,16 +60,24 @@ flowchart LR
 [`/linear-roadmap`](tools/linear/linear-roadmap/SKILL.md) prepares local artifacts
 and creates or updates the consuming product’s local scope contract, including
 its project boundaries and impact on the whole product. Proposed scope remains
-draft until authorized. It reads the tracker. `/spec` remains the scope authority and intake remains the
-ticket-writing authority. Existing approved tickets skip those creation steps.
+draft until authorized. It reads the tracker. `/spec` remains the scope authority and intake persists individual
+feature verdicts. Existing approved tickets skip those creation steps.
 A simple prompt can draft a graph; it does not authorize execution. `/next`
 consults indexed manifests, distinguishing plan, build, merge and release conditions
 with live evidence. Its existing scope and parallel-independence checks still apply.
 
+The separate [`/linear-roadmap-create`](tools/linear/linear-roadmap-create/SKILL.md)
+creates complete tracker roadmaps from a brief, spec or plan. It requires evals
+for every unit, decision, documentation ticket and release gate; reconciles MVP
+scope and ADR changes; reuses existing work; and verifies every write with a
+resumable ledger. Its project roadmap document is separate from the shared
+lifecycle. `--dry-run` makes no Linear writes. Creation grants no execution
+permission; the verified IDs can then be mapped by `/linear-roadmap`.
+
 The human maintainer manually publishes one central Linear contract outside pilot
 projects, following the workspace contract and verifying read-back, with the source
-commit/PR and schema version. The available connector supports a team-owned
-document rather than a workspace-root parent. Link that shared document from
+commit/PR and schema version. Discover supported document parents
+from the active connector and follow the workspace's ownership rules. Link that shared document from
 each project/subunit; keep each pilot's issue IDs in a separate project document.
 Links inherit actual access controls and do not grant access to other teams.
 Each repository's `orchestration/index.json` requires `source_revision`, the full

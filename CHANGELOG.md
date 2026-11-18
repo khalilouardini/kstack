@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+Add `/linear-roadmap-create <brief|spec|plan> [--team <team>] [--dry-run]`
+for complete new roadmaps in Linear: projects, milestones, parent/child issues,
+dependencies, a roadmap document and an initiative when useful or requested.
+The creator aligns with MVP scope and ADR decisions, searches duplicates,
+verifies saved records and resumes from a ledger. Every ticket, implementation
+unit and release gate needs an eval contract, preferring measurable success
+checks through unit tests, eval scripts or session-local evals. The existing
+`/linear-roadmap` mapper remains tracker read-only; dry runs make no Linear
+writes and neither skill grants execution permission.
+The bundled `check-evals` validates every supplied ticket's eval fields and
+reports proposed thresholds; semantic quality and executed results remain
+separate checks.
+
 `triage` 0.5.0 always shows a PR table in the response and proposal with project
 labels, current merge readiness, review needed, rationale, a short change summary,
 and the complete recommended merge order. PRs without a qualifying review at
