@@ -243,15 +243,15 @@ class InvocationTests(unittest.TestCase):
         self.assertEqual(claude[claude.index('--permission-prompts') + 1], 'none')
         for forbidden in ['-c', 'service_tier', 'bypassPermissions', '--dangerously-skip-permissions']:
             self.assertNotIn(forbidden, ' '.join(claude))
-        codex = rt.command('codex', '/repo', 'gpt-6.1-sol', 'high', 'prompt', '/report', True)
+        codex = rt.command('codex', '/repo', 'gpt-6.2-sol', 'high', 'prompt', '/report', True)
         self.assertIn('service_tier="fast"', codex)
         self.assertIn('model_reasoning_effort=high', codex)
         self.assertNotIn('--sandbox', codex)
         self.assertNotIn('danger-full-access', codex)
-        self.assertNotIn('service_tier="fast"', rt.command('codex', '/', 'gpt-6.1-sol', 'high', 'p', '/r'))
+        self.assertNotIn('service_tier="fast"', rt.command('codex', '/', 'gpt-6.2-sol', 'high', 'p', '/r'))
 
     def test_invalid_model_effort_or_fast_blocks(self):
-        for engine, model, effort, fast in [('claude', 'gpt-6.1-sol', 'high', False),
+        for engine, model, effort, fast in [('claude', 'gpt-6.2-sol', 'high', False),
                                           ('claude', 'sonnet', 'high', True),
                                           ('codex', 'sonnet', 'high', False),
                                           ('claude', 'sonnet', 'ultra', False),

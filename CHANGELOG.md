@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Update the normal reviewer to `gpt-6.2-sol`/`high` and first-review risk
+escalation to `gpt-6.2-astra`/`high` across kstack's config, project template,
+and `/pr-loop` defaults and examples. Keep the `gpt-6-luna` economy override.
+
 Add `/linear-roadmap-create <brief|spec|plan> [--team <team>] [--dry-run]`
 for complete new roadmaps in Linear: projects, milestones, parent/child issues,
 dependencies, a roadmap document and an initiative when useful or requested.

@@ -50,7 +50,7 @@ class RunnerTests(unittest.TestCase):
         args = [sys.executable, str(BIN / 'run-review'), '--repo-root', str(self.repo),
                 '--owner-repo', 'example/repo', '--pr', '16', '--head', HEAD,
                 '--route', str(route_file), '--skill', str(self.skill),
-                '--model', 'sonnet' if reviewer_engine == 'claude' else 'gpt-6.1-sol',
+                '--model', 'sonnet' if reviewer_engine == 'claude' else 'gpt-6.2-sol',
                 '--effort', 'high', '--report-dir', str(self.root / 'reports')]
         env = self.env.copy()
         for marker in ('CODEX_SESSION_ID', 'CODEX_THREAD_ID', 'CLAUDE_CODE_CHILD_SESSION'):
