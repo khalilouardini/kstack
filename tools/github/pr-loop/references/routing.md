@@ -173,8 +173,9 @@ uses `--print --output-format json --permission-prompts none --model ... --effor
 ...`, after `claude auth status` reports loggedIn. Exact-head reuse does not need a
 model login or installed model CLI, only verified GitHub evidence. Codex uses `exec -C ... -o ...
 -m ... -c model_reasoning_effort=...`, with the existing optional fast settings.
-Both inherit host permissions. No sandbox bypass, auto-approval permission mode,
-or fallback engine is selected. A denied required operation or unavailable required
+Each CLI uses its own configured permissions; the controller's successful shell
+calls do not prove the child has the same access. No sandbox bypass, auto-approval
+permission mode, or fallback engine is selected. A denied required operation or unavailable required
 flag means BLOCKED; establish permissions through the normal host flow before retrying.
 A denied optional runtime probe (any other check: a browser, a GUI app, Computer Use,
 `ps`) is named in the review instead and does not block it (review-claude-pr §2);
@@ -187,6 +188,31 @@ Claude permission flow before retrying. Never add a broad allowlist or bypass
 permissions to turn a blocked run green. Do not add `.git` to Codex's `writable_roots`
 or offer that as a fix: sandboxed code could then write `.git/hooks`, which Git runs
 outside the sandbox.
+
+### Permission diagnosis and resuming
+
+Do not invent a trust-file gate. An absent exact-path `projects.<path>.trust_level`
+entry, an unchanged config modification time, or unset `CODEX_HOME` is not evidence
+of the effective sandbox or network policy. Project trust can affect configuration
+loading and defaults; it is not a capability check or a guarantee of network
+access. Do not require a redundant worktree entry or edit the user's trust/config.
+
+1. Run the helper's exact-head reuse check before any reviewer permission/model
+   probe. A verified submitted review needs no reviewer launch or trust entry.
+2. For a new review, the child first checks its supplied GitHub identity, reads the
+   exact PR head, and writes a small file in its assigned scratch directory. These
+   initial access checks precede diff analysis or tests, so a denied required
+   operation stops the round promptly. Successful controller checks cannot replace
+   these child checks, and reads do not prove review submission will be permitted.
+3. On a required denial, retain the actual operation and sanitized error from the
+   current reviewer's report, saved streams or session log. Report that evidence
+   and its path; do not claim a specific sandbox/network setting from a missing
+   trust entry. A prior denial describes that attempt, not every future launch.
+4. When the user says permissions are fixed and requests a rerun, recheck current
+   head/reuse and attempt the normal helper once. Do not require the config file's
+   timestamp or a particular trust entry to change first. If the required operation
+   is denied again, stop with the new evidence; no automatic retry or permission
+   workaround. Never spend a full diff review before the initial access checks.
 
 ## Submitted evidence and reuse
 

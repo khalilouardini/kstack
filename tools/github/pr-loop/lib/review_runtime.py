@@ -206,7 +206,7 @@ def command(engine, repo, model, effort, prompt, report, fast=False):
                 '--model', model, '--effort', effort, prompt]
     if engine != 'codex' or model.startswith(('claude', 'sonnet', 'opus', 'haiku')):
         raise Blocked('invalid Codex engine/model')
-    # Inherit host permissions. Never lower its sandbox or suppress its rules.
+    # Keep the CLI's configured permissions; do not override them to mimic the controller.
     args = ['codex', 'exec', '-C', str(repo), '-o', str(report), '-m', model,
             '-c', 'model_reasoning_effort=' + effort]
     if fast:
@@ -461,8 +461,16 @@ def review_round(args, scratch, detail):
               'Post one submitted COMMENT review with commit_id pinned to that exact head and '
               'the engine-specific marker. Never edit implementation, commit, push, fix findings, '
               'or start/delegate pr-loop. Your process already has GH_TOKEN bound to '
-              f'{route["reviewer"]}; verify it with gh api user and use it for all GitHub reads '
-              'and review submission. Do not obtain or use a maintainer credential, and do not '
+              f'{route["reviewer"]}; use it for all GitHub reads and review submission. '
+              'Before diff analysis or tests, perform these initial access checks: verify gh api user '
+              f'matches {route["reviewer"]}, read repos/{args.owner_repo}/pulls/{args.pr} '
+              f'with gh api and verify head.sha is {args.head}, and write a small file in '
+              f'your assigned scratch directory {scratch}. A denied required access check '
+              'means stop immediately, before spending the review on the diff. An absent '
+              'exact-path project trust entry, unchanged config timestamp or unset CODEX_HOME '
+              'does not establish a denial or the effective sandbox/network policy. Test '
+              'actual access; do not edit trust/config or infer child permissions from the '
+              'controller. Do not obtain or use a maintainer credential, and do not '
               'reset to the configured default reviewer. Recompute provenance with this same token. '
               'Make any disposable checkout with git clone --shared --no-checkout or git archive '
               f'in your scratch directory {scratch} (also $REVIEW_SCRATCH), never git worktree '
@@ -481,7 +489,9 @@ def review_round(args, scratch, detail):
               'suspicion that needed it as a non-blocking question, and submit the review. '
               'Your final response must be only a JSON object: '
               '{"status":"REVIEW_SUBMITTED","review_id":123,"head":"<full reviewed SHA>"}. '
-              'Use the actual submitted ID. On failure return {"status":"BLOCKED"}.')
+              'Use the actual submitted ID. On failure return a JSON object with status '
+              'BLOCKED, required_operation and reason naming the actual failed operation '
+              'and sanitized observed error. Never include credentials.')
     argv = command(engine, repo, args.model, args.effort, prompt, report, args.fast)
     before = (run(['git', 'rev-parse', 'HEAD'], cwd=repo),
               run(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=repo))
