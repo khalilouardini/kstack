@@ -6,6 +6,18 @@ compares every field and type, including nested records, to this block.
 Legacy fields remain required; version 2 selection fields are required by the
 runtime for new records and optional in the schema for old-record compatibility.
 Nullable values explicitly represent absent evidence.
+
+Frontend review requirements use existing fields rather than extra schema keys:
+PLAN.acceptance_criteria_cited retains the ticket/roadmap source, review eval id and
+observable pass condition; PLAN.tests retains the chosen localhost/screenshots
+mode(s), setup/navigation, data, states and viewports; PLAN.evidence names the
+planned artifact destination. TRACK_RESULT.acceptance_evidence contains the actual
+demo instructions/observations and/or screenshot links with the evaluated revision
+and result. B3 receives both the approved PLAN and this acceptance evidence for
+its own track. Follow the physical stack root's ORCHESTRATION.md section
+**Frontend review evidence**. Missing planned details stop planning; missing or
+stale executed evidence blocks review readiness, not initial implementation.
+The schema checks field transport only; visual evidence review is prompt-level.
 A STOPPED record always has a non-empty stop_reason and evidence. Branch and
 worktree in selection are proposed names/absolute paths; only dispatch read-back
 proves their existence. New Run A records have schema_version 2 and preserve selection_report plus the

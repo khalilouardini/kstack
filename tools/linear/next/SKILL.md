@@ -1,6 +1,6 @@
 ---
 name: next
-version: 0.11.0
+version: 0.11.1
 description: Read Linear and recommend one scoped issue, or a bounded parallel batch with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. Explicit flags accept a reviewed pending PR or a local graph. Shared files warn; real dependencies constrain selection. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
@@ -280,6 +280,14 @@ original scope decision-log entry or Linear comment, including authorized actor,
 UTC date, exact boundary and manifest digest. A changed graph/scope invalidates a
 decision unless its owner explicitly reaffirms it. Do not write approval records.
 Done, a draft/recorded field or structural validity is not completion evidence.
+For frontend units, read the ticket's **Evals** section and preserve its visual
+review contract under the shared lifecycle's **Frontend review evidence** rule.
+Verify that the graph acceptance/Conditions table retains the eval ID,
+localhost/screenshots mode(s), protocol, visible pass criteria and destination.
+Missing planned details belong in the authorized planning handoff and prevent
+claiming the frontend plan complete or ready to build. Do not require completed
+demos/screenshots before planning or build; implementation supplies those before
+review/completion. This acceptance-plan check is prompt-level.
 
 Verified plan/native conditions with a false or unknown later build condition
 permit PLAN_ONLY in default mode. Its kickoff calls
@@ -594,6 +602,12 @@ Code, Codex, whichever host they drive). This handoff follows the readiness stat
   implementation runner-up and name any required rebase or final integration order.
 - Do not emit a new-session kickoff for a runner-up already owned by a live branch
   or PR; say `already active` in its ranking line instead.
+
+Every frontend kickoff, including a resume or plan-only handoff, carries its
+review eval ID, chosen localhost/screenshots modes, protocol/visible criteria
+and evidence destination or named planning gaps. Direct implementation to retain
+and link the resulting evidence from the ticket and PR before requesting review.
+Do not drop this requirement when shortening a parallel kickoff.
 
 Kickoff paragraphs do not turn runners-up into a menu. The #1 issue remains the
 decision; parallel paragraphs only explain how spare execution capacity can be

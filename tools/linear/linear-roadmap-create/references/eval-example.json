@@ -3,6 +3,7 @@
     {
       "key": "unit-idempotence",
       "kind": "unit",
+      "frontend": false,
       "outcome": "Retrying the same import does not duplicate stored records.",
       "evals": [
         {
@@ -23,6 +24,7 @@
     {
       "key": "gate-import",
       "kind": "release",
+      "frontend": false,
       "outcome": "App users can retry an interrupted import without losing or duplicating data.",
       "evals": [
         {
@@ -37,6 +39,28 @@
           "failure_check": "An injected retry that writes a duplicate must fail the count/ID comparison. Confirm the authorized control workspace can still import successfully.",
           "runner": "Release verifier; product owner ratifies the proposed rubric and signs release separately.",
           "evidence": "Ticket-linked session transcript, deployment SHA, fixture digest, before/after records, observed counts, outcome and explicit signoff or unresolved decision."
+        }
+      ]
+    },
+    {
+      "key": "unit-import-status-ui",
+      "kind": "unit",
+      "frontend": true,
+      "frontend_review": {"eval_id": "review-import-status", "modes": ["localhost", "screenshots"]},
+      "outcome": "Users can distinguish an interrupted import from a completed one and resume it from the status screen.",
+      "evals": [
+        {
+          "id": "review-import-status",
+          "claim": "The import status screen shows interruption accurately and offers a working resume action.",
+          "method": "Reviewer-facing localhost demo with retained screenshots of the changed states.",
+          "inputs": "Candidate revision, isolated test account and the frozen import fixture in interrupted and completed states; desktop 1280x800 and mobile 390x844 viewports.",
+          "baseline": "Capture the same states on the parent revision before changing the screen; no existing screenshots or observations are claimed.",
+          "procedure": "Illustrative setup: npm ci, then npm run dev -- --port 3000; open http://localhost:3000/imports with the test account. Replace these illustrative commands and route with repo-verified values before publishing. Interrupt the fixture import, inspect its status, click Resume and wait for completion. Repeat at both viewports, capture interrupted and completed screens, and stop the dev server afterward.",
+          "pass_condition": "At both viewports an interrupted import displays Interrupted and an accessible Resume action, never Completed. Resume finishes with exactly two canonical records, the screen displays Completed, and status text and controls remain visible without horizontal scrolling. The reviewer can reproduce the interaction and inspect the linked state screenshots.",
+          "threshold_source": {"status": "accepted", "source": "Illustrative UI requirement: interruption must remain visible until recovery finishes; frontend work must provide a localhost demo and/or screenshots for review."},
+          "failure_check": "Force the interrupted fixture to display Completed and confirm the review rubric fails; a nonfunctional Resume action must also fail even if screenshots look correct.",
+          "runner": "Implementer records the demo and screenshots; PR reviewer checks the visible states and resume interaction.",
+          "evidence": "Link demo startup/account/fixture/navigation instructions, observations and before/after screenshots from the ticket and PR. Retain revision, environment, route, state, viewport, timestamp and result in the ticket-linked review artifact directory."
         }
       ]
     }

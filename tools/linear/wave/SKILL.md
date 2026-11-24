@@ -1,6 +1,6 @@
 ---
 name: wave
-version: 0.12.0
+version: 0.12.1
 description: Run one independent Linear batch through a Claude Code Workflow graph, with human plan approval and merge checkpoints. Use when asked to "run one wave", "plan a Linear batch", "build the approved wave", or "/wave plan|build". (kstack)
 ---
 
@@ -319,6 +319,18 @@ literals without Markdown escaping and a stdlib-readable input to seam-check.
 A4 reads `tools/linear/dispatch-implementation/SKILL.md` top to bottom using its
 `--plan-only` node rule. No separate executor is launched.
 
+Follow the physical stack root's `ORCHESTRATION.md` section **Frontend review
+evidence** throughout A4, B1 and B3. A4 carries each frontend ticket's review eval,
+localhost/screenshots mode(s), setup, states, pass condition and evidence destination
+into the existing PLAN criteria/tests/evidence fields. Missing planned details stop
+that plan; actual demo/screenshots are future implementation work, not a start gate.
+B1 produces and links the evidence at the implemented revision in
+TRACK_RESULT.acceptance_evidence before review. B3 receives that same track's
+approved plan and observed acceptance evidence; it inspects the visuals/demo and
+cannot call missing or stale frontend evidence CLEAN. UI changes during review
+fixes require refreshed evidence. These checks remain prompt-level; the schemas
+validate transport fields, not the quality or existence of a demo.
+
 Run B first consumes the caller's read-only recovery evidence. Existing verified
 PRs skip implementation and proceed to seams/review. Only tracks proven to have
 no PR enter B1 in the dispatch worktrees. Each B1 node
@@ -362,7 +374,9 @@ heads, changed unreviewed heads, absent rows or mismatches block the affected
 track. A pre-review seam success cannot certify code changed by review fixes.
 For local shared agreements, B4 uses the same temporary contract projection as B2;
 a null published contract never skips final seam verification.
-B4 is read-only, including for terminal review verdicts.
+B4 is read-only, including for terminal review verdicts. For frontend work,
+verify that the final same-head review includes the required demo/screenshot
+evidence; stale visuals after an affected UI change do not establish readiness.
 Streaming FINAL_CHECK verifies all remote heads and their same-head review/CI
 evidence. Connected shared obligations then use FINAL_EVIDENCE at exact reviewed
 heads, with local/remote tip checks and participant-specific seam rows. Independent

@@ -1211,6 +1211,82 @@ tests.push(async()=>{
   }
 });
 
+cases.push({number:cases.length+1,name:'frontend review contract and executed artifacts reach build and reviewer'});
+tests.push(async()=>{
+  const reviewContract={
+    eval_id:'review-import-status',modes:['localhost','screenshots'],
+    setup:'npm run dev -- --port 3000; open /imports with interrupted fixture',
+    pass_condition:'Interrupted stays visible until Resume completes at desktop and mobile viewports',
+    destination:'ticket and PR: artifacts/import-status-review'
+  };
+  const planned=await run('plan',f=>{
+    const p=f.responses['A4 plan T-1'];
+    p.acceptance_criteria_cited.push('Frontend review eval: '+reviewContract.eval_id+'; '+reviewContract.pass_condition);
+    p.tests.push('Frontend review setup and modes: '+JSON.stringify(reviewContract));
+    p.evidence.push('Frontend review destination: '+reviewContract.destination);
+  });
+  const planner=planned.calls.find(c=>c.label==='A4 plan T-1').prompt;
+  assert.match(planner,/frontend classification and review eval/);
+  assert.match(planner,/source\/eval id and pass/);
+  for(const mode of ['legacy','streaming']){
+    const actual=['http://localhost:3000/imports; revision '+fixture.responses['B1 build T-1'].head_sha,
+      'artifacts/import-status-review/mobile-interrupted.png; rubric PASS'];
+    const built=await run('build',(f,a)=>{
+      if(mode==='streaming')streamingArgs(f,a);
+      a.plan_record=clone(planned.result);
+      f.responses['B1 build T-1'].acceptance_evidence=actual;
+    });
+    assert.equal(built.result.state,'COMPLETE',mode);
+    const builder=built.calls.find(c=>c.label==='B1 build T-1').prompt;
+    assert.ok(builder.includes(JSON.stringify(planned.result.plans[0])),mode+': approved plan reaches implementer');
+    assert.match(builder,/localhost demo and\/or screenshots before requesting review/);
+    const reviewer=built.calls.find(c=>c.label==='B3 review T-1').prompt;
+    const prefix='Implementation acceptance evidence for this track: ';
+    const line=reviewer.split('\n').find(s=>s.startsWith(prefix));
+    assert.ok(line,mode+': reviewer receives observed evidence');
+    assert.deepEqual(JSON.parse(line.slice(prefix.length,-1)),actual);
+    assert.ok(reviewer.includes(JSON.stringify(planned.result.plans[0])),mode+': review criteria retained');
+    assert.match(reviewer,/Missing, inaccessible or stale required evidence is BLOCKED/);
+    assert.match(reviewer,/UI changes in review fixes require updated/);
+  }
+});
+
+
+cases.push({number:cases.length+1,name:'recovered frontend PRs retain the final visual evidence check'});
+tests.push(async()=>{
+  for(const mode of ['legacy','streaming'])for(const missingVisuals of [false,true])for(const admissionBlocked of [false,true]){
+    const context=JSON.stringify({mode,missingVisuals,admissionBlocked});
+    const r=await run('build',(f,a)=>{
+      if(mode==='streaming')streamingArgs(f,a);
+      a.approve=['T-1'];
+      const plan=a.plan_record.plans[0],head=f.responses['B1 build T-1'].head_sha;
+      plan.acceptance_criteria_cited.push('Frontend review eval: interrupted import status and working Resume');
+      plan.tests.push('Localhost demo at /imports and state screenshots at mobile and desktop viewports');
+      plan.evidence.push('Frontend review destination: ticket and PR artifact links');
+      const result=clone(f.responses['B1 build T-1']);
+      result.acceptance_evidence=missingVisuals?['Unit tests and CI green; required frontend visuals unavailable']:
+        ['Ticket and PR link localhost reproduction and state screenshots at revision '+head];
+      a.recovery=[{issue_id:'T-1',branch:a.plan_record.tracks[0].branch,worktree:a.plan_record.tracks[0].worktree,
+        state:'PR_OPEN',checked_at:a.graph_publication.checked_at,result,evidence:['Verified existing same-head PR and green gates']}];
+      f.responses['B3 review T-1'].reviewed_head=head;
+      if(admissionBlocked)Object.assign(f.responses['B3 admission T-1'],{
+        state:'STOPPED',stop_reason:'Current admission evidence unavailable',evidence:['Live evidence lookup failed']
+      });
+      f.responses['B4 final verification']={heads:[{issue_id:'T-1',pr:result.pr,branch:a.plan_record.tracks[0].branch,
+        head_sha:head,reviewed_head_sha:missingVisuals?null:head}],seam:null};
+    });
+    assert.ok(!r.calls.some(c=>c.label.startsWith('B1 build')),context+': recovered PR never rebuilds');
+    assert.equal(r.calls.some(c=>c.label==='B3 review T-1'),!admissionBlocked,context+': stopped readmission bypasses paid review');
+    const final=r.calls.find(c=>c.label==='B4 final verification');
+    assert.ok(final,context+': recovered PR still reaches final read-only verification');
+    assert.match(final.prompt,/same-head review must include its required localhost\s+demo and\/or screenshots/);
+    assert.match(final.prompt,/Missing required frontend\s+review evidence also yields null reviewed_head_sha/);
+    assert.equal(r.result.tracks[0].state,missingVisuals||admissionBlocked?'BLOCKED':'CLEAN',context);
+    if(missingVisuals&&!admissionBlocked)
+      assert.ok(r.result.tracks[0].review.open_findings.includes('Final head has no matching review/CI evidence'),context);
+  }
+});
+
 let failed=0;
 for(let i=0;i<tests.length;i++)try{await tests[i]();console.log(`PASS ${cases[i].number} ${cases[i].name}`);}catch(e){failed++;console.error(`FAIL ${cases[i].number} ${cases[i].name}: ${e.stack}`);}
 console.log(`${tests.length-failed}/${tests.length} wave cases passed`);

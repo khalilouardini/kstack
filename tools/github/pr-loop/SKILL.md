@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.12.1
+version: 0.12.2
 description: Drive an independent Codex↔Claude review/fix loop on one PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. The implementation session keeps fixes; the other engine reviews with verified GitHub identity and head evidence. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#>". (kstack)
 ---
 
@@ -482,9 +482,21 @@ findings (summary plus inline). Missing/malformed evidence is BLOCKED. Apply
 the durable ledger below before responding. Classify:
 
 - any `P0`/`P1`/`P2` → there is work to do, continue to step 4.
-- only `P3`, or `No findings.` → run the CI gate (step 3a); exit `CLEAN` only
-  if it passes. **P3 is not worth another paid round**; leave those threads
-  open for the human.
+- only `P3`, or `No findings.` → run the frontend evidence gate and CI gate
+  (step 3a); exit `CLEAN` only if both applicable gates pass. **P3 is not worth
+  another paid round**; leave those threads open for the human.
+
+**Frontend evidence gate — before any `CLEAN` (prompt-level).** For UI changes,
+follow the physical stack root's `ORCHESTRATION.md` **Frontend review evidence**
+contract. Read the ticket/PR's visual eval, including on recovered PRs or a
+same-head review skip. Confirm that the localhost demo and/or screenshots are
+linked, correspond to the reviewed behavior/revision and have been checked
+against the visible criteria; retain the review/verification observation.
+Missing, stale or uninspected required evidence means `BLOCKED`, naming the
+artifact or verification still needed, even if code review says `No findings.`
+and CI is green. A denied optional browser probe stays a limitation, never a
+request to bypass host restrictions. Refresh affected visuals after UI fixes;
+do not launch another paid review merely to retry unchanged missing evidence.
 
 **3a. CI gate — before any `CLEAN`.** A finding-free review alone is not
 `CLEAN`. The implementer's pre-push gate is `<gates.test>`, which a project may scope to
@@ -516,8 +528,8 @@ NOW=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .head
 
 | `CI` | Verdict |
 |---|---|
-| `green` | `CLEAN`. A `skipping` check counts as passed, as GitHub counts a skipped required check. |
-| `skipped` | `CLEAN` (`ci.checks: none`); the report says no CI gate ran. |
+| `green` | `CLEAN` only with the frontend evidence gate satisfied when applicable. A `skipping` check counts as passed, as GitHub counts a skipped required check. |
+| `skipped` | `CLEAN` (`ci.checks: none`) only with the frontend evidence gate satisfied when applicable; the report says no CI gate ran. |
 | `red` | `BLOCKED`, naming each `fail`/`cancel` check from `ci.tsv`. No implementer pass: a red check is not a review finding, and this loop's fixes answer findings. |
 | `timeout` | `BLOCKED`, naming the checks still `pending`. An empty `ci.tsv` means GitHub reported no matching checks — quote `ci.err`. `no required checks reported` is a `ci.checks` setting for the human to fix, not something to wait out. |
 | `moved` | Someone pushed while the gate waited. Never report `CLEAN` for code nobody reviewed: start the next round (step 1), which counts against `--max-rounds`. |
@@ -618,8 +630,8 @@ Report one of these, always with the round count and what it cost:
 
 | Verdict | Condition | What you do |
 |---|---|---|
-| `CLEAN` | round produced no `P0`–`P2` findings **and** the step 3a CI gate passed at the reviewed head (or `ci.checks: none`) | stop; merge only if `--merge` (below) |
-| `BLOCKED` | repeat finding, failing gate, red or timed-out CI at a finding-free head, or a design-pushback finding you should not decide alone | stop, summarize the disagreement, ask nothing — the human reads it later |
+| `CLEAN` | round produced no `P0`–`P2` findings, required frontend evidence was checked at the reviewed revision, and step 3a CI passed at that head (or `ci.checks: none`) | stop; merge only if `--merge` (below) |
+| `BLOCKED` | repeat finding, failing gate, missing/stale/unverified required frontend evidence, red or timed-out CI at a finding-free head, or a design-pushback finding you should not decide alone | stop, summarize the disagreement, ask nothing — the human reads it later |
 | `ROUNDS_EXHAUSTED` | hit `--max-rounds` | stop; list the still-open findings |
 
 Design pushback ("this approach is wrong") is **always** `BLOCKED`, never
@@ -642,7 +654,7 @@ ran without a project review gate.
 A `CLEAN` or CI `BLOCKED` report also carries the step 3a result: `ci.checks`,
 the minutes waited, and each check's bucket at `$HEAD`. With `ci.checks: none`
 it carries, plainly: *"no CI gate configured (`ci.checks: none`) — `CLEAN`
-reflects review findings only."*
+reflects review findings and required frontend evidence, without a CI verdict."*
 
 ## Resuming after `ROUNDS_EXHAUSTED`
 
@@ -679,8 +691,9 @@ recorded in the ledger, and only the unreviewed delta is paid for.
   raised in step 3 before any edit — repeat finding, and design pushback — and a
   CI `BLOCKED` from step 3a. Repeat finding and design pushback re-block
   immediately on the ledger. A CI `BLOCKED` is the useful one: rerun once the
-  checks are green and step 3a reports `CLEAN` without paying for another independent
-  review.
+  checks are green and required frontend evidence is verified; step 3a can then
+  report `CLEAN` without paying for another independent review. A frontend-evidence
+  `BLOCKED` can likewise reuse the same-head review after the evidence gap is closed.
 - **The ledger (step 5) is what stays bounded.** `N` resets to `0` on every
   invocation and `ROUNDS_EXHAUSTED` is not sticky, so nothing in the round
   counter stops `/pr-loop 123 --max-rounds 1` from being run five times in a
@@ -757,10 +770,10 @@ outward step. Treat them as hard rules anyway.
 9. **All three identities are required.** No maintainer, reviewer, or implementer
    identity configured → refuse. An unattended loop does not silently reassign
    replies to the maintainer's account.
-10. **`CLEAN` reads CI as well as the review.** `No findings.` at a head whose
+10. **`CLEAN` requires review, configured CI and applicable frontend evidence.** `No findings.` at a head whose
     `ci.checks` are red, still pending after `--ci-wait`, or unreported is
     `BLOCKED`, never `CLEAN`. `ci.checks: none` is the one exception, and the
-    report states it.
+    report states it. Missing or stale required frontend evidence still blocks CLEAN.
 
 ## What this skill is NOT for
 

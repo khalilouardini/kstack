@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.6.1
+version: 0.6.2
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -173,6 +173,13 @@ The plan must cite the issue's acceptance criteria and name the files, tests, an
 risks it expects to touch. It may refine the technical approach; it may not reopen
 the product verdict or rewrite acceptance criteria.
 
+Follow the physical stack root's `ORCHESTRATION.md` section **Frontend review
+evidence**. For frontend or mixed work, carry the ticket's review eval, chosen
+localhost/screenshots mode(s), setup/navigation, representative states, pass
+condition and evidence destination into the plan. Resolve missing contract details
+before calling it complete; report gaps without silently rewriting acceptance.
+Planning names future evidence; it does not require screenshots before work starts.
+
 Return the plan and stop for user approval. Resume the same scoped executor with
 write access only after approval. Do not create a replacement session whose context
 can drift from the approved plan.
@@ -189,13 +196,19 @@ has actually produced.
 - If it opens a PR and the workspace contract defines a review status for that
   evidence, apply that transition with the same resolve → ledger → write → read-back
   discipline.
+- For frontend or mixed work, produce the planned localhost demo and/or
+  screenshots at the implemented revision before requesting review. Link the
+  reproducible demo and/or retained screenshots from the ticket and PR, with
+  observed results against the review eval. Passing tests or CI alone is
+  insufficient. Affected UI changed by later fixes needs refreshed evidence.
 - Never mark the issue completed. Completion remains governed by the workspace
   contract and an independent review, evaluation, or steward reconciliation.
 - Never merge automatically.
 
 The completion handoff reports: issue id and URL, executor/model, branch, absolute
 worktree path, current Linear status with read-back result, plan approval state, PR
-if any, tests run, acceptance evidence, blockers, and the next human checkpoint.
+if any, tests run, acceptance evidence (including frontend demo/screenshot links
+and revision when applicable), blockers, and the next human checkpoint.
 
 ## Refusals
 

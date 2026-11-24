@@ -1,6 +1,6 @@
 ---
 name: linear-feature-intake
-version: 0.1.0
+version: 0.2.0
 description: Turn a gated feature request into the correct Linear records — and nothing else. Searches for equivalent existing work first, then executes only the disposition a product-manager verdict block implies: no ticket for OUT, one research issue for NEEDS-EVIDENCE, one backlog issue for a future milestone, a meta issue plus children for the active one. Never overrides the verdict. Use when asked to "file this", "create the tickets for this", or "/linear-feature-intake …". (kstack)
 ---
 
@@ -169,6 +169,11 @@ Classify every hit as one of:
 - **Superseded** — an older issue this request replaces. Becomes a relation and a
   finding for whichever skill owns workspace hygiene; this skill does not close it.
 
+For equivalent frontend work, inspect its planned review evidence before
+reusing it. Surface a missing demo/screenshot eval as a gap; amend the existing
+body only when authorized, preserving its other scope and fields. Never create
+a duplicate implementation issue just to add evidence requirements.
+
 Print the hits and the classification before proceeding. "No existing work found" is
 a claim that needs the queries you ran shown beneath it.
 
@@ -232,6 +237,13 @@ After approval:
   `unstarted`-type status for the active milestone.
 - `dueDate` only if `/spec` produced one. An invented due date is noise the release
   audit will later have to discount.
+- For every frontend implementation ticket, including mixed frontend/backend
+  work, follow the physical stack root's `ORCHESTRATION.md` section **Frontend
+  review evidence**. Its **Evals** section names a stable review eval ID,
+  localhost demo and/or screenshots, reproducible steps, visible pass criteria,
+  reviewer/runner and evidence destination. Prepare the contract before writing
+  and verify it on read-back. Missing details remain explicit planning gaps;
+  actual demo/screenshot production belongs to implementation before review.
 
 ---
 

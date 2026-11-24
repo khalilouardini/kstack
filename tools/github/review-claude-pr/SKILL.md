@@ -1,6 +1,6 @@
 ---
 name: review-claude-pr
-version: 0.8.0
+version: 0.8.1
 description: Review an open agent-built PR (Codex- or Claude-attributed, including maintainer-opened PRs) and immediately post prioritized P0–P3 findings as the configured reviewer account (Codex by default). Review-only — never edits, commits, pushes, approves, or resolves. Use when asked to "review the bot's PR", "review this PR as Codex", "review PR #N", or "/review-claude-pr [PR# | URL]". (kstack)
 ---
 
@@ -240,6 +240,23 @@ security, performance, or meaningful maintainability, has a concrete affected
 path, and is something the author would likely fix. Do not flag intentional
 behavior changes, pre-existing defects, broad architectural preferences, or
 formatting/style nits.
+
+### Frontend review evidence
+
+For UI changes, read the physical stack root's `ORCHESTRATION.md`
+**Frontend review evidence** contract and the ticket/PR's visual eval. Inspect
+supplied localhost demo instructions/observations and/or screenshots against
+changed routes, states, viewports and visible pass criteria at the reviewed
+revision. Record the links/revision and what was inspected in the assessment.
+Tests and CI alone cannot establish this evidence. Missing, inaccessible, stale
+or uninspected visuals are an explicit review-readiness/completion gap; say
+which acceptance remains unverified even when the code review has no findings.
+Do not invent a code defect or priority merely because an artifact is absent.
+
+This evidence review is **prompt-level**. Use a runtime browser only under the
+optional-probe rules below. A denied probe still permits submitting the code
+review with its limitations; it does not turn unverified UI acceptance into PASS.
+The implementer/review loop retains the frontend completion blocker.
 
 ### Optional runtime probes
 

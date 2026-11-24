@@ -1,6 +1,6 @@
 ---
 name: review-comments
-version: 0.7.0
+version: 0.7.1
 description: Find unanswered PR feedback, make the warranted code fixes, and reply under the configured implementer identity using a per-command token that never switches global gh state. Use when asked to "answer the review comments", "reply to the review", "address the PR feedback", or "/review-comments [PR#]". (kstack)
 ---
 
@@ -238,6 +238,13 @@ means permit setup or command launch failed before the gate ran. Stop, push and
 reply nothing, and correct that setup error before retrying; this does not
 consume the single gate repair attempt. Require both the diagnostic and status:
 a child command may itself return 78. Without `--test-slots`, use the normal gate above.
+For frontend fixes, refresh the affected localhost demo and/or screenshots
+following the physical stack root's `ORCHESTRATION.md` **Frontend review evidence**
+contract. Update ticket/PR evidence links and state their evaluated revision and
+result in the replies and final summary. Keep unaffected evidence; do not claim
+refreshed UI verification when demo/capture execution was blocked. Tests and CI
+alone cannot close the visual acceptance gap. This is **prompt-level**.
+
 Commit/push under the user's normal branch discipline. **Commits use the repository's git author configuration (transport credentials are separate) — only the PR comments go out as the bot.** Keep truthful engine attribution in commit trailers; never change global author settings. This split is intentional: the fix is attributed to the implementation session, the conversation reply is authored by the bot.
 
 **Re-fetch the comment `databaseId`s immediately before posting.** Reviews can be re-attributed or re-submitted mid-session, which invalidates ids captured earlier — a reply against a dead id fails or lands on the wrong thread.

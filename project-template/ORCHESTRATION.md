@@ -45,6 +45,13 @@ recorded authority, checks duplicates, verifies writes and keeps a resumable
 ledger. Its project document is separate from the maintainer-published shared
 lifecycle. Creation grants no execution permission; dry runs make no Linear writes.
 
+For frontend work, follow the shared lifecycle's **Frontend review evidence**
+section. Map the ticket's review eval ID, localhost/screenshots mode(s), protocol,
+visible pass criteria and artifact destination into the unit's existing JSON
+`acceptance` text, its `source` citation and the Conditions table below. Retain
+those details in every implementation kickoff. Actual artifacts are produced
+from the implemented revision before review/completion, not before work starts.
+
 ## Project graph
 
 Replace these labels and conditions with actual issue IDs and gate evidence.
@@ -98,7 +105,7 @@ flowchart LR
 | -- | -- | -- | -- | -- | -- |
 | Contract | Authorized scope | Accepted shared contract | Default-branch SHA | Contract decision + merge | Scope record |
 | API unit | Contract merged | Tests, current-head independent review | Gate output + review SHA | If graph requires + merge | Issue body |
-| UI unit | Contract merged | API merged, tests, current-head independent review | Gate output + review SHA | If graph requires + merge | Issue body |
+| UI unit | Contract merged; planned review eval/protocol | API merged, tests, localhost demo and/or screenshots, current-head independent review | Eval ID + modes + steps/visible rubric + artifact destination; implemented-revision artifacts + reviewer | If graph requires + merge | Issue body / Evals |
 | Release | Required units integrated | Acceptance artefacts at deployed SHA | Artefact + production verification | Deploy + release sign-off | Project acceptance |
 
 ## Human decisions

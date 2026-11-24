@@ -13,6 +13,7 @@ FIELDS = (
     "evidence", "failure_check", "runner",
 )
 PLACEHOLDERS = {"todo", "tbd", "unknown", "pending", "n/a", "...", "?"}
+REVIEW_MODES = {"localhost", "screenshots"}
 
 
 def concrete(value: object) -> bool:
@@ -42,6 +43,9 @@ def check(plan: object) -> tuple[list[str], int, int, int]:
         for field in ("key", "kind", "outcome"):
             if not concrete(ticket.get(field)):
                 errors.append(f"{where}.{field} requires concrete text")
+        frontend = ticket.get("frontend")
+        if not isinstance(frontend, bool):
+            errors.append(f"{where}.frontend must be an explicit boolean")
         key = ticket.get("key")
         if isinstance(key, str):
             key = key.strip()
@@ -76,6 +80,20 @@ def check(plan: object) -> tuple[list[str], int, int, int]:
                 if not concrete(source.get("source")):
                     errors.append(f"{at}.threshold_source.source requires concrete text")
                 proposed += source.get("status") == "proposed"
+        review = ticket.get("frontend_review")
+        if frontend is True or "frontend_review" in ticket:
+            if not isinstance(review, dict):
+                errors.append(f"{where}.frontend_review requires eval_id and modes")
+            else:
+                review_id = review.get("eval_id")
+                if not concrete(review_id) or review_id.strip() not in ids:
+                    errors.append(f"{where}.frontend_review.eval_id must reference an eval on this ticket")
+                modes = review.get("modes")
+                if (
+                    not isinstance(modes, list) or not modes
+                    or any(not isinstance(mode, str) or mode not in REVIEW_MODES for mode in modes)
+                ):
+                    errors.append(f"{where}.frontend_review.modes requires localhost, screenshots or both")
         covered += len(errors) == before
     return errors, covered, len(tickets), proposed
 

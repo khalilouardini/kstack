@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+Require frontend tickets to plan a final localhost demo and/or screenshots in
+`/linear-roadmap-create`, with explicit classification and a linked review eval
+checked by `check-evals`. Preserve the requirement through feature intake,
+roadmap acceptance/conditions, selection, dispatch and wave prompts, PR bodies,
+review fixes, human briefings and completion audits. Recovered PRs retain the
+same evidence check. Visual execution/review remain prompt-level; graph and wave
+record schemas are unchanged.
+
 Update the normal reviewer to `gpt-6.2-sol`/`high` and first-review risk
 escalation to `gpt-6.2-astra`/`high` across kstack's config, project template,
 and `/pr-loop` defaults and examples. Keep the `gpt-6-luna` economy override.

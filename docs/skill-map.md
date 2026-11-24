@@ -194,7 +194,12 @@ For a whole new tracker roadmap, use
 It creates or reuses projects, milestones, tickets, dependencies and a project
 roadmap document. Every ticket, including documentation, decisions and release
 gates, needs a reproducible eval contract with meaningful pass criteria and
-retained evidence. The bundled checker rejects incomplete eval fields; semantic
+retained evidence. Frontend tickets require a localhost demo and/or screenshots
+for the reviewer, planned during roadmap creation and preserved through mapping,
+implementation, PR handoff and completion checks under the
+[shared frontend evidence contract](../ORCHESTRATION.md#frontend-review-evidence).
+The bundled checker rejects missing frontend review contracts and incomplete eval
+fields; semantic
 quality and scope authority remain explicit reviews. The creator reconciles
 necessary MVP scope and ADR changes, checks duplicates and verifies saved records.
 `--dry-run` prepares the complete proposal without Linear writes. Creating the
@@ -250,7 +255,8 @@ separate verified account. `/pr-loop` resolves the route from authorship
 evidence and is bounded by a round cap and repeat-finding detection. Claude
 implementation with Codex review is the default, but the route can reverse.
 
-`CLEAN` requires the configured CI checks at the reviewed head as well as the
+`CLEAN` requires applicable frontend demo/screenshot evidence and configured CI
+checks at the reviewed head as well as the
 review result. `ci.checks: none` is an explicit, reported exception for a
 repository without CI. A later push invalidates the earlier head's evidence.
 The optional `/pr-loop --merge` path requires human authorization and its merge

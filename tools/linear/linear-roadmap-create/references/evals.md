@@ -30,6 +30,48 @@ not placeholders or links to an unspecified future eval. A shared protocol may
 be referenced by exact section/version, but each ticket still states its own
 inputs, claim and pass condition. Future implementation has no PASS result yet.
 
+## Frontend review evidence
+
+During roadmap creation, give every ticket a `frontend` boolean in JSON and
+record the classification in its Linear body. Set it to `true` when the ticket
+changes user-visible UI or owns acceptance of changed UI, including mixed
+frontend/backend tickets. A container merely grouping frontend children does
+not need its own demo; each frontend child does.
+
+Every frontend ticket requires `frontend_review` with an `eval_id` referencing
+one of its own evals and `modes` containing `localhost`, `screenshots`, or both.
+The referenced eval uses the normal contract fields above:
+
+- `procedure` gives setup/start commands, fixture/account prerequisites, the
+  localhost URL/route and reproduction steps for a demo; for screenshots it
+  specifies how to reach and capture the changed screens/states. Resolve proposed
+  commands and routes against the consuming repo before publishing them as verified.
+- `inputs` names representative data, changed states, viewport(s) and relevant
+  loading/empty/error states. Include before/after comparison when it helps
+  explain a visual change.
+- `pass_condition` states what the reviewer must see or do to verify the promised
+  outcome, including relevant interaction and responsive behavior. Choose a
+  localhost demo when screenshots cannot demonstrate the claimed interaction;
+  screenshots alone can support a visual claim.
+- `evidence` names a durable destination linked from the ticket and PR (when
+  present) for demo instructions/observations and/or screenshots. Retain the
+  evaluated revision, environment, route, state, viewport, timestamp and result,
+  so the reviewer can identify what changed and reproduce or inspect it.
+- `runner` names who produces the evidence and who reviews it.
+
+Write the chosen modes, eval and evidence destination into the ticket's **Evals**
+section and project roadmap coverage matrix. The final implementation handoff
+must supply the demo and/or screenshots from the implemented revision before
+requesting review or treating the frontend outcome as complete. A localhost URL
+alone is insufficient for a reviewer on another machine: include reproducible
+startup/navigation instructions, or retained screenshots. Tests and CI remain
+part of verification; passing them alone does not satisfy this review evidence.
+
+Roadmap creation plans this future handoff; it does not run the app or fabricate
+screenshots. Missing visual evidence remains NOT_RUN or BLOCKED at execution.
+The checker validates the classification, modes and eval reference structurally;
+correct classification, useful visuals and the completed handoff are prompt-level.
+
 ## Match the check to the level
 
 - **Implementation unit:** assert behavior through a real consumer/interface.

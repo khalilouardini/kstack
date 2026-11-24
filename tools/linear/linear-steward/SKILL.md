@@ -1,6 +1,6 @@
 ---
 name: linear-steward
-version: 0.1.0
+version: 0.2.0
 description: Audit and repair the structural health of a Linear workspace against its workspace contract — issues with no project, stale statuses, statuses contradicted by GitHub, duplicates, superseded work, and issues too vague to gate. Produces an evidence ledger and mutates nothing unless explicitly invoked with apply. Use when asked to "clean up Linear", "is the board accurate?", "reconcile Linear with GitHub", or "/linear-steward audit|apply|reconcile-finished [team|project]". (kstack)
 ---
 
@@ -61,6 +61,11 @@ detection as unavailable rather than inventing the rule.
 `canceled` / `duplicate`), never by name. Where this file names a status in
 backticks it means *the contract's status of that type* — substitute the name the
 contract actually uses.
+
+For frontend work, also read the physical stack root's
+[Frontend review evidence](../../../ORCHESTRATION.md#frontend-review-evidence)
+contract. Apply that evidence requirement to completion proposals in every mode;
+a merged PR alone does not establish that the frontend outcome is complete.
 
 ## Invocation
 
@@ -158,7 +163,8 @@ whose `dueDate` has passed.
 Staleness is a question, not a verdict. Before proposing anything, look for the
 implementation evidence in Phase 2.3. The three outcomes:
 
-- Evidence of a merged PR → propose the `completed` status (2.3).
+- Evidence of a merged PR → assess the completion evidence in 2.3 before
+  proposing the `completed` status.
 - Evidence of an open PR → the issue is genuinely in review; propose only a
   `dueDate` correction, and name the PR.
 - No evidence at all → propose the `unstarted` status, with the reason "started
@@ -173,17 +179,24 @@ The reconciliation, in both directions:
   (`gitBranchName` on the issue), by issue identifier in the PR title or body, or by
   a titled correspondence you can state in one sentence. On a match, propose the
   status implied by the contract's evidence rules — the `completed` status for
-  implementation issues, and for a **release-gate** issue propose nothing but a
-  note, because a merged PR is not gate evidence.
+  implementation issues only when their required evidence is verified. For
+  frontend work, fetch the full issue and PR bodies and inspect linked evidence
+  under the shared Frontend review evidence contract. Missing or stale artifacts
+  mean no completion proposal; name the exact gap. For a **release-gate** issue
+  propose nothing but a note, because a merged PR is not gate evidence.
 - **Issue complete, no merged PR.** Report it. Propose no change: completed work is
   preserved, and the missing link is more likely a linkage gap than a false
   claim. Ask for the PR number.
+- **Frontend issue complete, required visual evidence missing or stale.** Report
+  the evidence gap and its source. Preserve the completed status; this audit
+  does not authorize reopening historical work.
 
 The focused `reconcile-finished` mode uses this exact mapping:
 
 | GitHub evidence | Current tracker state | Proposal |
 |---|---|---|
-| Merged PR, implementation issue | Any non-completed state | `completed` status |
+| Merged PR, implementation issue with all required evidence verified | Any non-completed state | `completed` status |
+| Merged PR, frontend issue with missing or stale required visual evidence | Any | No status change; name the evidence gap |
 | Open non-draft PR | Any `backlog` / `unstarted` / `started` state | The in-review status |
 | Open draft PR | `backlog` / `unstarted` | The in-progress status |
 | Merged PR, release-gate issue | Any | No status change; name the missing gate acceptance artifact |
@@ -302,7 +315,9 @@ workspace.
   Not from a doc being written, not from a related engineering issue closing. If the
   real-world state cannot be established, report `UNKNOWN — needs owner input`.
 - **Never mark engineering work complete without a merged PR or equivalent commit
-  evidence.** An open PR means in review.
+  evidence.** An open PR means in review. Frontend work also requires the
+  shared Frontend review evidence contract; missing or stale visual artifacts
+  cannot support a completion proposal.
 - **Never mark a release gate complete because its implementation PR merged.** The
   gate needs the gate's own acceptance evidence.
 - **Never create a second issue to represent cross-project relevance.**
@@ -321,7 +336,7 @@ them after any edit to this file.
 | # | Situation | Required behaviour |
 |---|---|---|
 | 1 | An issue sits in a started status past its due date with no branch, PR, or commit | Propose the `unstarted` status with reason "started status with no implementation evidence" — **not** `Canceled`, and **not** complete |
-| 2 | A merged PR implements an issue still in an `unstarted` status | Propose the `completed` status, citing PR number and merge date; if the issue is a release gate, propose a note instead and say the gate needs its own acceptance evidence |
+| 2 | A merged PR implements an issue still in an `unstarted` status | Propose the `completed` status only with all required evidence, citing PR number and merge date; for frontend work with missing or stale visual evidence, propose no status change and name the gap; for a release gate, propose a note instead and say the gate needs its own acceptance evidence |
 | 3 | One issue is relevant to two projects | Exactly one primary project (the one whose delivery it blocks) plus a capability label or relation — never two issues |
 | 4 | A broad issue is superseded by a concrete release-gate issue | Propose `duplicate`/`canceled` on the broad one with a relation to the concrete one; quote both titles; never delete |
 | 5 | A commercial issue's real-world state cannot be inferred | Report `UNKNOWN — needs owner input`; propose no status change under either mode |
