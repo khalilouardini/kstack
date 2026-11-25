@@ -6,6 +6,9 @@ them once review has no P0–P2 findings, and verifies the resulting run before
 CI gate and merge authorization still apply. Independent CI providers are not
 paused by this protocol.
 
+This mode supports same-repository PR heads. Fork heads are rejected before
+label mutations because GitHub can omit their PR association from workflow runs.
+
 ## Repository setup
 
 Create the repository label `ci:hold` once as the maintainer. The loop never
@@ -23,9 +26,11 @@ ci:
 ```
 
 `file` is a unique filename under `.github/workflows/`. Omit `paths` for an
-always-applicable workflow. Otherwise copy all positive PR file globs from that
-workflow; matching includes both sides of a rename. Exclusion patterns are not
-supported. The helper verifies complete PR file pagination before selecting
+always-applicable workflow. Otherwise copy all supported positive PR file globs
+from that workflow; matching includes both sides of a rename. Supported patterns
+contain literal text, `*` (one path segment) and `**` (any depth); `**/` also
+matches zero directories. Other glob syntax and exclusions are rejected rather
+than approximated. The helper verifies complete PR file pagination before selecting
 workflows. Every job in a selected released workflow must execute successfully;
 do not opt in a workflow with intentionally skipped jobs without adapting it.
 
@@ -106,9 +111,10 @@ GH_TOKEN="$MAINTAINER_TOKEN" python3 "$STACK_ROOT/tools/github/pr-loop/bin/defer
   check "${CI_DEFER_ARGS[@]}" --head "$HEAD"
 ```
 
-The helper saves the pre-release run IDs and release boundary **before** deleting
+The helper saves the pre-release run IDs **before** deleting
 the label, preserving them even if the deletion response is lost. It accepts only
-new release-named `pull_request` runs associated with this PR and exact head. It
+new release-named `pull_request` runs associated with this PR and exact head,
+without comparing the controller clock to GitHub timestamps. It
 pins each run ID and verifies its workflow path, success conclusion, nonempty
 paginated jobs, successful job conclusions and executed steps. A successful
 aggregate containing skipped jobs is `BLOCKED`.
@@ -139,3 +145,7 @@ the review and pinned run; a manually rerun GitHub workflow is verified at its
 latest attempt. Verified fix commits/new externally reconciled heads acquire a
 new hold and require the normal independent review. Saved state is retained for
 recovery and reporting. No mode change authorizes a merge.
+
+A later push or label removal can supersede a pinned run through the workflow's
+normal concurrency group. Cancellation fails closed as `BLOCKED`; the controller
+does not substitute an unrelated run or restart CI automatically.

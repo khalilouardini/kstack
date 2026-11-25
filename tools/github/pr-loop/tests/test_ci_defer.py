@@ -36,6 +36,7 @@ class GitHub:
     def __init__(self):
         self.login = 'maintainer'
         self.head = HEAD
+        self.head_repo = 'example/repo'
         self.labels = ['backend']
         self.files = [{'filename': 'src/app.py'}]
         self.changed_files = None
@@ -53,7 +54,7 @@ class GitHub:
         if url == 'user':
             value = dict(login=self.login)
         elif url.endswith('/pulls/16'):
-            value = dict(state='open', head=dict(sha=self.head, ref='feature'),
+            value = dict(state='open', head=dict(sha=self.head, ref='feature', repo=dict(full_name=self.head_repo)),
                          changed_files=len(self.files) if self.changed_files is None else self.changed_files)
         elif url.endswith('/pulls/16/files'):
             value = self.files
@@ -183,10 +184,10 @@ class DeferredCITests(unittest.TestCase):
         self.publish(number=22)['event'] = 'workflow_dispatch'
         self.assertEqual(self.controller().check()['status'], 'CI_PENDING')
 
-    def test_old_created_run_not_in_baseline_is_not_release_evidence(self):
+    def test_release_run_is_accepted_without_trusting_controller_clock(self):
         self.release()
         self.publish()['created_at'] = '2000-01-01T00:00:00Z'
-        self.assertEqual(self.controller().check()['status'], 'CI_PENDING')
+        self.assertEqual(self.controller().check()['status'], 'CI_GREEN')
 
     def test_unrelated_label_event_cannot_mask_the_release_run(self):
         self.release()
@@ -200,6 +201,12 @@ class DeferredCITests(unittest.TestCase):
     def test_head_movement_blocks_before_label_mutation(self):
         self.github.head = OTHER
         with self.assertRaisesRegex(Blocked, 'CI_HEAD_MOVED'):
+            self.acquire()
+        self.assertEqual(self.github.labels, ['backend'])
+
+    def test_fork_heads_are_rejected_before_holding_ci(self):
+        self.github.head_repo = 'a-fork/repo'
+        with self.assertRaisesRegex(Blocked, 'same-repository'):
             self.acquire()
         self.assertEqual(self.github.labels, ['backend'])
 
@@ -259,6 +266,33 @@ class DeferredCITests(unittest.TestCase):
         self.github.files.append(dict(filename='archive/old.md', previous_filename='docs/old.md'))
         self.acquire()
         self.assertEqual(self.controller().state['workflows'], ['tests.yml', 'docs.yml'])
+
+    def test_path_selection_matches_github_single_and_recursive_stars(self):
+        cases = [
+            ('**/*.md', 'README.md', True),
+            ('**/*.md', 'docs/nested/readme.md', True),
+            ('docs/**/*.md', 'docs/readme.md', True),
+            ('docs/*.md', 'docs/readme.md', True),
+            ('docs/*.md', 'docs/nested/readme.md', False),
+            ('docs/**', 'docs/nested/readme.md', True),
+            ('*.md', 'docs/readme.md', False),
+        ]
+        for pattern, filename, selected in cases:
+            with self.subTest(pattern=pattern, filename=filename):
+                self.args.config.write_text(json.dumps(dict(label='ci:hold', workflows=[
+                    dict(file='tests.yml'), dict(file='docs.yml', paths=[pattern])])))
+                self.github.files = [dict(filename=filename)]
+                hold = self.controller()
+                hold.verify()
+                self.assertEqual('docs.yml' in hold.workflows(), selected)
+
+    def test_unsupported_path_filter_syntax_fails_before_hold(self):
+        for pattern in ('docs/?.md', 'docs/[ab].md', 'docs/a+.md', 'docs/\\*.md', '***.md'):
+            with self.subTest(pattern=pattern):
+                self.args.config.write_text(json.dumps(dict(label='ci:hold', workflows=[
+                    dict(file='tests.yml', paths=[pattern])])))
+                with self.assertRaises(Blocked):
+                    self.controller()
 
     def test_incomplete_files_fail_closed(self):
         self.github.changed_files = 3001

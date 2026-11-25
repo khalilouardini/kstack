@@ -1,8 +1,6 @@
 """Per-PR CI holds and exact-run evidence. Uses gh; no reviewer process or shell eval."""
 
 import argparse
-from datetime import datetime, timezone
-import fnmatch
 import fcntl
 import json
 import os
@@ -12,6 +10,34 @@ import subprocess
 from urllib.parse import quote, urlencode
 
 from review_runtime import Blocked
+
+
+def path_pattern(pattern):
+    """The supported GitHub path-filter subset: literal text, * and **.
+
+    A single star cannot consume a slash; a whole **/ component can consume
+    zero directories. Reject other glob syntax rather than selecting the wrong
+    workflows. See GitHub's workflow-syntax filter-pattern cheat sheet.
+    """
+    if any(char in pattern for char in '?+[]\\{}()') or '***' in pattern:
+        raise Blocked('ci.defer.paths supports only literal text, * and **')
+    parts, offset = [], 0
+    while offset < len(pattern):
+        if pattern.startswith('**', offset):
+            if ((offset == 0 or pattern[offset - 1] == '/')
+                    and pattern[offset + 2:offset + 3] == '/'):
+                parts.append('(?:.*/)?')
+                offset += 3
+            else:
+                parts.append('.*')
+                offset += 2
+        elif pattern[offset] == '*':
+            parts.append('[^/]*')
+            offset += 1
+        else:
+            parts.append(re.escape(pattern[offset]))
+            offset += 1
+    return re.compile(''.join(parts))
 
 
 def config(value):
@@ -32,6 +58,8 @@ def config(value):
                                   or any(not isinstance(p, str) or not p
                                          or p.startswith('!') for p in paths)):
             raise Blocked('ci.defer workflow paths must be positive file globs')
+        for pattern in paths or []:
+            path_pattern(pattern)
     return value
 
 
@@ -85,6 +113,8 @@ class Hold:
         self.pr = self.api(f'{self.prefix}/pulls/{self.args.pr}')
         if self.pr.get('state') != 'open' or self.pr['head']['sha'] != self.args.head:
             raise Blocked('CI_HEAD_MOVED: PR is closed or its head changed')
+        if self.pr['head'].get('repo', {}).get('full_name', '').casefold() != self.args.owner_repo.casefold():
+            raise Blocked('deferred CI supports same-repository PR heads only')
         if self.state is not None:
             if (self.state.get('owner_repo') != self.args.owner_repo
                     or self.state.get('pr') != self.args.pr
@@ -101,7 +131,7 @@ class Hold:
             raise Blocked('complete PR file pagination is required to select deferred workflows')
         filenames = [v[k] for v in changes for k in ('filename', 'previous_filename') if k in v]
         selected = [v['file'] for v in self.settings['workflows']
-                    if v.get('paths') is None or any(fnmatch.fnmatchcase(name, pattern)
+                    if v.get('paths') is None or any(path_pattern(pattern).fullmatch(name)
                                                     for name in filenames for pattern in v['paths'])]
         if not selected:
             raise Blocked('no deferred workflow applies to this PR')
@@ -185,7 +215,6 @@ class Hold:
             self.state['workflows'] = self.workflows()
             self.state['baseline'] = {w: [r['id'] for r in self.runs(w, self.args.head)]
                                       for w in self.state['workflows']}
-            self.state['released_after'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
             self.state['runs'] = {}
             self.state['phase'] = 'releasing'
             self.save()  # Save BEFORE deleting: a crash must not swallow the new run.
@@ -213,8 +242,7 @@ class Hold:
                 candidates = [r for r in self.runs(workflow, self.args.head)
                               if self.belongs(r) and r.get('head_sha') == self.args.head
                               and r.get('display_title') == self.release_title()
-                              and r['id'] not in self.state['baseline'][workflow]
-                              and r.get('created_at', '') >= self.state['released_after']]
+                              and r['id'] not in self.state['baseline'][workflow]]
                 if not candidates:
                     pending.append(workflow + ': awaiting release-triggered run')
                     continue
