@@ -77,6 +77,7 @@ claude_review_model:             # Claude review rounds only; no Codex flags
   effort: high                  # null/missing → high
 ci:
   checks: <required|all|none>   # PR checks /pr-loop needs green before CLEAN
+  defer: null                 # optional --defer-ci protocol; see pr-loop reference
 identities:
   maintainer: <gh-login|null>   # human owner: opens PRs, governs, merges
   reviewer: <gh-login|null>     # review agent; Codex by default

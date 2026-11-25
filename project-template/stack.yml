@@ -121,6 +121,16 @@ claude_review_model:
 # null → /pr-loop refuses.
 ci:
   checks: null                   # required | all | none
+  # Optional /pr-loop --defer-ci; null leaves ordinary CI unchanged.
+  # Set only after creating the ci:hold label and adopting the workflow protocol
+  # in tools/github/pr-loop/references/deferred-ci.md. Example:
+  # defer:
+  #   label: ci:hold
+  #   workflows:
+  #     - file: tests.yml
+  #     - file: docs.yml
+  #       paths: ['docs/**', 'mkdocs.yml']  # mirror that workflow's PR filters
+  defer: null
 
 # GitHub logins. No defaults, ever — the human opens PRs, governs, and merges;
 # once a review loop starts, the reviewer publishes findings (Codex by default)

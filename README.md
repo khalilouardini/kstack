@@ -148,6 +148,11 @@ is an explicit exception for repositories without CI and is stated in the
 report. Its optional `--merge` path requires explicit authorization and its
 additional merge gates. `/land` always stops at the PR.
 
+`/pr-loop <PR#> --defer-ci` holds opted-in GitHub Actions jobs during review
+rounds and releases them on the final reviewed commit. `CLEAN` requires the new
+release-triggered runs and their executed jobs to succeed, plus the ordinary CI
+and frontend gates. See [repository setup and recovery](tools/github/pr-loop/references/deferred-ci.md).
+
 A second person can use their own accounts with a host-local `identities.yml`;
 see [the identity configuration](CONVENTIONS.md#2-per-project-configuration--agentsstackyml).
 
