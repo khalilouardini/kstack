@@ -1,0 +1,102 @@
+{
+  "eval_id": "skill-map-frontend-evidence-copy",
+  "modes": [
+    "screenshots"
+  ],
+  "source_revision": "e857b30fa2f424950c1b4c49518a541e834e37ed",
+  "source_html": "docs/skill-map.html",
+  "source_html_sha256": "9ceb7001f7b05f2d3894e1de5e4a2df46b55be4b85342287d737233b577f4396",
+  "source_skill": "tools/linear/linear-roadmap-create/SKILL.md",
+  "source_skill_sha256": "a5c5f41668748ea1e807cfa1fa9da518b710da315f7c45cc7b20d130cc7590ca",
+  "source_identity": "Captures apply while these source hashes match; this evidence commit adds only these retained artifacts.",
+  "scope": "Rendered /linear-roadmap-create skill card; single added frontend-evidence sentence.",
+  "procedure": [
+    "From the evaluated checkout root, run python3 -m http.server 8765 --bind 127.0.0.1.",
+    "Open http://127.0.0.1:8765/docs/skill-map.html in Chrome.",
+    "Enter linear-roadmap-create in the Filter skills by trigger phrase search box (#q).",
+    "Scroll the matching card into view at 1280x800 and 390x844; inspect the added sentence and follow its canonical skill link.",
+    "Stop the local server after inspection."
+  ],
+  "pass_criteria": [
+    "Exactly one visible card matches /linear-roadmap-create.",
+    "The added frontend demo/screenshots sentence is fully visible within the screenshot viewport.",
+    "Card content and page have no horizontal overflow or clipping.",
+    "The card link resolves to the canonical skill file and serves its candidate-revision bytes."
+  ],
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/158.0.8127.38",
+    "revision": "@bd978cc8489e498e709a40f55b1037e521b5a22d",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36",
+    "jsVersion": "15.8.62.31"
+  },
+  "observations": [
+    {
+      "time": "2026-11-25T11:56:59.617Z",
+      "viewport": {
+        "width": 1280,
+        "height": 800,
+        "devicePixelRatio": 1
+      },
+      "query": "linear-roadmap-create",
+      "filter_count": "1 of 33 entries",
+      "visible_cards": 1,
+      "card_name": "/linear-roadmap-create",
+      "sentence_fully_visible": true,
+      "page_horizontal_overflow": false,
+      "card_horizontal_overflow": false,
+      "card_vertical_clipping": false,
+      "theme": "dark",
+      "pass": true,
+      "screenshot_sha256": "64e07499210ec21e8c0846d52b6d7a1535f15a4538d775cfc444c8eed0cd6920",
+      "screenshot": "desktop.png",
+      "canonical_link": {
+        "path": "/tools/linear/linear-roadmap-create/SKILL.md",
+        "status": 200,
+        "sha256": "a5c5f41668748ea1e807cfa1fa9da518b710da315f7c45cc7b20d130cc7590ca",
+        "matches_candidate_file": true
+      }
+    },
+    {
+      "time": "2026-11-25T11:57:01.285Z",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "devicePixelRatio": 1
+      },
+      "query": "linear-roadmap-create",
+      "filter_count": "1 of 33 entries",
+      "visible_cards": 1,
+      "card_name": "/linear-roadmap-create",
+      "sentence_fully_visible": true,
+      "page_horizontal_overflow": false,
+      "card_horizontal_overflow": false,
+      "card_vertical_clipping": false,
+      "theme": "dark",
+      "pass": true,
+      "screenshot_sha256": "aba802841aaae081aa60ea559b649d63b5eff42cc1aeb0ccda01c9717fa1ee73",
+      "screenshot": "mobile.png",
+      "canonical_link": {
+        "path": "/tools/linear/linear-roadmap-create/SKILL.md",
+        "status": 200,
+        "sha256": "a5c5f41668748ea1e807cfa1fa9da518b710da315f7c45cc7b20d130cc7590ca",
+        "matches_candidate_file": true
+      }
+    }
+  ],
+  "visual_inspection": {
+    "reviewed_at": "2026-11-25T11:57:34.863884+00:00",
+    "method": "Inspected both retained PNGs using the image viewer after CDP geometry/link checks.",
+    "observed": "The changed frontend demo/screenshots sentence is fully visible in the filtered card at both viewport sizes. Text wraps within the card. The complete card fits in both screenshots; no clipping or horizontal overflow is visible. Dark theme rendered.",
+    "font_check_limit": "The recorded Bricolage Grotesque query used default weight 400, while page headings request weight 700. Its false value does not establish that the heading font failed to load. Changed body copy uses IBM Plex Sans, whose recorded check passed."
+  },
+  "producer": "Codex implementation session",
+  "reviewer": "Independent PR reviewer checks these artifacts and source hashes.",
+  "finished_at": "2026-11-25T11:57:01.427Z",
+  "result": "PASS",
+  "limits": [
+    "Checks the changed static catalog copy and its filtering/link path, not a product frontend or future roadmap implementation.",
+    "Screenshots capture the current light/dark preference and actual font-loading state recorded per viewport.",
+    "No assistive-technology or interaction beyond search filtering/link fetch was exercised."
+  ]
+}
