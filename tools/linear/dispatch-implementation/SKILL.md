@@ -1,6 +1,6 @@
 ---
 name: dispatch-implementation
-version: 0.6.2
+version: 0.6.3
 description: Start one approved Linear issue in an isolated branch and worktree, update its tracker status only after that evidence exists, and route a plan-only executor before implementation. Use when asked to "start this ticket", "tackle ISSUE-123", "dispatch this issue", or "/dispatch-implementation ISSUE-123". Not for choosing the next issue or certifying completion. (kstack)
 ---
 
@@ -12,7 +12,7 @@ An existing, approved Linear issue is ready to be picked up by Claude or Codex.
 Invoke as:
 
 ```text
-/dispatch-implementation <ISSUE-ID> [--executor claude|codex] [--model <name>] [--plan-only] [--accept-graph-update <PR#>]... [--local-graph]
+/dispatch-implementation <ISSUE-ID> [--executor claude|codex] [--model <name>] [--effort <level>] [--from-next <parent-session-id>] [--plan-only] [--accept-graph-update <PR#>]... [--local-graph]
 ```
 
 The exact issue identifier is required. Invoking this skill is explicit authorization
@@ -35,6 +35,18 @@ copy. Changed pins require a new plan. Reject repeated local flags and mixed
 local/PR graph sources. No graph publication or extra tracker writes are granted.
 
 ## Configuration and required access
+
+For a `/next` handoff (`--from-next <parent-session-id>`), first read
+`tools/linear/next/references/dispatch.md` from the physical stack root. Require
+the explicit Claude executor, resolved latest Opus >=5.5 model and `--effort high`.
+Only an explicit later user override may change those requested settings; retain
+that instruction and verify the actual settings against it rather than defaults.
+Before any workspace/status write, verify that this is the separate fresh ticket
+child of the named `/next` session and read back its actual model/effort/context.
+Missing values, a mismatch or unavailable verification → stop with Dispatch blocked;
+never choose a substitute or execute in the coordinator. Omitting the origin flag
+does not waive this contract when the kickoff identifies a `/next` handoff.
+Ordinary invocations without that origin retain their existing executor policy.
 
 Read `.agents/stack.yml` from the consuming repository, then read the file named by
 `workspace_contract` in full.
@@ -159,12 +171,21 @@ the human approval for that exact wave/plan, resumes the same dispatch worktree
 with the returned plan context, and records the approval ids in WAVE_REPORT.
 All Refusals still apply. Ordinary invocation follows the executor route below.
 
-Select the executor and model from explicit flags when supplied. Otherwise choose by
+**`/next` child (`--from-next`):** plan in this already verified ticket session
+with the same plan-only boundary; launch no additional executor. Return the plan
+and stop for approval, then resume this same child for its exact approved plan.
+The `--plan-only` current-agent path above also means this child, not its parent.
+Reuse verified approval for an unchanged exact plan instead of asking again;
+changed scope, plan or evidence requires the existing approval checks anew.
+
+For ordinary non-`/next` invocations only, select the executor, model and effort
+from explicit flags when supplied; set and read back the actual settings before
+planning. Otherwise choose by
 risk, ambiguity, relevant strengths, and expected horizon, and state the choice in
 one sentence. Do not choose by task size alone.
 
-Launch the executor in the verified worktree with a hard read-only/plan-only
-boundary:
+For these ordinary invocations, launch the executor in the verified worktree
+with a hard read-only/plan-only boundary:
 
 - Claude: plan permission mode in the isolated worktree.
 - Codex: read-only sandbox with a plan-only output contract.
@@ -180,8 +201,9 @@ condition and evidence destination into the plan. Resolve missing contract detai
 before calling it complete; report gaps without silently rewriting acceptance.
 Planning names future evidence; it does not require screenshots before work starts.
 
-Return the plan and stop for user approval. Resume the same scoped executor with
-write access only after approval. Do not create a replacement session whose context
+Return the plan. Unless verified approval for the unchanged exact plan already
+exists, stop for user approval. Resume the same scoped executor with write access
+only with that approval. Do not create a replacement session whose context
 can drift from the approved plan.
 
 ## 5. Lifecycle after the start

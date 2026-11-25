@@ -1,6 +1,6 @@
 ---
 name: next
-version: 0.11.1
+version: 0.11.2
 description: Read Linear and recommend one scoped issue, or a bounded parallel batch with --parallel and repeated --project. Verifies candidate scope and dependency closure; unrelated graph gaps are warnings. Explicit flags accept a reviewed pending PR or a local graph. Shared files warn; real dependencies constrain selection. Read-only. Use for "what should I work on next", "pick my next ticket", or "what can I run in parallel". (kstack)
 ---
 
@@ -32,6 +32,15 @@ set of things that can start *at once* with explicit integration obligations." S
 same contract gate, same blocker analysis; the output is a batch of up to N issues
 assessed for technical compatibility instead of a single decision. Default N = 3. See
 **Parallel mode** below.
+
+## Mandatory dispatch proposal
+
+Read [references/dispatch.md](references/dispatch.md) on every invocation.
+Every new engineering kickoff must propose its own fresh child session under
+this `/next` session, using the latest available Opus (minimum 5.5), effort High.
+Apply its completion check to every output path, including PLAN_ONLY and a
+single selected task. Selection stays read-only; launch capability gaps must be
+reported explicitly rather than changing these settings.
 
 ## Project filters — `--project "<name-or-id>"` (repeatable)
 
@@ -572,9 +581,10 @@ still means one paragraph per issue. Additionally:
 
 ## Agent handoff
 
-After ranking, write a paste-ready kickoff for the recommended work — one
-paragraph a person can paste straight into a fresh coding-agent session (Claude
-Code, Codex, whichever host they drive). This handoff follows the readiness state; it is not a second recommendation.
+After ranking, explicitly propose dispatch for the recommended engineering work
+using the mandatory session contract in references/dispatch.md. Include its
+self-contained dispatch envelope in every paste-ready kickoff paragraph.
+This handoff follows the readiness state; it is not a second recommendation.
 
 - Write **one short paragraph for the #1 issue**. Use its tracker outcome and
   acceptance criteria, the contract boundary, known prerequisites, the relevant
@@ -681,6 +691,7 @@ unblocks or de-risks.>
 
 **Kickoff:** <implementation paragraph for READY_TO_BUILD or graphless engineering; plan-only paragraph
 with unmet build condition for PLAN_ONLY; human action when non-engineering>
+**Dispatch:** <one child under this /next session per new engineering kickoff; fresh context; latest Opus >=5.5; High; verified IDs or explicit pending/blocked fields; none with reason for human/resume/empty results>
 
 ---
 
@@ -690,9 +701,9 @@ with unmet build condition for PLAN_ONLY; human action when non-engineering>
 
 **Parallel kickoffs** (omit when none are proven safe):
 
-**`<id>`:** <one short, paste-ready paragraph for this issue only>
+**`<id>`:** <dispatch envelope and one short, paste-ready paragraph for this issue only>
 
-**`<id>`:** <one short, paste-ready paragraph for this issue only>
+**`<id>`:** <dispatch envelope and one short, paste-ready paragraph for this issue only>
 
 **Not these, and why:**
 - `<id>` — <six-word reason>
@@ -726,7 +737,7 @@ runner-up lines also name their project and milestone when filters are supplied.
 Project: <name, ID> · Milestone: <name, ID> · Gate: <date/TBD/overdue>
 Readiness: READY_TO_BUILD · Graph: <path, sha256 revision, condition source; omit without graph>
 <size> · <contract section> · branch `<name>`, worktree `<distinct path>`
-<one short paste-ready kickoff paragraph, this issue only>
+<mandatory child-session dispatch envelope and paste-ready kickoff, this issue only>
 
 **Track 2 — `(no issue)` <one-line action>**          ← untracked human action
 Project: <contract assignment> · Milestone: <contract assignment> · Gate: <date/TBD/overdue>
@@ -739,7 +750,7 @@ Independent because: <the one sentence from criterion 2 above>
 Project: <name, ID> · Milestone: <name, ID> · Gate: <date/TBD/overdue>
 Readiness: READY_TO_BUILD · Graph: <path, sha256 revision, condition source; omit without graph>
 <size> · <contract section> · branch `<name>`, worktree `<distinct path>`
-<one short paste-ready kickoff paragraph, this issue only>
+<mandatory child-session dispatch envelope and paste-ready kickoff, this issue only>
 
 **Sequenced instead** (passed the contract gate, failed the concurrency bar):
 - `<id>` — <the concrete collision: the file it shares with track M, the
@@ -747,7 +758,7 @@ Readiness: READY_TO_BUILD · Graph: <path, sha256 revision, condition source; om
 
 **Planning only** (outside N, no implementation or PR):
 - `<id>` — PLAN_ONLY — <manifest sha256, unmet build condition/source>
-  <plan-only kickoff using /dispatch-implementation --plan-only; stop at plan>
+  <mandatory child-session dispatch envelope; run /dispatch-implementation --plan-only inside that child; stop at plan>
 
 **Already active:** <issue, project, milestone, branch/PR, resume or review action>
 
@@ -787,6 +798,9 @@ must constrain selection. Explain the difference with cited evidence.
 
 ## Rules
 
+- **Always propose dispatch for new engineering kickoffs.** One child per issue
+  under the `/next` coordinator, fresh context, latest Opus >=5.5, explicit High.
+  Apply references/dispatch.md's completion check; a task paragraph alone fails.
 - **Default mode: one recommendation, up to three ranked.** The #1 is the
   decision; 2 and 3 exist so the reader can see what it beat. Never present three
   as a menu. If two are genuinely tied, pick the smaller one and say it was a coin
