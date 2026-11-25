@@ -318,7 +318,7 @@ def decode(text):
         raise Blocked('invalid JSON evidence') from exc
 
 
-def cli_report(engine, text):
+def cli_report(engine, text, secret=None):
     if not text.strip():
         raise Blocked('missing reviewer report')
     if engine == 'claude':
@@ -335,6 +335,20 @@ def cli_report(engine, text):
             raise Blocked('Claude failed, denied permissions, or returned an incomplete report')
         text = data.get('result', '')
     report = decode(text)
+    if isinstance(report, dict) and report.get('status') == 'BLOCKED':
+        operation, reason = report.get('required_operation'), report.get('reason')
+        if isinstance(operation, str) and isinstance(reason, str):
+            # Child reports are untrusted diagnostics, never control data.
+            def diagnostic(value, limit):
+                # JSON escapes may conceal the credential in the raw stream.
+                if secret:
+                    value = value.replace(secret, '[REDACTED]')
+                printable = ''.join(c if c.isprintable() else ' ' for c in value)
+                return ' '.join(printable.split())[:limit]
+
+            operation, reason = diagnostic(operation, 200), diagnostic(reason, 600)
+            if operation and reason:
+                raise Blocked(f'reviewer reported BLOCKED at {operation}: {reason}')
     if (not isinstance(report, dict) or report.get('status') != 'REVIEW_SUBMITTED'
             or type(report.get('review_id')) is not int or report['review_id'] <= 0
             or not SHA.fullmatch(report.get('head', ''))):
@@ -539,9 +553,9 @@ def review_round(args, scratch, detail):
             report.write_text(output.replace(token, '[REDACTED]'))
         if not report.is_file():
             raise Blocked('reviewer did not produce a captured report')
-        text = report.read_text()
-        report.write_text(text.replace(token, '[REDACTED]'))
-        submitted = cli_report(engine, text)
+        text = report.read_text().replace(token, '[REDACTED]')
+        report.write_text(text)
+        submitted = cli_report(engine, text, secret=token)
     except OSError as exc:
         raise name_posted_review(Blocked('cannot read or save the captured reviewer report'),
                                  observed) from exc

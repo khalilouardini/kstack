@@ -257,8 +257,12 @@ A denied optional probe does not block the review:
 - finish and submit the review.
 
 A denied required step (the reviewer identity check, GitHub reads, the review
-submission, the diff, `gates.test`, or the project proof gate) still stops the
-review without posting; under run-review the final report is `{"status":"BLOCKED"}`.
+submission, assigned scratch writes, the diff, `gates.test`, or the project proof
+gate) still stops the review without posting. Under run-review return
+`{"status":"BLOCKED","required_operation":"<failed operation>","reason":"<sanitized observed error>"}`.
+Name the actual operation and error; never include credentials. The runner
+redacts the supplied reviewer credential, normalizes control characters and
+bounds the operation/error before including them in its BLOCKED reason.
 Cleanup is never a required step: see "Temporary files and cleanup".
 
 This rule is prompt-level. Under run-review the runner still blocks a Claude round
