@@ -213,6 +213,15 @@ hold a local-test permit while waiting for paid review or CI.
 Every variable the round uses is defined by the bootstrap, routing contract, or
 this preflight. Do not run the round against a partial preflight.
 
+Project trust is **not an additional preflight gate**. An absent exact-path
+`projects.<path>.trust_level` entry, an unchanged config file, or unset
+`CODEX_HOME` does not establish the reviewer's effective filesystem/network
+permissions. Follow the permission diagnosis in `references/routing.md`: check
+submitted exact-head evidence first, then let the reviewer test its required
+access before reading the diff. Do not refuse a launch solely from a config-file
+inspection or ask the user repeatedly to save a trust entry. A concrete denied
+required operation still blocks; never change trust or bypass permissions for it.
+
 ```bash
 MAX_ROUNDS=5; N=0                                        # --max-rounds overrides MAX_ROUNDS
                                                          # N counts rounds in THIS invocation only —

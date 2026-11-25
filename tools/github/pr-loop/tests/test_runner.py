@@ -397,6 +397,85 @@ class RunnerTests(unittest.TestCase):
         result, report, _ = self.invoke('Claude', mode='blocked-report')
         self.assert_blocked(result, report)
 
+    def test_structured_blocked_access_diagnostics_survive_for_both_engines(self):
+        for implementation in ('Codex', 'Claude'):
+            with self.subTest(implementation=implementation):
+                report_dir = self.root / ('reports-' + implementation)
+                result, report, state = self.invoke(
+                    implementation, mode='structured-blocked',
+                    extra=['--report-dir', str(report_dir)])
+                self.assert_blocked(result, report)
+                self.assertIn('gh api user', report['reason'])
+                self.assertIn('network access denied', report['reason'])
+                self.assertIn('[REDACTED]', report['reason'])
+                self.assertFalse(state['posted'])
+                self.assertNotIn('submitted_review', report)
+                captured = (report_dir / 'report.txt').read_text()
+                self.assertIn('[REDACTED]', captured)
+                self.assertNotIn('fixture-secret', captured + result.stdout + result.stderr)
+
+    def test_structured_blocked_diagnostics_are_normalized_and_bounded(self):
+        blocked = {
+            'status': 'BLOCKED',
+            'required_operation': 'gh api\r\nuser\t\x00\x1bfixture-secret ' + 'o' * 260,
+            'reason': 'network\taccess\x00 denied for fixture-secret\r\n' + 'e' * 900,
+        }
+        for implementation in ('Codex', 'Claude'):
+            with self.subTest(implementation=implementation):
+                report_dir = self.root / ('reports-bounded-' + implementation)
+                result, report, state = self.invoke(
+                    implementation, mode='structured-blocked',
+                    extra=['--report-dir', str(report_dir)],
+                    modify=lambda value: value.update(blocked_report=blocked))
+                self.assert_blocked(result, report)
+                reason = report['reason']
+                self.assertIn('gh api user', reason)
+                self.assertIn('network access', reason)
+                self.assertTrue(all(ord(c) >= 32 and not 127 <= ord(c) <= 159 for c in reason))
+                self.assertNotIn('o' * 201, reason)
+                self.assertNotIn('e' * 601, reason)
+                self.assertLess(len(reason), 1000)
+                self.assertFalse(state['posted'])
+                self.assertNotIn('submitted_review', report)
+                captured = (report_dir / 'report.txt').read_text()
+                self.assertNotIn('fixture-secret', captured + result.stdout + result.stderr)
+
+    def test_escaped_credentials_are_redacted_after_decoding_for_both_engines(self):
+        for implementation in ('Codex', 'Claude'):
+            with self.subTest(implementation=implementation):
+                report_dir = self.root / ('reports-escaped-' + implementation)
+                result, report, state = self.invoke(
+                    implementation, mode='structured-blocked-escaped',
+                    extra=['--report-dir', str(report_dir)])
+                self.assert_blocked(result, report)
+                self.assertIn('gh api user', report['reason'])
+                self.assertIn('network access denied for [REDACTED]', report['reason'])
+                self.assertFalse(state['posted'])
+                self.assertNotIn('submitted_review', report)
+                captured = (report_dir / 'report.txt').read_text()
+                self.assertIn('\\u002d', captured)
+                self.assertNotIn('fixture-secret', captured + result.stdout + result.stderr)
+
+    def test_invalid_blocked_details_remain_generic_for_both_engines(self):
+        invalid = [
+            {'status': 'BLOCKED'},
+            {'status': 'BLOCKED', 'required_operation': {'command': 'gh api user'},
+             'reason': 'UNTRUSTED-DETAIL'},
+            {'status': 'BLOCKED', 'required_operation': 'UNTRUSTED-DETAIL', 'reason': ['denied']},
+            {'status': 'UNKNOWN', 'required_operation': 'UNTRUSTED-DETAIL', 'reason': 'denied'},
+        ]
+        for implementation in ('Codex', 'Claude'):
+            for number, blocked in enumerate(invalid):
+                with self.subTest(implementation=implementation, fields=number):
+                    result, report, state = self.invoke(
+                        implementation, mode='structured-blocked',
+                        extra=['--report-dir', str(self.root / f'generic-{implementation}-{number}')],
+                        modify=lambda value: value.update(blocked_report=blocked))
+                    self.assert_blocked(result, report)
+                    self.assertNotIn('UNTRUSTED-DETAIL', report['reason'])
+                    self.assertFalse(state['posted'])
+                    self.assertNotIn('submitted_review', report)
+
     def test_wrong_report_id_blocks(self):
         result, report, _ = self.invoke(mode='wrong-report-id')
         self.assert_blocked(result, report)

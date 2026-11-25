@@ -103,7 +103,7 @@ assert args[-1].find(s['route']['head']) >= 0
 assert 'https://github.com/example/repo/pull/16' in args[-1]
 assert str(Path(s['skill']).resolve()) in args[-1]
 draft_in_scratch()
-s['posted'] = mode != 'no-review'
+s['posted'] = mode not in {'no-review', 'structured-blocked', 'structured-blocked-escaped'}
 state_path.write_text(json.dumps(s))
 if mode == 'posted-then-crash':
     print('fixture-secret', file=sys.stderr)
@@ -118,15 +118,24 @@ if mode == 'malformed':
     sys.exit(0)
 report = {'status': 'BLOCKED' if mode == 'blocked-report' else 'REVIEW_SUBMITTED',
           'review_id': 999 if mode == 'wrong-report-id' else 123, 'head': 'a' * 40}
+if mode in {'structured-blocked', 'structured-blocked-escaped'}:
+    report = s.get('blocked_report', {
+        'status': 'BLOCKED',
+        'required_operation': 'gh api user',
+        'reason': 'network access denied for fixture-secret',
+    })
+report_text = json.dumps(report)
+if mode == 'structured-blocked-escaped':
+    report_text = report_text.replace('fixture-secret', 'fixture\\u002dsecret')
 if name == 'claude':
     if mode == 'unwritable-report':
         Path(s['report_path']).mkdir()
     emit({'type': 'result', 'subtype': 'success', 'is_error': mode == 'error-envelope',
           'session_id': SESSION,
-          'permission_denials': [{'tool_name': 'Bash'}] if mode == 'denied' else [], 'result': json.dumps(report)})
+          'permission_denials': [{'tool_name': 'Bash'}] if mode == 'denied' else [], 'result': report_text})
 if name == 'codex':
     report_path = Path(args[args.index('-o') + 1])
-    report_path.write_text(json.dumps(report))
+    report_path.write_text(report_text)
     if mode == 'unwritable-diagnostics':
         (report_path.parent / 'reviewer.stdout.txt').mkdir()
     print('events are not the final report')
