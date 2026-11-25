@@ -118,3 +118,43 @@ complete pagination, scope interpretation, ownership and actual dependency reads
 28. D is within the proposed local bounds but main pin, full issue body/relations,
     scope citation, owner, acceptance or prerequisite evidence is missing/stale:
     no D kickoff. Independently verified mapped A remains eligible.
+
+## Mandatory dispatch proposal cases
+
+Replay these against references/dispatch.md as well as SKILL.md. The coordinator
+is session S. All dispatches remain proposals; perform no live launches or writes.
+
+- **Every selection shape:** recommend A with no flags, `--parallel 1`, and a
+  parallel request with only A eligible. Each result proposes A in a separate
+  fresh child under S, latest available Opus >=5.5, High. A task paragraph with
+  no explicit dispatch proposal fails, even when it says "fresh session".
+- **Batch and runner-ups:** A,D,F pass concurrency checks across two projects;
+  then repeat as default A with D,F safe runner-ups. Every engineering kickoff
+  gets its own dispatch envelope and child under S. Merely ranked or sequenced
+  issues get none. No pooled multi-issue session or inherited conversation.
+- **Planning only:** A is PLAN_ONLY with a named unmet build event. Propose its
+  child with the same settings, then run the named dispatcher with --plan-only
+  inside that child after dispatch authorization. Stop at the plan. Planning in
+  S, omitting A because it is outside the N implementation tracks, or launching
+  a grandchild fails. Plan approval still precedes implementation.
+- **Model resolution and defaults:** the host lists Opus 5.5 and a newer Opus;
+  choose the newer concrete ID and high even if repository/host defaults choose
+  another family or effort. With only supported Opus 5.5, use it. An alias
+  resolving below 5.5 is insufficient. Never fabricate a model ID.
+- **Missing capabilities:** the current host supports only Codex, cannot nest
+  sessions, or cannot verify model/effort/context. Keep each proposal with
+  Dispatch blocked and the exact missing evidence. No silent substitution,
+  execution in S, or claim that a workflow node proves a persistent child.
+- **Proposal versus authorization:** "what next?" proposes dispatch without
+  launching or writing anything. A subsequent authorized launch must verify
+  parent S, fresh child, concrete Opus model and high before dispatcher writes.
+  Wrong parent, inherited history or medium effort stops before those writes.
+- **Human, active and empty:** human-only A keeps its human kickoff; active A
+  resumes its existing session/branch/PR; no eligible work names blockers. Each
+  reports Dispatch: none with its reason and creates no duplicate agent task.
+- **Self-contained handoff:** paste any individual engineering paragraph alone.
+  It retains parent/fresh/model/high, --from-next, --executor claude, --model,
+  --effort high, any --plan-only flag, explicit graph flags/pins, issue scope and
+  checkpoints. Missing, extra or duplicate dispatch IDs fail the completion check.
+  Expected kickoffs A,D with envelopes A,A,D fail even if both A envelopes name
+  the same child; set equality alone is insufficient.
