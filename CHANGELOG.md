@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+`summarize-change` 0.4.0 uses an intent paragraph, a few main-change and eval
+bullets, and a final appendix for PR metadata and detailed evidence. `--tight`
+shortens the same structure; the default adds context.
+
 `pr-loop` 0.13.0 adds opt-in `--defer-ci`: a per-PR `ci:hold` label suppresses
 configured Actions jobs while review/fix rounds run. The controller cancels only
 active runs associated with that PR, releases CI once review is clear, and pins

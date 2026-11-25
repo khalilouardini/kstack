@@ -1,7 +1,7 @@
 ---
 name: summarize-change
-version: 0.3.1
-description: Brief a change in chat, leading with the decision and key caveats and backing them with intent, impact, and observed verification. Use when asked to "summarize this PR", "what did we do here", "give me a high-level summary of this branch", "brief me on this change", or "/summarize-change [branch | PR | commit range | paths] [--tight]". (kstack)
+version: 0.4.0
+description: Brief a PR or change in chat with an intent paragraph, a few main-change and eval bullets, and PR details in a final appendix. Use when asked to "summarize this PR", "what did we do here", "give me a high-level summary of this branch", "brief me on this change", or "/summarize-change [branch | PR | commit range | paths] [--tight]". (kstack)
 ---
 
 # summarize-change — brief a change by its intent, in chat
@@ -40,10 +40,12 @@ says "ship it".
 
 `/summarize-change [branch | PR number | commit range | file paths] [--tight]`.
 With no target, summarize the current branch against its merge base.
-`--tight` emits one compact paragraph. Gather the same evidence in either mode.
+Both modes use an intent paragraph, a few bullets on main changes and evals,
+and a final appendix for PR details. `--tight` shortens that structure; it does
+not change it. Gather the same evidence in either mode.
 
-**Resolve the argument to concrete revisions before investigating.** State the
-target and revision range in the briefing, after the opening decision.
+**Resolve the argument to concrete revisions before investigating.** Record the
+target and revision range in the final appendix.
 
 ```bash
 BASE=$(git merge-base --fork-point HEAD origin/main || git merge-base HEAD origin/main)
@@ -139,43 +141,57 @@ on this.
 
 ## 3. Emit the briefing
 
-### Default
+Use the same structure in both modes: one clean paragraph, a few bullet points,
+then an **Appendix**. Start directly with the paragraph, without a summary title
+or mode label. Keep the main body focused on intent, main changes, and evals.
 
-- **Decision and key caveats.** Open with the specific call the reader has to
-  make or the next concrete action. Put the blockers, conditions, scope gaps,
-  and policy choices that could change that call in the opening. If no action
-  is pending, say so and lead with the outcome.
-- **Change and impact.** Identify the target and revision range. State what
-  changed and why, cite the intent source or label the intent as inferred, and
-  distinguish what this change delivers from any wider completion criteria.
-  Include the approach, affected callers or data, and departures from intent
-  where they matter to the reader. Omit empty categories and mechanical detail.
-  Add a precise `file:line` reference only where the reader has a concrete
-  reason to inspect the implementation, such as a spend gate, data write, or
-  consequential departure from the agreed scope.
-- **Verification.** State what was verified at the stated revision and what
-  remains unverified. Name the local gates and their observed exit codes,
-  giving the exact commands when known. Include material test, CI, and review
-  results when available. Distinguish local checks from CI, and report pending
-  or failed checks explicitly. Say which configured `gates.lint` and
-  `gates.test` in `.agents/stack.yml` were not run in this session.
-  Report the limits of replay or offline evidence when
-  the intended outcome depends on live behavior. For frontend changes, include
-  localhost demo instructions and/or screenshot links, their revision and
-  observed result, following the physical stack root's `ORCHESTRATION.md`
-  **Frontend review evidence** contract. Keep missing, stale or uninspected
-  visuals visible as verification gaps, including in `--tight` handoffs.
+**Opening paragraph — intent.** Explain the problem, who it affects, and what
+the PR aims to achieve. Connect that goal to the resulting behavior in plain
+language. Attribute the intent briefly to the request, issue, or spec; label it
+as inferred when necessary. Include a material scope gap or policy choice where
+it changes the reader's understanding of the outcome. Do not lead with an
+approval request, next action, PR number, revision range, or status inventory.
 
-### `--tight`
+**A few bullets — main changes and evals.** Aim for 3–5 bullets total:
 
-Write one compact paragraph without headings, lists, code-line references, or
-omission counts. Aim for three to five sentences. Lead with the decision or
-next action and the caveats that affect it. Identify the target and revision
-range, and state what changed and why, with a short intent source or an
-explicit inference. Close with the verification that bears on the decision.
-Keep observed exit codes for any local
-gates cited and state which configured gates were unrun, grouping them when
-possible. Keep material verification gaps even if no checks ran.
+- Use 2–4 bullets for the main behavioral changes, grouped by what the system
+  now does. Explain the approach and affected users, callers, or data where
+  they help the reader understand the change. Include consequential departures
+  from intent here; omit empty categories and mechanical edits.
+- Finish with an **Evals:** bullet. Say which intended behaviors the observed
+  tests, evals, CI, or other checks support, their results, and any material
+  failures or gaps. Distinguish local evidence from CI and tests merely added
+  from tests actually run. If no checks ran, say so. Keep the outcome and its
+  limits here; put the command transcript and status details in the appendix.
+
+**Appendix — PR and evidence details, always last.** Keep this compact, grouping
+related details into a few bullets and omitting unavailable or irrelevant fields:
+
+- PR link, issue/spec links, branch, and the concrete base/head or revision
+  range actually summarized. For path inputs, include the selected paths.
+  State any unresolved target or fallback here.
+- Exact check commands and observed exit codes for local gates cited in the
+  body; CI run links and head, review state, and pending checks when relevant.
+  Say which configured `gates.lint` and `gates.test` in `.agents/stack.yml` were
+  not run in this session, grouping them when possible. Never imply a green
+  suite from tests that were only inspected.
+- Supporting implementation references or operational steps only when useful.
+  Keep `file:line` citations, SHAs, counts, and routine PR metadata out of the
+  main paragraph and bullets.
+
+For frontend changes, retain localhost demo instructions and/or screenshot
+links, their revision and observed result, following the physical stack root's
+`ORCHESTRATION.md` **Frontend review evidence** contract. Put those supporting
+details in the appendix. Missing, stale, or uninspected visuals remain visible
+as material gaps in the Evals bullet, including with `--tight`. Likewise, state
+the limits of replay or offline evidence when the outcome needs live behavior.
+
+**Length is the only mode difference.** With `--tight`, aim for a 1–2 sentence
+paragraph and short, single-sentence bullets (roughly 100–160 words before the
+appendix). Without it, expand the paragraph and the same bullets with useful
+context and explanation (roughly 200–350 words before the appendix). These are
+guidelines: use less for a simple change, and keep material evidence gaps in
+either mode. Do not add more sections or print a "tight" label in the response.
 
 ## 4. What this skill refuses
 
@@ -196,6 +212,7 @@ possible. Keep material verification gaps even if no checks ran.
 
 ## Enforcement
 
-**Prompt-level.** Before sending, check that the opening tells the reader what
-to decide or do and which caveats affect it. Check that the briefing identifies
-the revisions and gives observed verification or states the evidence gap.
+**Prompt-level.** Before sending, read only the paragraph and main bullets:
+can the reader explain the PR's intent, main changes, and what the evals prove
+or leave unverified? Check that both modes use that structure and all PR and
+evidence details follow in the final appendix, including the revision range.

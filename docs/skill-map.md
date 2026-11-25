@@ -264,11 +264,11 @@ gates; `/land` always stops at the PR.
 
 ## Briefings and recurring work
 
-Use `/summarize-change` for a chat briefing that leads with the decision and
-key caveats and includes observed verification. The default cites code only
-where the reader has a reason to inspect it. `--tight` gives one compact
-paragraph with the same evidence standard. `/explain-diff-html` creates a
-durable teaching page. `/delivery-retro` compares periods of work.
+Use `/summarize-change` for an intent paragraph followed by a few main-change
+and eval bullets. PR metadata, revisions, and detailed check evidence belong
+in a final appendix. `--tight` shortens the same structure; the default adds
+context with the same evidence standard. `/explain-diff-html` creates a durable
+teaching page. `/delivery-retro` compares periods of work.
 
 Manual session-title and PR-label sweeps default to dry-run. `/sweep-schedules`
 creates or updates a desktop schedule only when requested; installing a skill

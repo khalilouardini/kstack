@@ -178,7 +178,7 @@ One axis: **who consumes the explanation, and how far from you they are.**
 
 | Unit of work | Consumer | Route to |
 |---|---|---|
-| One change | you or a colleague, in this conversation | `/summarize-change` — decision-first briefing in chat with key caveats and verification |
+| One change | you or a colleague, in this conversation | `/summarize-change` — intent paragraph, main-change and eval bullets, then a PR-details appendix; `--tight` shortens the same structure |
 | One change | someone studying it later without you | `/explain-diff-html` — offline page, diagrams, quiz, validator-gated |
 | A period, many PRs | whoever asks whether the time was well spent | `/delivery-retro` — outcomes vs the previous equal period |
 
