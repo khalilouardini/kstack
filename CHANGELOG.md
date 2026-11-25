@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+`pr-loop` 0.13.0 adds opt-in `--defer-ci`: a per-PR `ci:hold` label suppresses
+configured Actions jobs while review/fix rounds run. The controller cancels only
+active runs associated with that PR, releases CI once review is clear, and pins
+new release-named runs at the reviewed head. `CLEAN` requires successful executed
+jobs as well as the existing CI/frontend gates. Durable hold state survives early
+stops and lost release responses; same-head CI retries reuse the review and run.
+Consumers adopt the label/workflow protocol and optional `ci.defer` configuration.
+
 Require frontend tickets to plan a final localhost demo and/or screenshots in
 `/linear-roadmap-create`, with explicit classification and a linked review eval
 checked by `check-evals`. Preserve the requirement through feature intake,

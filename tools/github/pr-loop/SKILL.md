@@ -1,6 +1,6 @@
 ---
 name: pr-loop
-version: 0.12.2
+version: 0.13.0
 description: Drive an independent Codex↔Claude review/fix loop on one PR to CLEAN, BLOCKED, or ROUNDS_EXHAUSTED. The implementation session keeps fixes; the other engine reviews with verified GitHub identity and head evidence. Use when asked to "run the review loop", "ping-pong this PR", or "/pr-loop <PR#>". (kstack)
 ---
 
@@ -11,7 +11,7 @@ description: Drive an independent Codex↔Claude review/fix loop on one PR to CL
 One open PR needs review rounds driven to a stop condition without a human in
 the seat: review → fix → reply → re-review, until the PR is clean, a
 disagreement blocks it, or the round budget runs out. Invoke as
-`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--implementation-engine codex|claude] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--review-slots N] [--slot-wait SEC] [--test-slots N] [--accept-graph-update <PR#>]... [--local-graph]`. Not for reviewing a
+`/pr-loop <PR#> [--max-rounds N] [--merge] [--any-author] [--implementation-engine codex|claude] [--model M] [--effort E] [--fast] [--ci-wait MIN] [--defer-ci] [--review-slots N] [--slot-wait SEC] [--test-slots N] [--accept-graph-update <PR#>]... [--local-graph]`. Not for reviewing a
 human-authored PR, not for deciding contested design questions, and not for
 approving — see "What this skill is NOT for".
 
@@ -96,6 +96,11 @@ JSON object when it does: those logins replace the block, and the final report s
   CI nobody read. `required` on a base branch that requires nothing never turns
   green — gh reports `no required checks reported` and the gate times out — so
   such a repo sets `all`.
+- **`ci.defer`** — required only with `--defer-ci`: the `ci:hold` label and
+  opted-in workflow filenames/path filters. Read
+  [references/deferred-ci.md](references/deferred-ci.md) for setup, durable state,
+  hold/release commands and run verification. Missing config or `ci.checks: none`
+  refuses this mode; ordinary invocations do not require this optional block.
 - **`review_gate.skill_path`** — the project's "prove the bug" review skill,
   and **`review_gate.scope`**, the diff paths that trigger it. Non-null → the
   reviewer round is expected to run it over matching diffs, and preflight
@@ -230,6 +235,7 @@ MAX_ROUNDS=5; N=0                                        # --max-rounds override
 CI_CHECKS="<ci.checks>"                                  # required | all | none
 CI_WAIT_MIN=30                                           # --ci-wait overrides: minutes step 3a
                                                          # waits for pending checks
+DEFER_CI="<true iff --defer-ci was passed; otherwise false>"
 
 REVIEWER_TOKEN=$(gh auth token --hostname github.com --user "$REVIEWER")
 IMPLEMENTER_TOKEN=$(gh auth token --hostname github.com --user "$IMPLEMENTER")
@@ -397,6 +403,19 @@ and verifies submitted GitHub evidence. Permission or authentication failures
 block; never change host policy to make a review succeed. Codex --fast retains
 the service-tier/feature settings, only when explicitly requested.
 
+## Deferred CI — opt-in, after preflight
+
+Before any round, inspect PR labels and
+`$STATE_DIR/$OWNER-$REPO-$PR.ci-hold.json`. A `ci:hold` label or saved deferred
+state at the current head requires `--defer-ci`; otherwise stop with the resume
+command. Never let held/skipped checks satisfy the ordinary CI gate.
+
+With `--defer-ci`, read [references/deferred-ci.md](references/deferred-ci.md) and
+follow its controller setup after every ordinary preflight/binding check passes.
+Acquire the hold once at each freshly bound round head, before any paid
+review. Stop on helper failure. Local gates and review routing remain in force.
+Without a hold or matching saved state, the default loop is unchanged.
+
 ## The round
 
 Repeat until an exit gate fires. Default cap: **5 rounds** (`--max-rounds`
@@ -416,6 +435,9 @@ HEAD=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .hea
 
 After recomputing route.json with the shared resolver, require
 `test "$HEAD" = "$(route_field head)"` before skipping or launching a review.
+With `--defer-ci`, run the reference's `hold` command at this head before the
+review skip-check/paid launch. A same-head `CI_RELEASED` result resumes CI without
+starting a new release or another paid review.
 
 Read all submitted reviews with --paginate --slurp. For Codex model escalation,
 PRIOR_REVIEW_COUNT counts only submitted reviews by the resolved reviewer with
@@ -510,12 +532,30 @@ do not launch another paid review merely to retry unchanged missing evidence.
 **3a. CI gate — before any `CLEAN`.** A finding-free review alone is not
 `CLEAN`. The implementer's pre-push gate is `<gates.test>`, which a project may scope to
 the tests a branch changed, so the full suite's verdict lives in CI. Read the
-checks on the reviewed head, waiting for pending ones:
+checks on the reviewed head, waiting for pending ones.
+
+With `--defer-ci`, first follow the reference's **Review clear — step 3a**:
+release the hold only now, then poll the pinned release runs to `CI_GREEN`.
+Require their jobs to have actually executed successfully; skipped held runs
+cannot pass. Share one `--ci-wait` deadline with the ordinary gate below by
+setting `CI_DEFER_DEADLINE` when entering this step at each reviewed head. A
+deferred failure, timeout or missing evidence blocks; head movement returns to
+the next bounded round. Only `CI_GREEN` continues below. Leave the variable unset
+in ordinary mode.
+
+```bash
+CI_DEFER_DEADLINE=""
+if [ "$DEFER_CI" = true ]; then
+  CI_DEFER_DEADLINE=$(( $(date +%s) + CI_WAIT_MIN * 60 ))
+fi
+```
+
+Run the deferred release/check procedure, when selected, then the ordinary gate:
 
 ```bash
 CI=""; [ "$CI_CHECKS" = none ] && CI=skipped
 SCOPE=(); [ "$CI_CHECKS" = required ] && SCOPE=(--required)
-DEADLINE=$(( $(date +%s) + CI_WAIT_MIN * 60 ))
+DEADLINE=${CI_DEFER_DEADLINE:-$(( $(date +%s) + CI_WAIT_MIN * 60 ))}
 while [ -z "$CI" ]; do
   # --json exits 0 even when checks are pending or failing (gh 2.89.0), so read
   # the buckets, never the exit code. No checks reported → empty file → wait.
@@ -537,7 +577,7 @@ NOW=$(GH_TOKEN="$MAINTAINER_TOKEN" gh pr view "$PR" --json headRefOid --jq .head
 
 | `CI` | Verdict |
 |---|---|
-| `green` | `CLEAN` only with the frontend evidence gate satisfied when applicable. A `skipping` check counts as passed, as GitHub counts a skipped required check. |
+| `green` | `CLEAN` only with the frontend evidence gate satisfied when applicable and the released-run gate green when `--defer-ci` applies. Ordinary skipped checks follow GitHub semantics; held/skipped runs never satisfy deferred CI. |
 | `skipped` | `CLEAN` (`ci.checks: none`) only with the frontend evidence gate satisfied when applicable; the report says no CI gate ran. |
 | `red` | `BLOCKED`, naming each `fail`/`cancel` check from `ci.tsv`. No implementer pass: a red check is not a review finding, and this loop's fixes answer findings. |
 | `timeout` | `BLOCKED`, naming the checks still `pending`. An empty `ci.tsv` means GitHub reported no matching checks — quote `ci.err`. `no required checks reported` is a `ci.checks` setting for the human to fix, not something to wait out. |
@@ -664,6 +704,11 @@ A `CLEAN` or CI `BLOCKED` report also carries the step 3a result: `ci.checks`,
 the minutes waited, and each check's bucket at `$HEAD`. With `ci.checks: none`
 it carries, plainly: *"no CI gate configured (`ci.checks: none`) — `CLEAN`
 reflects review findings and required frontend evidence, without a CI verdict."*
+
+With `--defer-ci`, every verdict also states whether CI is held or released and
+names its durable state path. A release result includes verified run IDs/URLs
+and executed job names. A stop before release leaves the label in place and
+gives `/pr-loop <PR#> --defer-ci` as the resume command; no exit trap removes it.
 
 ## Resuming after `ROUNDS_EXHAUSTED`
 
