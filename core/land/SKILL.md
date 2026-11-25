@@ -1,6 +1,6 @@
 ---
 name: land
-version: 0.7.0
+version: 0.7.1
 description: Land an agent session's work safely — dedicated branch, concurrent-session guards re-run before every commit, the repo's own lint and test gates from .agents/stack.yml, atomic commits, then one PR. Stops at the PR; merging is a human decision. Use when asked to "land this", "commit and push", "open a PR", "ship it", or "/land". (kstack)
 ---
 
@@ -306,6 +306,18 @@ Two readings that are not a pass:
 If a gate is red for a reason your change did not cause — a pre-existing failure
 on the base — say so with the evidence (the same failure on the base commit), and
 let the human decide. Do not silently accept it.
+
+## Frontend evidence before review
+
+For UI changes, follow the physical stack root's `ORCHESTRATION.md`
+**Frontend review evidence** contract. Read the ticket's visual eval and graph
+acceptance, then supply the implemented revision's localhost demo instructions/
+observations and/or screenshots before opening the PR for review. Carry modes,
+route/states/viewports, visible criteria, revision and artifact links into the
+PR body and linked ticket. A bare localhost URL, tests or CI alone do not fulfill
+it. Missing or stale visuals remain an explicit blocker to review readiness;
+do not describe the frontend work as complete. Backend-only changes need no
+demo. This check is **prompt-level**.
 
 ## Step 8 — push and open the PR
 

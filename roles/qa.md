@@ -1,6 +1,6 @@
 ---
 name: qa
-version: 0.1.0
+version: 0.1.1
 description: Turns an in-scope feature into acceptance criteria that are runnable checks — each naming the exact command or test that decides it — plus a per-criterion false-positive definition and an explicit Human-judgement section for what genuinely cannot be executed. Refuses any criterion with no execution path. Use when asked to "write the acceptance criteria", "how would we know this works", "definition of done", or when /spec runs its last gate. (kstack)
 ---
 
@@ -26,7 +26,8 @@ Read `.agents/stack.yml` at the consuming repo's root (schema: kstack
 
 - **`gates.lint`, `gates.test`, `gates.test_full`** — the commands that exist in
   this repo. Every criterion's "How it's checked" column names one of these, a
-  test path under one of them, or a script the appendix documents. A key you need
+  test path under one of them, a script the appendix documents, or the named
+  frontend review protocol below. A key you need
   that is missing or null → **refuse**, naming the exact key. Never substitute a
   guessed command: a criterion checked by a command that does not exist is
   strictly worse than an admitted gap, because it looks green in a spec.
@@ -93,9 +94,11 @@ catalog**, its **trap ledger**, and any **benchmark harnesses**.
 | Project review gate | `<review_gate.skill_path>` | **Required** when the diff falls inside `<review_gate.scope>` |
 | Benchmark / eval | named by the appendix | Report a **delta**, never a one-shot score |
 | End-to-end / smoke | named by the appendix | |
+| Frontend review | named demo/capture protocol and visible rubric | Required for UI work; linked demo/screenshots before review |
 
-**No appendix** (key absent, null, or unreadable): build criteria **only from the
-`gates` commands**, and state in the output that **the project catalog was
+**No appendix** (key absent, null, or unreadable): build automated criteria
+**only from the `gates` commands**, with the frontend review protocol below
+remaining a named visual/human check, and state in the output that **the project catalog was
 absent** — so no factory names, no baseline test count, no trap list, and no
 benchmark layer. Naming a factory you did not read is a fabricated criterion.
 
@@ -113,6 +116,20 @@ in the same diff, the new number is **not comparable** to the old one and must
 not be reported as a delta or turned into a finding. Say the matcher changed,
 re-baseline, and compare after. **A number that moved because measurement moved
 has told you nothing about the change under review.**
+
+### Frontend acceptance includes reviewer-visible evidence
+
+For UI work, include a localhost demo and/or screenshot eval under the physical
+stack root's `ORCHESTRATION.md` **Frontend review evidence** contract. Name the
+changed states/viewports, observable pass rubric, setup/navigation/capture steps,
+evidence destination and producer/reviewer. Choose a demo when still images
+cannot prove an interaction. Carry this criterion into each frontend ticket;
+tests and CI alone do not fulfill it. This is a **prompt-level** handoff rule.
+
+Without a project appendix, use only verified repo steps and the named human
+rubric for this visual check; do not invent commands or fixtures. Unresolved
+setup stays NOT-READY. Plan the future evidence now; implementation supplies the
+actual revision-bound demo/screenshots before review/completion.
 
 ## The false-positive definition
 
@@ -166,7 +183,7 @@ thing the person closest to the work is least able to see from the inside.
 ## Acceptance criteria
 | # | Criterion | How it's checked | Layer |
 |---|---|---|---|
-| 1 | <observable, falsifiable statement> | `<exact command or test name>` | lint / unit / full / review-gate / benchmark / e2e |
+| 1 | <observable, falsifiable statement> | `<exact command or test name>` | lint / unit / full / review-gate / benchmark / e2e / frontend-review |
 
 ## Regression risk
 | What could break | Existing coverage | Gap |

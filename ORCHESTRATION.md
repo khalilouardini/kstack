@@ -190,6 +190,44 @@ merge decisions. It does not implement this project-wide controller.
   fabricated human `/wave build --approve` invocation and does not override the
   current wave/dispatch guard. Implement an explicit opt-in path before use.
 
+## Frontend review evidence
+
+Every frontend ticket, including mixed frontend/backend work, ends with a
+localhost demo and/or screenshots so the reviewer can see and understand the
+change. Tickets accepting changed UI carry the same requirement; a container
+merely grouping UI children need not duplicate each child's demo.
+
+- **Creation and mapping:** put the frontend classification, ticket eval ID,
+  chosen modes (`localhost`, `screenshots`, or both), setup/navigation/capture
+  steps, representative states/viewports, visible pass criteria, evidence
+  destination and responsible roles in the ticket's Evals section and project
+  coverage matrix. The creator's [eval contract](tools/linear/linear-roadmap-create/references/evals.md#frontend-review-evidence)
+  defines the JSON representation. Mapping preserves the requirement in existing
+  node `acceptance` and `source` fields and the root Conditions table. Do not add
+  schema fields or a human approval solely to carry it.
+- **Planning and implementation:** carry that contract into dispatch/wave plans
+  and executor prompts. Planning identifies how evidence will be produced;
+  actual demo/screenshots are due after implementation, before review/completion.
+  Reused tickets or recovered PRs retain this requirement. Missing plan details
+  are a named planning gap, not evidence that the future demo already failed.
+- **Review handoff:** link the actual localhost instructions/observations and/or
+  screenshots from the ticket, PR and change briefing. Identify revision,
+  environment, URL/route, data/state, viewport, timestamp, result and reviewer.
+  A localhost URL alone does not serve someone on another machine: include
+  reproducible startup and navigation instructions. Choose a demo when still
+  screenshots cannot show the claimed interaction; screenshots can establish
+  a visual claim. Refresh affected evidence after UI fixes or relevant rebases.
+- **Review and closure:** compare supplied evidence with the changed UI and
+  acceptance criteria at the reviewed revision. Missing, inaccessible or stale
+  evidence remains an explicit verification gap; tests, CI and a merge do not
+  fulfill it. Do not report the frontend outcome complete or the review loop
+  CLEAN until required evidence is supplied and checked. A denied optional
+  browser probe never grants permission to bypass host restrictions; submit
+  the code review with that limit and leave visual verification unresolved.
+
+This handoff and semantic verification are **prompt-level**. The creator's
+checker validates classification, modes and the linked eval structurally.
+
 ## Dependencies, evidence and human decisions
 
 Keep distinct edge types: `start_after`, `merge_after`, `release_after`,

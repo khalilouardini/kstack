@@ -2455,7 +2455,13 @@ Dispatch exact issue ${t.issue_id} with --plan-only ${graphFlags.join(' ')}. Pro
 Contract: ${JSON.stringify(record.contract)}. Shared agreements: ${JSON.stringify(record.literals)}.
 ${localIndex ? 'Keep shared agreements in this approved plan handoff. Do not create a separate wave contract branch, test, commit or PR; include any required product tests in the ticket plan.' : ''}
 Return criteria citations, files, tests,
-risks, status read-back and verified absolute worktree. No implementation permission.`, schemas.PLAN, 'Plan');
+risks, status read-back and verified absolute worktree. No implementation permission.
+Read this ticket's frontend classification and review eval from its full body and
+mapped acceptance. For frontend or mixed work, retain the source/eval id and pass
+condition in acceptance_criteria_cited; retain localhost/screenshots mode(s), setup,
+route/navigation, data, states and viewports in tests; name the planned evidence
+destination in evidence. Missing planned details return STOPPED with the exact gap.
+Do not require future demo/screenshots before implementation starts.`, schemas.PLAN, 'Plan');
     if (!p || p.issue_id !== t.issue_id || !p.worktree.startsWith('/') || !p.branch) return stoppedPlan(t,'A4 missing or wrong issue record');
     if (p.state==='STOPPED') log(`${t.issue_id}: STOPPED ${p.stop_reason}`);
     return p;
@@ -2591,7 +2597,14 @@ AND its commit/file is on the fetched default branch; a PR state alone is insuff
 Verify exact contract contents match ${JSON.stringify(a.literals)}. If absent, stop.` :
   'There is no published wave contract to merge. Use the approved shared agreements above; do not create a separate wave contract PR.'}
 Implement the approved plan, follow land to a PR, then dispatch section 5's
-review-status write/read-back if defined. Include every open question.`, schemas.TRACK_RESULT, 'Build');
+review-status write/read-back if defined. Include every open question.
+For frontend or mixed work, execute the approved review eval and provide its
+localhost demo and/or screenshots before requesting review. Follow the physical
+stack root's ORCHESTRATION.md section Frontend review evidence. Link reproducible
+setup/navigation and observations and/or retained screenshots from the ticket and
+PR, with revision, state, viewport and result in acceptance_evidence. Tests or CI
+alone cannot satisfy this handoff; unavailable evidence returns STOPPED with its
+exact blocker, never a fabricated demo or screenshot.`, schemas.TRACK_RESULT, 'Build');
   if (r?.state==='PR_OPEN' && (!r.pr || !r.head_sha || r.gates.lint.exit!==0 || r.gates.test.exit!==0 || !r.acceptance_evidence.length)) {
     log(`${t.issue_id}: STOPPED; incomplete PR/gate/acceptance evidence`);
     return stoppedBuild(t,'B1 incomplete PR/gate/acceptance evidence');
@@ -2745,6 +2758,14 @@ const reviewOne=async t=>{
     if (admitted.auditEvidence) report.evidence.push(admitted.auditEvidence);
     const reviewed=admitted.review ? null : await call(`B3 review ${t.issue_id}`, `${graphContext(t)}${approvedGraphPrompt(t)}${admitted.prompt}${read(args.paths.pr_loop, 'no adaptation: parse existing final verdict report; BLOCKED asks nothing')}
 Run /pr-loop ${r.pr} --max-rounds ${rounds}${streaming ? ' --review-slots '+concurrency+' --test-slots '+testSlots : ''} ${(admitted.flags || graphFlags).join(' ')} in ${t.worktree}.
+Approved plan for this track: ${JSON.stringify(a.plans.find(p=>p.issue_id===t.issue_id))}.
+Implementation acceptance evidence for this track: ${JSON.stringify(r.acceptance_evidence)}.
+For frontend or mixed work, inspect the planned localhost demo and/or screenshots
+against the ticket's review eval and implemented revision before reviewer/human
+handoff. Missing, inaccessible or stale required evidence is BLOCKED, never CLEAN;
+passing tests/CI alone is insufficient. UI changes in review fixes require updated
+evidence linked from ticket and PR. Follow the physical stack root's
+ORCHESTRATION.md section Frontend review evidence.
 Never exceed the round cap or retry a terminal verdict. Parse the existing verdict
 report into REVIEW_RESULT, including routing evidence. A reviewer permit expiry
 is verdict BLOCKED with block_reason_code SLOT_WAIT_TIMEOUT and no paid review;
@@ -2796,6 +2817,10 @@ Read each actual remote PR head and its branch/worktree pairing. Return head_sha
 after fetching that exact commit object without moving the implementation branch,
 and reviewed_head_sha from the final same-head configured reviewer marker and
 pr-loop/CI evidence; null reviewed_head_sha if that evidence is unavailable.
+For frontend or mixed work, the same-head review must include its required localhost
+demo and/or screenshots. Re-read their ticket/PR links and revision; visuals made
+stale by affected UI changes cannot certify readiness. Missing required frontend
+review evidence also yields null reviewed_head_sha; do not substitute green CI.
 Do not edit, rebase, push, review or write Linear. Shared agreements: ${JSON.stringify(a.literals)}.
 ${!streaming && hasSeams ? `${seamContract}
 Run ${args.paths.seam_check} --repo ${args.repo_root} --base ${args.default_branch}

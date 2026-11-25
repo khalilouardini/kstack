@@ -1,6 +1,6 @@
 ---
 name: linear-release-audit
-version: 0.1.0
+version: 0.2.0
 description: Audit a release project against its gate criteria using Linear and GitHub evidence together — what is complete, active, blocked, unstarted, or falsely complete (Done with no acceptance evidence) — plus date/dependency incoherence, open review findings, and red CI. Never treats a merged implementation PR as proof a gate passed. Ends with three next actions. Use when asked "will we hit the release date", "audit the release", or "/linear-release-audit "<project>" [--apply]". (kstack)
 ---
 
@@ -102,6 +102,12 @@ gh run list --branch "$DEFAULT_BRANCH" --limit 20 --json conclusion,headSha,work
 `statusCheckRollup` is check state at read time. For an open PR that is exactly the
 question being asked — is CI red *now* — so no timestamp filter applies here.
 
+For frontend work, fetch the full issue and PR bodies and inspect linked
+artifacts under the physical stack root's
+[Frontend review evidence](../../../ORCHESTRATION.md#frontend-review-evidence)
+contract. Record missing or stale required visuals explicitly; a merged PR alone
+does not supply them.
+
 For every open PR that maps to a gate issue, pull its unresolved review threads —
 an unresolved blocking finding on the PR that implements a gate is a gate blocker,
 whatever the issue status says.
@@ -128,6 +134,12 @@ Six buckets. Each issue lands in exactly one, with its evidence.
 | **Blocked** | Cannot proceed until something else lands | The blocking issue or PR, named |
 | **Unstarted** | An unstarted- or backlog-type status in the active milestone | — |
 | **Unimplementable as written** | No linked implementation and no acceptance path | What would have to exist |
+
+For frontend work, **Complete** also requires the shared Frontend review
+evidence contract. A completed frontend issue with missing or stale required
+visual artifacts is **Falsely complete**; name the artifact and revision gap.
+Keep other issues in their existing lifecycle bucket and report any outstanding
+frontend evidence alongside the other acceptance gaps.
 
 Two distinctions do the real work here.
 
@@ -234,6 +246,8 @@ reached; closing the work publishes a number that was not hit.
 
 - **Never claim a gate passed because its implementation PR merged.** Require the
   gate's own acceptance evidence.
+- **Never claim frontend work complete with missing or stale required visual
+  evidence.** Apply the shared Frontend review evidence contract.
 - **Never report milestone `progress` as the metric named in the milestone.**
 - **Never mark commercial work complete without named, dated user evidence.**
 - **Never resolve an unknown by picking the optimistic reading.** `UNKNOWN` is a

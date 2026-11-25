@@ -1,6 +1,6 @@
 ---
 name: linear-roadmap-create
-version: 0.1.0
+version: 0.2.0
 description: Create complete Linear roadmaps with measurable evals on every ticket and aligned MVP scope and architecture decisions. Use when asked to "create a roadmap in Linear", "build a new Linear roadmap", or "/linear-roadmap-create BRIEF [--dry-run]". Searches existing work, verifies writes and resumes partial runs. Does not authorize implementation or release. (kstack)
 ---
 
@@ -62,6 +62,13 @@ contract. Numeric measures are preferred when meaningful; a precise observable
 pass/fail rubric is valid. A list of implementation tasks or "CI green" alone
 does not assess the promised behavior.
 
+Classify every ticket as frontend or non-frontend while creating the roadmap.
+Every frontend ticket, including mixed frontend/backend work, must plan a final
+localhost demo and/or screenshots so the reviewer can see and understand the
+change. Map that requirement to the ticket's own eval, pass condition and
+evidence destination now; implementation supplies the actual evidence before
+review/completion. Follow the frontend review contract in the eval reference.
+
 Prepare one durable local plan at the consuming repo's established roadmap path
 (or a disclosed local artifact path). Include:
 
@@ -71,7 +78,9 @@ Prepare one durable local plan at the consuming repo's established roadmap path
   unresolved owner decision, scope source, boundaries, prerequisites and evals.
 - A coverage matrix from every admitted outcome to unit evals and the integrated
   gate. Distinguish optional work and excluded scope. No orphan promise, uncovered
-  ticket or release gate that merely sums closed children.
+  ticket or release gate that merely sums closed children. For each frontend
+  ticket, include its review eval, chosen demo/screenshot modes and evidence
+  destination in this matrix and the published project roadmap.
 - Baseline/eval preparation before dependent behavior changes, explicit human
   decisions, and start/build/merge/release prerequisites. Reuse external issues;
   preserve dependency direction and distinguish completion from a positive
@@ -93,7 +102,8 @@ python3 <physical-skill-directory>/bin/check-evals <absolute-eval-plan.json>
 Read the exit code and repair every structural error before publishing tickets.
 Then review semantic quality: input representativeness, meaningful thresholds,
 negative controls, gate coverage and feasibility. The checker enforces required
-fields and complete coverage of its supplied ticket list only. It cannot prove
+fields, explicit frontend classification and a linked demo/screenshot eval for
+each frontend ticket in its supplied list. It cannot prove
 that the inventory is complete, the eval is useful, approval exists, or an eval
 passed. Those checks and all write restrictions are **prompt-level**.
 
@@ -120,6 +130,8 @@ sessions, move new work into started/completed states or mark release gates pass
 Lead with DRAFT, CREATED or PARTIAL. Return the roadmap/project links, the
 created/reused/updated counts, eval coverage (tickets with defined evals / all
 in-scope tickets), checker result, scope/ADR paths and adoption status, and ledger
-path. Report proposed thresholds, missing decisions and unrun evals explicitly.
+path. Include frontend review coverage (frontend tickets with planned visual
+evidence / all frontend tickets). Report proposed thresholds, missing decisions
+and unrun evals explicitly.
 Creation success means the planned records and relationships were read back;
 implementation success requires their future executed eval evidence.

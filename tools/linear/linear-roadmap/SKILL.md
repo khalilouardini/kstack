@@ -1,6 +1,6 @@
 ---
 name: linear-roadmap
-version: 0.7.1
+version: 0.7.2
 description: Map existing Linear work or a proposed plan into local orchestration JSON, Markdown and a scope contract. Local updates are the default; --publish explicitly opens or updates the graph PR. Reports coverage separately from execution eligibility. Use when asked to "map this Linear project", "prepare an orchestration roadmap", or "/linear-roadmap PROJECT [--publish]". Tracker reads only; does not launch sessions or create tickets. (kstack)
 ---
 
@@ -144,20 +144,30 @@ contract's existence, completeness or approval.
    index. A different installed HEAD alone needs no repin; validate supported
    schemas and retain the dirty-source guard. Root
    `ORCHESTRATION.md` links this machine-readable index and its one manifest.
-3. Encode prerequisites with source and target events. `start_after` targets a
+3. Preserve each frontend ticket's review contract under the shared lifecycle's
+   **Frontend review evidence** section. Carry its eval ID, localhost/screenshots
+   mode(s), reproducible protocol, visible pass criteria and evidence destination
+   into the unit's existing `acceptance` text and cite the ticket's **Evals**
+   section in `source`. Include the same mapping in the root Conditions table.
+   Do not add unsupported graph fields or turn future demo production into a
+   start prerequisite. Surface missing contracts on reused tickets as gaps and
+   prepare an amendment for the authorized tracker-writing workflow; this mapper
+   remains tracker-read-only. A missing planned contract cannot be reported as a
+   complete frontend acceptance plan.
+4. Encode prerequisites with source and target events. `start_after` targets a
    unit's plan/build event; `merge_after` targets merge; `release_after` targets
    release; `evidence_required` comes from an evidence pass; `human_decision`
    comes from a human approval. `verify_after` orders evidence collection;
    `review_after` orders a human review. Every condition cites its source. Do not convert a merge-only condition into a native start blocker.
-4. Run `python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <absolute-consuming-root>/orchestration/index.json`, then the
+5. Run `python3 <stack-root>/tools/linear/linear-roadmap/bin/graph-record validate-index <absolute-consuming-root>/orchestration/index.json`, then the
    same full command with `render-index`. Read exit codes and the manifest digest.
    Schema/source/structure failure stops the handoff; fix from evidence, never remove the
    failing prerequisite. Plain `validate`/`render` accept a manifest for draft
    checks only and cannot substitute for indexed validation before `/next`.
-5. Put the rendered project graph, a condition/source table, unknowns and links
+6. Put the rendered project graph, a condition/source table, unknowns and links
    to the shared lifecycle in root `ORCHESTRATION.md`. Before replacing an
    existing diagram, inspect its conditions and preserve unrelated content.
-6. Save the validated local artifacts. Publish only with explicit `--publish`,
+7. Save the validated local artifacts. Publish only with explicit `--publish`,
    using the graph-only repair exception to land. For semantic changes, report
    reviewed publication as a requirement before affected execution. For small in-scope maintenance, the
    shared contract's bounded local reconciliation can establish candidate admission;

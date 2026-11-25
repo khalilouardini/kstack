@@ -1,6 +1,6 @@
 ---
 name: summarize-change
-version: 0.3.0
+version: 0.3.1
 description: Brief a change in chat, leading with the decision and key caveats and backing them with intent, impact, and observed verification. Use when asked to "summarize this PR", "what did we do here", "give me a high-level summary of this branch", "brief me on this change", or "/summarize-change [branch | PR | commit range | paths] [--tight]". (kstack)
 ---
 
@@ -160,11 +160,15 @@ on this.
   or failed checks explicitly. Say which configured `gates.lint` and
   `gates.test` in `.agents/stack.yml` were not run in this session.
   Report the limits of replay or offline evidence when
-  the intended outcome depends on live behavior.
+  the intended outcome depends on live behavior. For frontend changes, include
+  localhost demo instructions and/or screenshot links, their revision and
+  observed result, following the physical stack root's `ORCHESTRATION.md`
+  **Frontend review evidence** contract. Keep missing, stale or uninspected
+  visuals visible as verification gaps, including in `--tight` handoffs.
 
 ### `--tight`
 
-Write one compact paragraph without headings, lists, file references, or
+Write one compact paragraph without headings, lists, code-line references, or
 omission counts. Aim for three to five sentences. Lead with the decision or
 next action and the caveats that affect it. Identify the target and revision
 range, and state what changed and why, with a short intent source or an

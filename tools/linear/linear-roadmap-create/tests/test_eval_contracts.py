@@ -22,18 +22,90 @@ class EvalContracts(unittest.TestCase):
                 capture_output=True, text=True,
             )
 
-    def test_unit_and_session_release_contracts_are_supported(self):
+    def test_unit_release_and_frontend_contracts_are_supported(self):
         result = self.run_check(EXAMPLE)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("2/2", result.stdout)
+        self.assertIn("3/3", result.stdout)
         self.assertIn("1 proposed", result.stdout)
+
+    def test_every_ticket_explicitly_classifies_frontend_scope(self):
+        for value in (None, "false", 0, 1, []):
+            with self.subTest(value=value):
+                plan = copy.deepcopy(EXAMPLE)
+                plan["tickets"][0]["frontend"] = value
+                result = self.run_check(plan)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("frontend", result.stderr)
+        plan = copy.deepcopy(EXAMPLE)
+        del plan["tickets"][0]["frontend"]
+        self.assertEqual(self.run_check(plan).returncode, 1)
+
+    def test_frontend_requires_visual_review_even_with_complete_generic_evals(self):
+        plan = copy.deepcopy(EXAMPLE)
+        plan["tickets"][0]["frontend"] = True
+        result = self.run_check(plan)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("frontend_review", result.stderr)
+        self.assertIn("2/3", result.stdout)
+
+    def test_localhost_screenshots_or_both_satisfy_review_modes(self):
+        for modes in (["localhost"], ["screenshots"], ["localhost", "screenshots"]):
+            with self.subTest(modes=modes):
+                plan = copy.deepcopy(EXAMPLE)
+                plan["tickets"][2]["frontend_review"]["modes"] = modes
+                result = self.run_check(plan)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_missing_and_invalid_frontend_review_contracts_are_rejected(self):
+        for review in (None, {}, "screenshots", {"eval_id": "review-import-status"}):
+            with self.subTest(review=review):
+                plan = copy.deepcopy(EXAMPLE)
+                plan["tickets"][2]["frontend_review"] = review
+                self.assertEqual(self.run_check(plan).returncode, 1)
+
+    def test_frontend_review_must_reference_its_own_eval(self):
+        for eval_id in ("missing", "retry-once", None, [], "TBD"):
+            with self.subTest(eval_id=eval_id):
+                plan = copy.deepcopy(EXAMPLE)
+                plan["tickets"][2]["frontend_review"]["eval_id"] = eval_id
+                result = self.run_check(plan)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("frontend_review.eval_id", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_empty_unknown_and_malformed_review_modes_are_rejected(self):
+        for modes in ([], None, "screenshots", ["ci"], ["localhost", "ci"], [{}], [True]):
+            with self.subTest(modes=modes):
+                plan = copy.deepcopy(EXAMPLE)
+                plan["tickets"][2]["frontend_review"]["modes"] = modes
+                result = self.run_check(plan)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("frontend_review.modes", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_backend_contract_does_not_require_visual_review(self):
+        plan = {"tickets": [copy.deepcopy(EXAMPLE["tickets"][0])]}
+        result = self.run_check(plan)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_frontend_review_still_requires_complete_eval_fields(self):
+        plan = copy.deepcopy(EXAMPLE)
+        del plan["tickets"][2]["evals"][0]["procedure"]
+        result = self.run_check(plan)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("procedure", result.stderr)
 
     def test_every_ticket_kind_requires_its_own_eval(self):
         for kind in ("unit", "release", "group", "decision", "documentation", "research"):
             with self.subTest(kind=kind):
                 plan = copy.deepcopy(EXAMPLE)
-                plan["tickets"].append({"key": "missing", "kind": kind, "outcome": "Record the agreed decision."})
-                self.assertEqual(self.run_check(plan).returncode, 1)
+                plan["tickets"].append({
+                    "key": "missing", "kind": kind, "frontend": False,
+                    "outcome": "Record the agreed decision.",
+                })
+                result = self.run_check(plan)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("evals", result.stderr)
 
     def test_incomplete_eval_cannot_hide_behind_another_ticket(self):
         for field in ("inputs", "procedure", "pass_condition", "evidence", "failure_check", "runner", "baseline"):

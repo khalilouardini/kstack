@@ -74,6 +74,20 @@ complete pagination, scope interpretation, ownership and actual dependency reads
   A live branch or PR receives a resume instruction without a duplicate session.
   Wave selection alone starts no loop. Wave review stays in B3.
 
+## Frontend evidence handoff cases (prompt-level)
+
+- Recommend a frontend unit whose ticket names a review eval, screenshots mode,
+  capture steps, viewport/state rubric and artifact destination. Its graph
+  acceptance and Conditions entry preserve those fields, and every single,
+  parallel and resume kickoff carries them through to the implementation handoff.
+- Repeat with localhost only, then both modes. The handoff retains startup/route
+  instructions and requires implementation evidence before review; absence of
+  artifacts that can only be produced after build does not block starting work.
+- Reuse a frontend ticket with only CI as its eval, or omit the protocol/visible
+  rubric. Report the precise planning gap and route it to authorized planning;
+  do not call its acceptance plan complete, silently create a duplicate ticket,
+  mutate Linear from `/next`, or treat a mapper's structural PASS as visual proof.
+
 ## Published graph admission cases
 
 21. Main's P1 graph omits unrelated maintenance D, dropping coverage from 11/11

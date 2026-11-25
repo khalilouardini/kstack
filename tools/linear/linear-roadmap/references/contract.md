@@ -134,6 +134,24 @@ at approve/pass with the corresponding type. An unfulfilled native blocker alway
 blocks planning and wins over a graph edge targeting build only. Report their
 disagreement for reconciliation; never relax the native relation by inference.
 
+## Frontend review mapping
+
+Follow the shared stack root `ORCHESTRATION.md` section **Frontend review
+evidence**. For each frontend unit, including mixed frontend/backend work, keep
+its ticket's eval ID, localhost/screenshots mode(s), protocol, visible pass
+criteria and evidence destination in the existing node `acceptance` strings;
+`source` cites the ticket's **Evals** section. Mirror that mapping in the consuming
+root Conditions table. Schema version 1 gains no extra fields from this rule.
+
+Mapping preserves the planned review contract. The implementer produces the demo
+and/or screenshots after building the change, before review/completion; missing
+future artifacts alone do not prevent planning or build. Missing planned protocol
+or criteria remain an acceptance-plan gap, not a complete frontend plan. If the
+project already models evidence/review nodes, preserve their conditions and
+sources; this rule does not invent a separate human checkpoint for each ticket.
+The graph validator checks structure, not classification, visual quality or
+execution. These propagation and review checks are prompt-level.
+
 ## Observations and manual human decisions
 
 The manifest is declarative. Per-condition verifier, evidence, observation time

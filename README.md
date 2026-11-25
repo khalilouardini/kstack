@@ -88,7 +88,11 @@ For a whole new tracker roadmap, use
 It creates or reuses projects, milestones, tickets, dependencies and a project
 roadmap document. Every ticket, including documentation, decisions and release
 gates, needs a reproducible eval contract with meaningful pass criteria and
-retained evidence. The bundled checker rejects incomplete eval fields; semantic
+retained evidence. Frontend tickets also plan a final localhost demo and/or
+screenshots for the reviewer. The [shared frontend evidence contract](ORCHESTRATION.md#frontend-review-evidence)
+preserves that requirement through ticket creation, roadmap mapping, dispatch,
+implementation, PR/review handoff and completion audits. The bundled checker
+rejects missing frontend review contracts and incomplete eval fields; semantic
 quality and scope authority remain explicit reviews. The creator reconciles
 necessary MVP scope and ADR changes, checks duplicates and verifies saved records.
 `--dry-run` prepares the complete proposal without Linear writes. Creating the

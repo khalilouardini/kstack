@@ -46,6 +46,9 @@ text, labels, owners, states and relationships.
 4. Create/update a roadmap document in the intended supported parent, link all
    canonical records, scope/ADR sources, coverage matrix and typed dependency
    table. Replace plan keys with verified IDs/URLs. Keep actual access boundaries.
+   Preserve each frontend ticket's review eval, demo/screenshot modes and evidence
+   destination in both its body and the roadmap coverage matrix; verify those
+   fields on read-back alongside the other evals.
    Publishing a new project roadmap does not publish or replace the stack's shared
    central lifecycle document; that remains its maintainer's separate action.
 

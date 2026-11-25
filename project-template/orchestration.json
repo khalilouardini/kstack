@@ -84,9 +84,11 @@
       "issue_ref": null,
       "owner": "implementer",
       "acceptance": [
-        "TODO: runnable acceptance criterion from source"
+        "TODO: runnable acceptance criterion from source",
+        "TODO: frontend review eval ID and localhost/screenshots modes; reproducible setup/route/capture steps, changed states/viewports and visible pass criteria from ticket Evals",
+        "TODO: ticket/PR-linked artifact destination for implemented-revision demo instructions and/or screenshots, observations and reviewer before review/completion"
       ],
-      "source": "TODO: cited issue/spec/owner source",
+      "source": "TODO: cited frontend ticket Evals section and stable review eval ID",
       "effort": null
     },
     {
